@@ -14,9 +14,12 @@
 
 import type { Painter } from './art/roles'
 import { BLUEPRINT } from './styles/blueprint'
+import { CAVE } from './styles/cave'
 import { ENGRAVING } from './styles/engraving'
 import { GOLDEN } from './styles/golden'
 import { KAMON } from './styles/kamon'
+import { MOSAIC } from './styles/mosaic'
+import { SAMPLER } from './styles/sampler'
 import { UKIYOE } from './styles/ukiyoe'
 import type { HeroPainter } from './hero3d'
 import { BAYER4, cells, edges, gray, hueMask, ink, lift, lumMask, posterize, ramp, screen, screened, screenGray, through } from './grade'
@@ -67,6 +70,8 @@ export type Art = {
   ground: string
   /** Definitions the painters refer to (patterns, gradients), laid down once under the stage. */
   defs?: (sw: number, h: number) => string
+  /** The ground everything is drawn on (a wall, a floor of stones), under the scenery. */
+  under?: (sw: number, h: number) => string
 }
 
 export type Look = {
@@ -213,135 +218,13 @@ export const LOOKS: Record<string, Look> = {
   pixel: PIXEL,
   original: ORIGINAL,
 
-  cave: style({
-    name: 'cave',
-    label: 'Cave Painting',
-    voice: 'a storyteller by the fire, in short plain words',
-    paper: { card: '#e6d8b8', ink: '#2e2119', kinds: { code: '#6a3a1e', path: '#4a3a5a', fn: '#6a3a1e', num: '#8a3220', bad: '#8a3220', good: '#4a5a2a', face: '#8a3220' } },
-    edge: '#cdb892',
-    titleColor: '#2e2119',
-    // Pigment on limestone: the picture's edges roughened as if daubed, its tones cut to
-    // charcoal, umber, ochre and the bare wall, and the reds kept as red earth.
-    grade: (sw, h, pixel) =>
-      `<feTurbulence type="fractalNoise" baseFrequency=".18" numOctaves="2" seed="3" result="wob"/>` +
-      `<feDisplacementMap in="SourceGraphic" in2="wob" scale="${pixel ? 3 : 2.4}" xChannelSelector="R" yChannelSelector="G" result="daub"/>` +
-      gray('daub', 'g') +
-      lift('g', 0.5, 'gl') +
-      ramp('gl', ['#2e2119', '#5a3c26', '#9a6a3e', '#c9a77a', '#dcc9a2', '#e6d8b8'], 'base', true) +
-      hueMask('daub', 'warm', 'warm') +
-      ramp('gl', ['#4a1a10', '#7a2a18', '#a8452a', '#c4683e'], 'red', true) +
-      through('red', 'warm', 'base', 'paint'),
-    // The rock's own relief, lit from the upper left and multiplied over the paint. Static, so drawn once.
-    texture: (sw, h) =>
-      `<defs><filter id="lk-rock" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">` +
-      `<feTurbulence type="fractalNoise" baseFrequency=".035 .05" numOctaves="4" seed="9"/>` +
-      `<feDiffuseLighting surfaceScale="5" diffuseConstant="1.15" lighting-color="#f4ead6"><feDistantLight azimuth="235" elevation="38"/></feDiffuseLighting></filter></defs>` +
-      `<rect width="${sw}" height="${h}" filter="url(#lk-rock)" style="mix-blend-mode:multiply" opacity=".65"/>`,
-    tag: (text, inset) => {
-      // Tally marks, scratched in charcoal, then the name.
-      const x = inset + 6
-      const y = inset + 5
-      const marks = [0, 1, 2, 3].map(i => `M${n(x + i * 2.4)} ${y}l.4 9`).join('') + `M${x - 1} ${y + 7}l10 -5`
-      return {
-        svg:
-          // A wash of bare wall behind it, so the charcoal reads on dark rock.
-          `<rect x="${x - 4}" y="${y - 3}" width="${n(text.length * 6.2 + 26)}" height="15" rx="6" fill="#e2d2b0" opacity=".8"/>` +
-          `<path d="${marks}" stroke="#2e2119" stroke-width="1.1" stroke-linecap="round" fill="none"/>` +
-          tagText(text.toUpperCase(), x + 14, y + 8, { font: PIXEL_FONT, size: 8, fill: '#2e2119', spacing: 0.6 }),
-        w: x + 14 + text.length * 6.2 + 6,
-        h: y + 14,
-      }
-    },
-  }),
+  cave: CAVE,
 
   blueprint: BLUEPRINT,
 
-  mosaic: style({
-    name: 'mosaic',
-    label: 'Mosaic',
-    voice: 'a Roman floor inscription',
-    paper: { card: '#f1ead8', ink: '#2a2420', kinds: { code: '#3e5a66', path: '#3e5a66', fn: '#6a4a8a', num: '#b0442c', bad: '#b0442c', good: '#4a6a3a', face: '#b0442c' } },
-    edge: '#7a5a3a',
-    inset: 8,
-    titleColor: '#b0442c',
-    // Set in tesserae: one stone per square, cut to a stone palette (marble, terracotta,
-    // slate blue), the grout laid over after.
-    grade: () =>
-      cells('SourceGraphic', 4, 'tess') +
-      gray('tess', 'g') +
-      lift('g', 0.75, 'gl') +
-      ramp('gl', ['#2a2420', '#5d4a3a', '#8a6a4a', '#b39a72', '#d4c6a6', '#ece3cc'], 'stone', true) +
-      hueMask('tess', 'warm', 'warm') +
-      ramp('gl', ['#6a2a1c', '#9a3a24', '#b0442c', '#c9784a', '#d99a6a'], 'terra', true) +
-      through('terra', 'warm', 'stone', 'a') +
-      hueMask('tess', 'blue', 'cool') +
-      ramp('gl', ['#22343e', '#3e5a66', '#5d7a8a', '#8aa0aa'], 'slate', true) +
-      through('slate', 'cool', 'a', 'b') +
-      hueMask('tess', 'green', 'leaf') +
-      ramp('gl', ['#2e3a24', '#4e5e36', '#76845a', '#a4aa80'], 'olive', true) +
-      through('olive', 'leaf', 'b', 'set'),
-    texture: (sw, h) =>
-      `<defs><pattern id="lk-grout" width="4" height="4" patternUnits="userSpaceOnUse"><path d="M0 0h4v.45h-4zM0 0h.45v4h-.45z" fill="#d8ccb0" opacity=".7"/></pattern></defs>` +
-      cover(sw, h, 'url(#lk-grout)'),
-    frame: (sw, h) => {
-      // A meander along the top and bottom edges.
-      const key = (x: number, y: number, flip: boolean) => `M${x} ${y}h8v${flip ? -6 : 6}h-6v${flip ? 3 : -3}h3`
-      const row = (y: number, flip: boolean) => Array.from({ length: Math.ceil(sw / 10) }, (_, i) => key(i * 10 + 1, y, flip)).join('')
-      return (
-        `<rect width="${sw}" height="8" fill="#f1ead8"/><rect y="${h - 8}" width="${sw}" height="8" fill="#f1ead8"/>` +
-        `<path d="${row(1, false)}${row(h - 1, true)}" fill="none" stroke="#2a2420" stroke-width="1.4"/>`
-      )
-    },
-    // A lettered tablet, in Roman capitals: no U, only V.
-    tag: (text, inset) =>
-      plaque(text.toUpperCase().replace(/U/g, 'V'), inset, { fill: '#f1ead8', stroke: '#2a2420', ink: '#2a2420', font: SERIF, size: 8, charW: 7, strokeW: 1.4, spacing: 1 }),
-  }),
+  mosaic: MOSAIC,
 
-  sampler: style({
-    name: 'sampler',
-    label: 'Sampler',
-    voice: 'a sweet Victorian embroidered motto',
-    paper: { card: '#efe5cc', ink: '#3a2a20', kinds: { code: '#3a5a8a', path: '#3a5a8a', fn: '#6a3a7a', num: '#a8322e', bad: '#a8322e', good: '#4f7a3a', face: '#c4553a' } },
-    edge: '#d9caa6',
-    inset: 6,
-    titleColor: '#a8322e',
-    // Cross-stitched: one stitch per square in a few skeins of thread, the lightest
-    // left as bare linen; the linen between the stitches is laid over after.
-    grade: () =>
-      cells('SourceGraphic', 4, 'st') +
-      gray('st', 'g') +
-      lift('g', 0.7, 'gl') +
-      ramp('gl', ['#2a1e18', '#4a3a2e', '#7a6a52', '#a8987a', '#e8dcc0', '#e8dcc0'], 'brown', true) +
-      hueMask('st', 'warm', 'warm') +
-      ramp('gl', ['#5a1a18', '#8a2826', '#a8322e', '#c4553a', '#d98a6a'], 'red', true) +
-      through('red', 'warm', 'brown', 'a') +
-      hueMask('st', 'green', 'leaf') +
-      ramp('gl', ['#1f3a1c', '#2f5a2a', '#4f7a3a', '#7a9a5a'], 'green', true) +
-      through('green', 'leaf', 'a', 'b') +
-      hueMask('st', 'blue', 'cool') +
-      ramp('gl', ['#1a2448', '#2a3a6a', '#3a5a8a', '#7a9ac0'], 'blue', true) +
-      through('blue', 'cool', 'b', 'sewn'),
-    texture: (sw, h) => {
-      // The linen round each cross: the cell less an X, so the stitch shows through.
-      const L = 1.75
-      const w = 0.5
-      const plus: [number, number][] = [[-w, -L], [w, -L], [w, -w], [L, -w], [L, w], [w, w], [w, L], [-w, L], [-w, w], [-L, w], [-L, -w], [-w, -w]]
-      const c = Math.SQRT1_2
-      const x = plus.map(([px, py]) => `${n(2 + (px - py) * c)} ${n(2 + (px + py) * c)}`).join('L')
-      return (
-        `<defs><pattern id="lk-linen" width="4" height="4" patternUnits="userSpaceOnUse">` +
-        `<path fill-rule="evenodd" fill="#e8dcc0" d="M0 0h4v4h-4zM${x}z"/>` +
-        `<path d="M0 0h4v.3h-4zM0 0h.3v4h-.3z" fill="#b8a888" opacity=".5"/></pattern></defs>` +
-        cover(sw, h, 'url(#lk-linen)', ' opacity=".9"')
-      )
-    },
-    frame: (sw, h) => frame(sw, h, '#e8dcc0', 4, 2) + frame(sw, h, '#a8322e', 1.2, 5, ' stroke-dasharray="3 2"'),
-    tag: (text, inset) => {
-      const t = plaque(text.toUpperCase(), inset, { fill: '#e8dcc0', stroke: 'none', ink: '#a8322e', size: 8, weight: '700', spacing: 0.6 })
-      const y = inset + 4 + 15
-      return { ...t, svg: t.svg + `<path d="M${inset + 9} ${y}H${n(t.w - 6)}" stroke="#4f7a3a" stroke-width="1" stroke-dasharray="2 1.5"/>` }
-    },
-  }),
+  sampler: SAMPLER,
 
   aero: style({
     name: 'aero',

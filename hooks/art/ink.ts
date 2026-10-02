@@ -203,3 +203,21 @@ export function poly(points: readonly (readonly [number, number])[], dx = 0, dy 
   }
   return d.trimEnd() + (close ? 'z' : '')
 }
+
+/** The palette color nearest a color, weighted the way eyes weigh the channels. */
+export function nearest(color: string, palette: readonly string[]): string {
+  const c = rgb(color)
+  if (!c) return palette[0] ?? color
+  let best = palette[0] ?? color
+  let bestD = Infinity
+  for (const p of palette) {
+    const q = rgb(p)
+    if (!q) continue
+    const d = 3 * (c[0] - q[0]) ** 2 + 4 * (c[1] - q[1]) ** 2 + 2 * (c[2] - q[2]) ** 2
+    if (d < bestD) {
+      bestD = d
+      best = p
+    }
+  }
+  return best
+}

@@ -811,6 +811,7 @@ export function sceneToSvg(
     (grade ? `<g filter="url(#lk-grade)">` : '') +
     // The graded stage carries its own sky, so the grade sees the whole picture.
     (look.grade ? `<rect width="${sw}" height="${H}" fill="${sky}"/>` : '') +
+    (art?.under?.(sw, H) ?? '') +
     stage.back +
     `<rect x="${-sw * 4}" y="${stage.groundTop}" width="${sw * 9}" height="${H * 4}" fill="${ground}"/>` +
     // Ground-level scenery goes down before anything that stands on it.
