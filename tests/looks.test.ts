@@ -32,19 +32,21 @@ describe('looks', () => {
     expect(findLook('nonsense')).toBeUndefined()
   })
 
-  test('every style draws every backdrop within the Svg limit, pixelized or smooth, keeping the text', () => {
+  test('every style draws every backdrop within the Svg limit, never pixelized, keeping the text', () => {
     for (const look of STYLE_NAMES) {
       for (const backdrop of BACKDROPS) {
-        for (const pixelArt of [true, false]) {
+        {
           const scene = parseScene({ ...SCENE, backdrop })
           if (!scene) throw new Error('expected a scene')
-          const svg = sceneToSvg(scene, { width: 2400, height: 192, look, figure: '3d', pixelArt })
+          const svg = sceneToSvg(scene, { width: 2400, height: 192, look, figure: '3d' })
           expect(svg.length).toBeLessThan(MAX_SVG)
           // A drafting hand letters in capitals.
           expect(svg.toLowerCase()).toContain('chasing #abc')
           expect(svg).toContain(`data-look="${look}"`)
           // A graded style runs its own filter when smooth; an artwork has none to run.
-          if (LOOKS[look]?.grade) expect(svg.includes('filter="url(#lk-grade)"')).toBe(!pixelArt)
+          if (LOOKS[look]?.grade) expect(svg).toContain('filter="url(#lk-grade)"')
+          // Only the original look's own pixel style is pixelized.
+          expect(svg).not.toContain('sc-pixelize')
           expect(svg.endsWith('</svg>')).toBe(true)
         }
       }
@@ -57,11 +59,11 @@ describe('looks', () => {
     expect(arts).toContain('blueprint')
     for (const look of arts) {
       for (const backdrop of BACKDROPS) {
-        for (const pixelArt of [true, false]) {
+        {
           const scene = parseScene({ ...SCENE, backdrop })
           if (!scene) throw new Error('expected a scene')
-          const svg = sceneToSvg(scene, { look, figure: '3d', pixelArt })
-          const lit = [...svg.matchAll(/filter="url\(#(sc-[\w-]+)\)"/g)].map(m => m[1]).filter(id => !id?.startsWith('sc-pixelize'))
+          const svg = sceneToSvg(scene, { look, figure: '3d' })
+          const lit = [...svg.matchAll(/filter="url\(#(sc-[\w-]+)\)"/g)].map(m => m[1])
           expect(lit).toEqual([])
           expect(svg).not.toContain('mix-blend-mode')
         }

@@ -55,17 +55,15 @@ export type Bubble = {
  * Claude himself repainted in its medium, rather than the finished picture graded.
  */
 export type Art = {
-  /** Paints the scenery's elements, for a stage `sw` wide; `pixel` when it will be pixelized. */
-  painter: (sw: number, pixel: boolean) => Painter
+  /** Paints the scenery's elements, for a stage `sw` wide. */
+  painter: (sw: number) => Painter
   /** Paints Claude. */
-  hero: (pixel: boolean) => HeroPainter
+  hero: () => HeroPainter
   /** The sky and ground colors past the stage's edges. */
   sky: string
   ground: string
   /** Definitions the painters refer to (patterns, gradients), laid down once under the stage. */
-  defs?: (sw: number, h: number, pixel: boolean) => string
-  /** The pixel-art Claude's eye and outline colors, for the pixelizer's sprite pass. */
-  sprite?: { eye: string; outline: string }
+  defs?: (sw: number, h: number) => string
 }
 
 export type Look = {
@@ -101,6 +99,8 @@ export type Look = {
   frame?: (sw: number, h: number, ground: number) => string
   /** The chapter tag, drawn in the look; absent, the plain tag. */
   tag?: (text: string, inset: number) => Tag
+  /** Draw the stage as pixel art: only the original look's own pixel style does. */
+  pixel?: boolean
   /** Set when the look is an artwork in its own right (see Art). */
   art?: Art
   /** The caption's bubble, when the style draws its own. */
@@ -179,16 +179,20 @@ const grain = (id: string, sw: number, h: number, freq: string, opacity: number,
 
 // ---------------------------------------------------------------- the looks
 
-const DEFAULT: Look = {
-  name: 'default',
-  label: 'Default',
-  voice: 'a cheerful 16-bit game',
+/** The original look: the authored scenes as they are lit, drawn smooth. */
+const ORIGINAL: Look = {
+  name: 'original',
+  label: 'Original',
+  voice: '',
   cell: 'solid',
   figure: 'pixel',
   font: MONO,
   charW: 5.7,
   caption: { fill: '#2b1c1a', stroke: '#cfc8b8', ink: '#ece9df', radius: 2 },
 }
+
+/** The original look in pixel art: the whole stage pixelized, Claude a sprite with an outline. The default. */
+const PIXEL: Look = { ...ORIGINAL, name: 'pixel', label: 'Pixel Art', pixel: true }
 
 /** A look in the gallery's manner: always the 3D Claude, captions on the look's paper. */
 const style = (o: Omit<Look, 'cell' | 'figure' | 'font' | 'charW' | 'caption'> & { paper: Paper }): Look => ({
@@ -203,7 +207,8 @@ const style = (o: Omit<Look, 'cell' | 'figure' | 'font' | 'charW' | 'caption'> &
 const LCD = ['#0f380f', '#306230', '#8bac0f', '#9bbc0f']
 
 export const LOOKS: Record<string, Look> = {
-  default: DEFAULT,
+  pixel: PIXEL,
+  original: ORIGINAL,
 
   cave: style({
     name: 'cave',
@@ -532,12 +537,12 @@ export const LOOKS: Record<string, Look> = {
 }
 
 export const LOOK_NAMES = Object.keys(LOOKS)
-export const DEFAULT_LOOK = 'default'
-/** The looks a person can choose, all but the default. */
-export const STYLE_NAMES = LOOK_NAMES.filter(name => name !== DEFAULT_LOOK)
+export const DEFAULT_LOOK = 'pixel'
+/** The styles from the gallery: every look but the original and its pixel art. */
+export const STYLE_NAMES = LOOK_NAMES.filter(name => name !== 'pixel' && name !== 'original')
 
 /** The look by name; an unknown name draws the default. */
-export const lookFor = (name: string | undefined): Look => LOOKS[name ?? DEFAULT_LOOK] ?? DEFAULT
+export const lookFor = (name: string | undefined): Look => LOOKS[name ?? DEFAULT_LOOK] ?? PIXEL
 
 const squash = (text: string) => text.toLowerCase().replace(/[^a-z]/g, '')
 

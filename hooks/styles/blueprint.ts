@@ -43,20 +43,18 @@ const UNLINED: readonly Family[] = ['sky', 'stars', 'life', 'lens', 'fire', 'lam
 
 /**
  * Families made of many small shapes (needles, blades, fronds, leaves): outlined at full
- * weight they would fill in white, so they take a hairline; on the pixel grid, where no
- * hairline survives, they are drawn as hatched silhouettes instead.
+ * weight they would fill in white, so they take a hairline.
  */
 const DENSE: readonly Family[] = ['foliage', 'grass']
-const denseLine = (depth: number, pixel: boolean) =>
-  pixel ? '' : `stroke="${LINE}" stroke-width="${n(0.12 + depth * 0.16)}" stroke-opacity="${n(0.5 + depth * 0.3)}" stroke-linejoin="round"`
+const denseLine = (depth: number) =>
+  `stroke="${LINE}" stroke-width="${n(0.12 + depth * 0.16)}" stroke-opacity="${n(0.5 + depth * 0.3)}" stroke-linejoin="round"`
 
 /** Families whose darkest faces take section hatching. */
 const HATCHED: readonly Family[] = ['rock', 'built', 'land', 'bark']
 
 /** How a lit color reads on the sheet: the knock-out, a hatch, a white mark, or nothing. */
-function ink(color: string, family: Family, attr: string, pixel = false): string {
+function ink(color: string, family: Family, attr: string): string {
   const l = lum(color)
-  if (pixel && DENSE.includes(family) && attr === 'fill') return l > 0.78 ? 'none' : 'url(#bp-hatch)'
   if (attr === 'stroke') return LINE
   if (attr === 'color') return SHEET
   switch (family) {
@@ -81,35 +79,33 @@ function ink(color: string, family: Family, attr: string, pixel = false): string
 }
 
 /** A line of the drawing for a shape at a depth: heavier toward the front. */
-const lineFor = (depth: number, pixel: boolean) =>
-  pixel
-    ? `stroke="${LINE}" stroke-width="${depth > 0.55 ? 1.4 : 1}" stroke-opacity="${n(0.6 + depth * 0.4)}" stroke-linejoin="round"`
-    : `stroke="${LINE}" stroke-width="${n(0.22 + depth * 0.5)}" stroke-opacity="${n(0.55 + depth * 0.4)}" stroke-linejoin="round"`
+const lineFor = (depth: number) =>
+  `stroke="${LINE}" stroke-width="${n(0.22 + depth * 0.5)}" stroke-opacity="${n(0.55 + depth * 0.4)}" stroke-linejoin="round"`
 
 /** Outlines only, as phantom lines: the conventional drawing of things without an edge. */
-const phantom = (svg: string, c: Ctx, pixel: boolean, opacity = 0.6) =>
-  `<g fill="none" stroke="${LINE}" stroke-opacity="${opacity}" stroke-width="${pixel ? 1 : 0.4}" ${PHANTOM}>` +
+const phantom = (svg: string, c: Ctx, opacity = 0.6) =>
+  `<g fill="none" stroke="${LINE}" stroke-opacity="${opacity}" stroke-width=".4" ${PHANTOM}>` +
   c.repaint(svg).replace(/\sfill="[^"]*"/g, ' fill="none"').replace(/\sstroke="[^"]*"/g, '').replace(/\sstroke-width="[^"]*"/g, '') +
   `</g>`
 
 /** A circle with its centre marked, as a drawing shows a round thing: the sun, the moon. */
-const centred = (cx: number, cy: number, r: number, pixel: boolean) => {
-  const w = pixel ? 1.2 : 0.7
+const centred = (cx: number, cy: number, r: number) => {
+  const w = 0.7
   const m = r + 3
   return (
     `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="url(#bp-sheet)" stroke="${LINE}" stroke-width="${w}"/>` +
-    `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r * 1.45)}" fill="none" stroke="${LINE}" stroke-opacity=".5" stroke-width="${pixel ? 1 : 0.35}" stroke-dasharray="1.3 1.3"/>` +
-    `<path stroke="${LINE}" stroke-opacity=".75" stroke-width="${pixel ? 1 : 0.35}" stroke-dasharray="2.2 .9 .5 .9" d="M${n(cx - m)} ${n(cy)}h${n(m * 2)}M${n(cx)} ${n(cy - m)}v${n(m * 2)}"/>`
+    `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r * 1.45)}" fill="none" stroke="${LINE}" stroke-opacity=".5" stroke-width=".35" stroke-dasharray="1.3 1.3"/>` +
+    `<path stroke="${LINE}" stroke-opacity=".75" stroke-width=".35" stroke-dasharray="2.2 .9 .5 .9" d="M${n(cx - m)} ${n(cy)}h${n(m * 2)}M${n(cx)} ${n(cy - m)}v${n(m * 2)}"/>`
   )
 }
 
-const scenery = (_sw: number, pixel: boolean) =>
+const scenery = (_sw: number) =>
   painter(
     {
-      ink: (color, family, _depth, attr) => ink(color, family, attr, pixel),
+      ink: (color, family, _depth, attr) => ink(color, family, attr),
       // A gradient fill is light or a lit surface: lamps' cones and pools are left out, surfaces knocked out.
       url: (_id, family, attr) => (attr === 'stroke' ? LINE : family === 'lamp' ? 'none' : ink('#808080', family, attr)),
-      line: (family, depth) => (UNLINED.includes(family) ? '' : DENSE.includes(family) ? denseLine(depth, pixel) : lineFor(depth, pixel)),
+      line: (family, depth) => (UNLINED.includes(family) ? '' : DENSE.includes(family) ? denseLine(depth) : lineFor(depth)),
       lineless: 0.6,
       faint: 'hide',
       templateFamily: 'foliage',
@@ -124,28 +120,28 @@ const scenery = (_sw: number, pixel: boolean) =>
           const r = (c.meta.r ?? 8) * (c.role === 'space.earth' ? 1 : 1.3)
           const cx = c.meta.cx ?? 0
           const cy = c.meta.cy ?? 0
-          if (c.role !== 'space.earth') return centred(cx, cy, r, pixel)
+          if (c.role !== 'space.earth') return centred(cx, cy, r)
           // The Earth: the circle, its equator and a meridian, as a globe is drafted.
           return (
-            centred(cx, cy, r, pixel) +
-            `<g fill="none" stroke="${LINE}" stroke-opacity=".6" stroke-width="${pixel ? 1 : 0.35}"><ellipse cx="${n(cx)}" cy="${n(cy)}" rx="${n(r)}" ry="${n(r * 0.3)}"/><ellipse cx="${n(cx)}" cy="${n(cy)}" rx="${n(r * 0.42)}" ry="${n(r)}"/></g>`
+            centred(cx, cy, r) +
+            `<g fill="none" stroke="${LINE}" stroke-opacity=".6" stroke-width=".35"><ellipse cx="${n(cx)}" cy="${n(cy)}" rx="${n(r)}" ry="${n(r * 0.3)}"/><ellipse cx="${n(cx)}" cy="${n(cy)}" rx="${n(r * 0.42)}" ry="${n(r)}"/></g>`
           )
         },
-        cloud: (svg, c) => phantom(svg, c, pixel, 0.55),
-        beam: (svg, c) => phantom(svg, c, pixel, 0.4),
+        cloud: (svg, c) => phantom(svg, c, 0.55),
+        beam: (svg, c) => phantom(svg, c, 0.4),
         air: (svg, c) => {
           // Mist as two phantom lines across the scene, drifting as it did.
           const y = c.meta.y ?? 80
           const h = c.meta.h ?? 12
           const w = c.meta.sw ?? 640
           return (
-            `<g fill="none" stroke="${LINE}" stroke-opacity=".45" stroke-width="${pixel ? 1 : 0.4}" ${PHANTOM}>` +
+            `<g fill="none" stroke="${LINE}" stroke-opacity=".45" stroke-width=".4" ${PHANTOM}>` +
             `<path d="M${n(-20)} ${n(y + h * 0.4)}H${n(w + 20)}M${n(-10)} ${n(y + h * 0.75)}H${n(w + 20)}"/>${c.motion(svg)}</g>`
           )
         },
-        'space.milkyway': (svg, c) => phantom(svg, c, pixel, 0.35),
+        'space.milkyway': (svg, c) => phantom(svg, c, 0.35),
         water: (svg, c) => `<g opacity=".45">${c.repaint(svg)}</g>`,
-        mark: (svg, c) => `<g stroke-opacity=".6">${c.repaint(svg).replace(/\sstroke-width="([\d.]+)"/g, (_, w: string) => ` stroke-width="${pixel ? Math.max(1, +w) : Math.min(0.5, +w)}"`)}</g>`,
+        mark: (svg, c) => `<g stroke-opacity=".6">${c.repaint(svg).replace(/\sstroke-width="([\d.]+)"/g, (_, w: string) => ` stroke-width="${Math.min(0.5, +w)}"`)}</g>`,
       },
     },
     'bp',
@@ -155,10 +151,10 @@ const scenery = (_sw: number, pixel: boolean) =>
 
 /** Claude as the gallery's patent drawing: knock-out per part, solid outline, thin creases, dashed hidden edges. */
 const hero =
-  (pixel: boolean): HeroPainter =>
+  (): HeroPainter =>
   (m: Model, cx: number, floor: number) => {
-    const sil = pixel ? 1.4 : 0.75
-    const crease = pixel ? 1 : 0.4
+    const sil = 0.75
+    const crease = 0.4
     const seg = (e: { a: readonly [number, number]; b: readonly [number, number] }) => poly([e.a, e.b], cx, floor, false)
     let parts = ''
     let hidden = ''
@@ -178,14 +174,14 @@ const hero =
       const xs = body.hull.map(p => p[0])
       const ys = body.hull.map(p => p[1])
       const mx = (Math.min(...xs) + Math.max(...xs)) / 2 + cx
-      axis = `<path stroke-width="${pixel ? 1 : 0.3}" stroke-opacity=".45" stroke-dasharray="6 1.6 1.2 1.6" d="M${t1(mx)} ${t1(Math.min(...ys) + floor - 3)}V${t1(floor + 2)}"/>`
+      axis = `<path stroke-width=".3" stroke-opacity=".45" stroke-dasharray="6 1.6 1.2 1.6" d="M${t1(mx)} ${t1(Math.min(...ys) + floor - 3)}V${t1(floor + 2)}"/>`
     }
     return (
       `<style>.c{stroke-width:${crease}px;stroke-opacity:.82}</style>` +
       `<g fill="none" stroke="${LINE}" stroke-width="${sil}" stroke-linecap="round" stroke-linejoin="round">` +
       parts +
-      (hidden ? `<path stroke-width="${pixel ? 1 : 0.35}" stroke-opacity=".5" stroke-dasharray="1.6 1.2" d="${hidden}"/>` : '') +
-      `<g stroke-width="${pixel ? 1 : 0.55}">${eyes}</g>` +
+      (hidden ? `<path stroke-width=".35" stroke-opacity=".5" stroke-dasharray="1.6 1.2" d="${hidden}"/>` : '') +
+      `<g stroke-width=".55">${eyes}</g>` +
       axis +
       `</g>`
     )
@@ -212,32 +208,24 @@ export const BLUEPRINT: Look = {
     hero,
     sky: SHEET,
     ground: SHEET,
-    sprite: { eye: LINE, outline: LINE },
-    defs: (_sw, _h, pixel) => {
-      const g = pixel ? 2 : 0.38
-      const G = pixel ? 2 : 0.6
-      return (
+    defs: () =>
         // The sheet: Prussian ground, a fine grid every 3.2 units and a heavier line every fifth.
         `<pattern id="bp-sheet" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="16" height="16" fill="${SHEET}"/>` +
-        (pixel ? '' : `<path d="M3.2 0v16M6.4 0v16M9.6 0v16M12.8 0v16M0 3.2h16M0 6.4h16M0 9.6h16M0 12.8h16" stroke="${LINE}" stroke-opacity=".075" stroke-width="${g}"/>`) +
-        `<path d="M0 0v16M0 0h16" stroke="${LINE}" stroke-opacity="${pixel ? 0.09 : 0.17}" stroke-width="${G}"/></pattern>` +
+        `<path d="M3.2 0v16M6.4 0v16M9.6 0v16M12.8 0v16M0 3.2h16M0 6.4h16M0 9.6h16M0 12.8h16" stroke="${LINE}" stroke-opacity=".075" stroke-width=".38"/>` +
+        `<path d="M0 0v16M0 0h16" stroke="${LINE}" stroke-opacity=".17" stroke-width=".6"/></pattern>` +
         // Section hatching for shade, on the sheet.
         `<pattern id="bp-hatch" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="16" height="16" fill="url(#bp-sheet)"/>` +
-        (pixel
-          ? `<path d="M0 8L8 0M0 16L16 0M8 16L16 8" stroke="${LINE}" stroke-opacity=".7" stroke-width="1.2"/></pattern>`
-          : `<path d="M-4 4l8 -8M0 16L16 0M12 20l8 -8M-4 12l8 -8M4 20L20 4" stroke="${LINE}" stroke-opacity=".38" stroke-width=".35"/></pattern>`) +
+        `<path d="M-4 4l8 -8M0 16L16 0M12 20l8 -8M-4 12l8 -8M4 20L20 4" stroke="${LINE}" stroke-opacity=".38" stroke-width=".35"/></pattern>` +
         // The ground's earth hatch: short strokes under a ground line, scattered.
         `<pattern id="bp-earth" width="9" height="7" patternUnits="userSpaceOnUse"><rect width="9" height="7" fill="url(#bp-sheet)"/>` +
-        `<path d="M3 1l-2.6 2.8" stroke="${LINE}" stroke-opacity=".32" stroke-width="${pixel ? 1 : 0.35}"/></pattern>` +
+        `<path d="M3 1l-2.6 2.8" stroke="${LINE}" stroke-opacity=".32" stroke-width=".35"/></pattern>` +
         // The cyanotype's mottling: soft light and dark clouds in the print.
         `<filter id="bp-mottle" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".012 .03" numOctaves="4" seed="13"/>` +
         `<feColorMatrix values="0 0 0 0 .6  0 0 0 0 .78  0 0 0 0 1  0 0 0 -2.2 1.15"/></filter>` +
-        `<radialGradient id="bp-vignette" cx=".5" cy=".5" r=".75"><stop offset=".55" stop-color="#08184a" stop-opacity="0"/><stop offset="1" stop-color="#08184a" stop-opacity=".45"/></radialGradient>`
-      )
-    },
+        `<radialGradient id="bp-vignette" cx=".5" cy=".5" r=".75"><stop offset=".55" stop-color="#08184a" stop-opacity="0"/><stop offset="1" stop-color="#08184a" stop-opacity=".45"/></radialGradient>`,
   },
-  texture: (sw, h, _ground, pixel) =>
-    `<rect width="${sw}" height="${h}" filter="url(#bp-mottle)" opacity="${pixel ? 0.12 : 0.16}"/>` + `<rect width="${sw}" height="${h}" fill="url(#bp-vignette)"/>`,
+  texture: (sw, h) =>
+    `<rect width="${sw}" height="${h}" filter="url(#bp-mottle)" opacity=".16"/>` + `<rect width="${sw}" height="${h}" fill="url(#bp-vignette)"/>`,
   frame: (sw, h) =>
     `<rect x="2.5" y="2.5" width="${sw - 5}" height="${h - 5}" fill="none" stroke="${LINE}" stroke-opacity=".9" stroke-width="1.1"/>` +
     `<rect x="5" y="5" width="${sw - 10}" height="${h - 10}" fill="none" stroke="${LINE}" stroke-opacity=".8" stroke-width=".45"/>`,

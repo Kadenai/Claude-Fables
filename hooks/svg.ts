@@ -752,7 +752,7 @@ const PIXELIZE = (sw: number, claude: Rect, grade = '', sprite = { eye: SPRITE_E
  */
 export function sceneToSvg(
   scene: FablesScene,
-  options: { width?: number; height?: number; look?: string; figure?: 'auto' | 'pixel' | '3d'; pixelArt?: boolean } = {},
+  options: { width?: number; height?: number; look?: string; figure?: 'auto' | 'pixel' | '3d' } = {},
 ): string {
   const sw = options.width && options.height ? stageWidth(options.width, options.height) : W
   const width = options.width ?? sw
@@ -762,12 +762,12 @@ export function sceneToSvg(
   const wants = options.figure && options.figure !== 'auto' ? options.figure : look.figure
   // The 3D Claude gets scenery and props with depth to match; the pixel sprite keeps the flat pixel stage.
   const rich = wants === '3d'
-  // Pixel art (the default) pixelizes the whole stage crisply; without it the scenery takes a soft blur instead.
-  const pixelArt = rich && options.pixelArt !== false
+  // The pixel-art look (the default) pixelizes the whole stage crisply; drawn smooth, the scenery takes a soft blur instead.
+  const pixelArt = rich && look.pixel === true
   // A style drawn as an artwork repaints every element of the scenery, and Claude, in its own medium.
   const art = rich ? look.art : undefined
-  const painter = art?.painter(sw, pixelArt)
-  const figure: Figure = rich ? { kind: '3d', hero: art?.hero(pixelArt) } : { kind: 'pixel', cell: look.cell }
+  const painter = art?.painter(sw)
+  const figure: Figure = rich ? { kind: '3d', hero: art?.hero() } : { kind: 'pixel', cell: look.cell }
   // Smooth, the scenery is softened so Claude reads first; a style brings its own treatment instead,
   // and softening under a grade would be redone on every frame.
   const stageAt = (lean: boolean) =>
@@ -806,8 +806,8 @@ export function sceneToSvg(
     `shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" style="display:block;background:${look.grade ? edge : ground}"${look.grade || art ? ` data-look="${look.name}"` : ''}>` +
     grade +
     `<rect x="${-sw * 4}" y="${-H * 4}" width="${sw * 9}" height="${H * 4 + GROUND_Y}" fill="${look.grade ? edge : sky}"/>` +
-    (art?.defs ? `<defs>${art.defs(sw, H, pixelArt)}</defs>` : '') +
-    (pixelArt ? `<defs>${PIXELIZE(sw, claudeBox, gradeBody, art?.sprite)}</defs><g filter="url(#sc-pixelize)">` : '') +
+    (art?.defs ? `<defs>${art.defs(sw, H)}</defs>` : '') +
+    (pixelArt ? `<defs>${PIXELIZE(sw, claudeBox, gradeBody)}</defs><g filter="url(#sc-pixelize)">` : '') +
     (grade ? `<g filter="url(#lk-grade)">` : '') +
     // The graded stage carries its own sky, so the grade sees the whole picture.
     (look.grade ? `<rect width="${sw}" height="${H}" fill="${sky}"/>` : '') +

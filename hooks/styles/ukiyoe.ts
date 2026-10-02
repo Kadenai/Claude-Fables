@@ -130,7 +130,7 @@ const UNLINED: readonly Family[] = ['sky', 'glow', 'beam', 'stars', 'life', 'len
  * Kasumi: long bands of flat cream lying across the scene, edged in key,
  * broken into a few lengths with rounded ends. Replaces mist and haze.
  */
-function kasumi(c: Ctx, pixel: boolean, sw: number): string {
+function kasumi(c: Ctx, sw: number): string {
   const y = c.meta.y ?? 80
   const h = Math.max(3, (c.meta.h ?? 12) * 0.42)
   const width = c.meta.sw ?? sw
@@ -147,34 +147,34 @@ function kasumi(c: Ctx, pixel: boolean, sw: number): string {
   }
   const fill = c.meta.veil ? '#e4dcc4' : '#efe6cc'
   // The band drifts as the mist it replaces did.
-  return `<g><path fill="${fill}" fill-opacity=".92" stroke="${P.key}" stroke-width="${pixel ? 1 : 0.4}" d="${d}"/>${(c.meta.anim as string | undefined) ?? ''}</g>`
+  return `<g><path fill="${fill}" fill-opacity=".92" stroke="${P.key}" stroke-width=".4" d="${d}"/>${(c.meta.anim as string | undefined) ?? ''}</g>`
 }
 
 /** A disc cut in one ink with a key line: the sun, the moon. */
-const disc = (cx: number, cy: number, r: number, fill: string, pixel: boolean) =>
-  `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="${fill}" stroke="${P.key}" stroke-width="${pixel ? 1 : 0.5}"/>`
+const disc = (cx: number, cy: number, r: number, fill: string) =>
+  `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="${fill}" stroke="${P.key}" stroke-width=".5"/>`
 
 /** Water and wet floors, combed: foam lines laid across them, the wave's language. */
-const comb = (c: Ctx, sw: number, pixel: boolean) => {
+const comb = (c: Ctx, sw: number) => {
   const y = c.meta.y ?? 100
   const h = c.meta.h ?? 28
-  return `<rect x="0" y="${n(y)}" width="${c.meta.sw ?? sw}" height="${n(h)}" fill="url(#uk-comb${pixel ? 'px' : ''})" opacity=".55"/>`
+  return `<rect x="0" y="${n(y)}" width="${c.meta.sw ?? sw}" height="${n(h)}" fill="url(#uk-comb)" opacity=".55"/>`
 }
 
 /** The Ukiyo-e scenery painter. */
-const scenery = (sw: number, pixel: boolean) =>
+const scenery = (sw: number) =>
   painter(
     {
       ink: (color, family, depth) => ink(color, family, depth),
       line: (family, depth) =>
-        UNLINED.includes(family) ? '' : `stroke="${P.key}" stroke-width="${n(pixel ? (depth > 0.6 ? 1.6 : 1) : 0.25 + depth * 0.35)}" stroke-linejoin="round"`,
+        UNLINED.includes(family) ? '' : `stroke="${P.key}" stroke-width="${n(0.25 + depth * 0.35)}" stroke-linejoin="round"`,
       opacity: (family, v) => (family === 'glow' || family === 'beam' ? v * 0.55 : family === 'air' ? Math.min(1, v * 1.2) : v),
       lineless: 0.6,
       redraw: {
-        air: (svg, c) => kasumi({ ...c, meta: { ...c.meta, anim: c.motion(svg) } }, pixel, sw),
-        'forest.sun': (_svg, c) => (c.meta.part === 'core' ? disc(c.meta.cx ?? 0, c.meta.cy ?? 0, (c.meta.r ?? 7) * 1.5, P.seal, pixel) : ''),
-        'desert.sun': (_svg, c) => (c.meta.part === 'core' ? disc(c.meta.cx ?? 0, c.meta.cy ?? 0, (c.meta.r ?? 11) * 1.25, P.seal, pixel) : ''),
-        'night.moon': (_svg, c) => disc(c.meta.cx ?? 0, c.meta.cy ?? 0, (c.meta.r ?? 9) * 1.15, '#f3ead6', pixel),
+        air: (svg, c) => kasumi({ ...c, meta: { ...c.meta, anim: c.motion(svg) } }, sw),
+        'forest.sun': (_svg, c) => (c.meta.part === 'core' ? disc(c.meta.cx ?? 0, c.meta.cy ?? 0, (c.meta.r ?? 7) * 1.5, P.seal) : ''),
+        'desert.sun': (_svg, c) => (c.meta.part === 'core' ? disc(c.meta.cx ?? 0, c.meta.cy ?? 0, (c.meta.r ?? 11) * 1.25, P.seal) : ''),
+        'night.moon': (_svg, c) => disc(c.meta.cx ?? 0, c.meta.cy ?? 0, (c.meta.r ?? 9) * 1.15, '#f3ead6'),
         'space.earth': (_svg, c) => {
           const cx = c.meta.cx ?? 0
           const cy = c.meta.cy ?? 0
@@ -183,12 +183,12 @@ const scenery = (sw: number, pixel: boolean) =>
           return (
             `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="${P.mid}"/>` +
             `<path fill="${P.deep}" d="M${n(cx + r * 0.1)} ${n(cy - r)}a${n(r)} ${n(r)} 0 0 1 0 ${n(r * 2)}a${n(r * 0.7)} ${n(r)} 0 0 0 0 ${n(-r * 2)}z"/>` +
-            `<path fill="none" stroke="${P.foam}" stroke-width="${pixel ? 1.4 : 1}" stroke-linecap="round" d="M${n(cx - r * 0.8)} ${n(cy - r * 0.3)}q${n(r * 0.5)} ${n(-r * 0.15)} ${n(r * 0.9)} 0M${n(cx - r * 0.6)} ${n(cy + r * 0.25)}q${n(r * 0.4)} ${n(-r * 0.12)} ${n(r * 0.8)} 0"/>` +
-            `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="none" stroke="${P.key}" stroke-width="${pixel ? 1 : 0.6}"/>`
+            `<path fill="none" stroke="${P.foam}" stroke-width="1" stroke-linecap="round" d="M${n(cx - r * 0.8)} ${n(cy - r * 0.3)}q${n(r * 0.5)} ${n(-r * 0.15)} ${n(r * 0.9)} 0M${n(cx - r * 0.6)} ${n(cy + r * 0.25)}q${n(r * 0.4)} ${n(-r * 0.12)} ${n(r * 0.8)} 0"/>` +
+            `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="none" stroke="${P.key}" stroke-width=".6"/>`
           )
         },
-        'city.reflection': (svg, c) => c.repaint(svg) + comb(c, sw, pixel),
-        'lab.reflection': (svg, c) => c.repaint(svg) + comb(c, sw, pixel),
+        'city.reflection': (svg, c) => c.repaint(svg) + comb(c, sw),
+        'lab.reflection': (svg, c) => c.repaint(svg) + comb(c, sw),
         lens: () => '',
       },
     },
@@ -199,7 +199,7 @@ const scenery = (sw: number, pixel: boolean) =>
 
 /** Claude cut in flat blocks under a key line, after the gallery's `tone(f, P)` and `unionOutline`. */
 const hero =
-  (pixel: boolean): HeroPainter =>
+  (): HeroPainter =>
   (m: Model, cx: number, floor: number) => {
     // The outline: every part's hull stroked wide in key under the blocks, so the union carries one line.
     const hulls = m.parts.map(pt => poly(pt.hull, cx, floor)).join('')
@@ -221,14 +221,14 @@ const hero =
       .map(e =>
         e.poly
           ? `<path fill="${P.key}" d="${poly(e.poly, cx, floor)}"/>` +
-            `<circle cx="${t1((e.poly[3]?.[0] ?? 0) + cx)}" cy="${t1((e.poly[3]?.[1] ?? 0) + floor)}" r="${pixel ? 0.7 : 0.45}" fill="${P.foam}"/>`
-          : `<path fill="none" stroke="${P.key}" stroke-width="${pixel ? 1.2 : 1}" stroke-linecap="round" d="${poly(e.line ?? [], cx, floor, false)}"/>`,
+            `<circle cx="${t1((e.poly[3]?.[0] ?? 0) + cx)}" cy="${t1((e.poly[3]?.[1] ?? 0) + floor)}" r=".45" fill="${P.foam}"/>`
+          : `<path fill="none" stroke="${P.key}" stroke-width="1" stroke-linecap="round" d="${poly(e.line ?? [], cx, floor, false)}"/>`,
       )
       .join('')
     return (
       `<path fill="${P.key}" opacity=".28" d="${poly(m.shadow, cx, floor)}"/>` +
-      `<path fill="${P.front}" stroke="${P.key}" stroke-width="${pixel ? 2.2 : 1.5}" stroke-linejoin="round" d="${hulls}"/>` +
-      `<g stroke="${P.key}" stroke-width="${pixel ? 1 : 0.5}" stroke-linejoin="round">${faces}</g>` +
+      `<path fill="${P.front}" stroke="${P.key}" stroke-width="1.5" stroke-linejoin="round" d="${hulls}"/>` +
+      `<g stroke="${P.key}" stroke-width=".5" stroke-linejoin="round">${faces}</g>` +
       eyes
     )
   }
@@ -256,18 +256,16 @@ export const UKIYOE: Look = {
     hero,
     sky: P.paper,
     ground: P.key,
-    sprite: { eye: P.key, outline: P.key },
-    defs: (_sw, _h, pixel) =>
+    defs: () =>
       // Foam combing for water: fine curved lines, one block's cut repeated.
       `<pattern id="uk-comb" width="14" height="3" patternUnits="userSpaceOnUse"><path d="M0 1.5q3.5 -1 7 0t7 0" fill="none" stroke="${P.foam}" stroke-width=".45"/></pattern>` +
-      `<pattern id="uk-combpx" width="16" height="4" patternUnits="userSpaceOnUse"><path d="M0 1h8v1h8" fill="none" stroke="${P.foam}" stroke-width="1"/></pattern>` +
-      `<filter id="uk-paper" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="${pixel ? '.35' : '.8 .5'}" numOctaves="3" seed="36"/>` +
+      `<filter id="uk-paper" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".8 .5" numOctaves="3" seed="36"/>` +
       `<feColorMatrix values="0 0 0 0 .35  0 0 0 0 .27  0 0 0 0 .15  -1.6 0 0 0 1"/></filter>` +
       `<linearGradient id="uk-bokashi" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P.deep}" stop-opacity=".55"/><stop offset="1" stop-color="${P.deep}" stop-opacity="0"/></linearGradient>`,
   },
-  texture: (sw, h, _ground, pixel) =>
+  texture: (sw, h) =>
     // The bokashi along the top of the sheet, and the paper's grain over the whole print.
-    `<rect width="${sw}" height="18" fill="url(#uk-bokashi)"/>` + `<rect width="${sw}" height="${h}" filter="url(#uk-paper)" opacity="${pixel ? 0.22 : 0.3}"/>`,
+    `<rect width="${sw}" height="18" fill="url(#uk-bokashi)"/>` + `<rect width="${sw}" height="${h}" filter="url(#uk-paper)" opacity=".3"/>`,
   frame: (sw, h) =>
     `<rect x="1.5" y="1.5" width="${sw - 3}" height="${h - 3}" fill="none" stroke="${P.paper}" stroke-width="3"/>` +
     `<rect x="3.5" y="3.5" width="${sw - 7}" height="${h - 7}" fill="none" stroke="${P.key}" stroke-width="1"/>`,

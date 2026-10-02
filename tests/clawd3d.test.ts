@@ -105,11 +105,11 @@ describe('layering', () => {
     expect(sceneToSvg(scene, { figure: 'pixel' })).toContain('17 tests')
   })
 
-  test('pixel art can be switched off: then the scenery is smooth under a soft blur, and nothing is pixelized', () => {
+  test('pixel art is a look of its own: the original look drawn smooth has a soft blur and no pixels', () => {
     const scene = parseScene({ backdrop: 'forest', hero: { action: 'walk', from: 0, to: 20 }, caption: 'Smooth.' })
     if (!scene) throw new Error('expected a scene')
     const pixel = sceneToSvg(scene, { figure: '3d' })
-    const smooth = sceneToSvg(scene, { figure: '3d', pixelArt: false })
+    const smooth = sceneToSvg(scene, { figure: '3d', look: 'original' })
     expect(pixel).toContain('url(#sc-pixelize-claude)')
     expect(pixel).not.toContain('sc-calm')
     expect(smooth).not.toContain('sc-pixelize')

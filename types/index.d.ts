@@ -49,9 +49,7 @@ declare module 'claude-code' {
     fables: {
       scene: FablesScene | null
       enabled: boolean
-      /** Draw the stage as pixel art (the default), or smooth. */
-      pixelArt: boolean
-      /** The graphic style scenes are drawn in (looks.ts); 'default' for none. */
+      /** The style scenes are drawn in (looks.ts): 'pixel' by default, 'original', or a gallery style. */
       style: string
     }
   }

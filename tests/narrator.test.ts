@@ -127,6 +127,11 @@ test('a style is chosen by name and draws the band, until it is turned off', asy
   expect(asked[0]).toContain('woodblock')
   expect(await band()).toContain('data-look="ukiyoe"')
 
-  expect((await run('style off')).text).toContain('default')
+  expect((await run('style off')).text).toContain('Pixel Art')
+  // The old pixel switch picks between the original look's two styles.
+  expect((await run('pixel off')).text).toContain('Original')
+  expect(await band()).not.toContain('sc-pixelize')
+  expect((await run('pixel')).text).toContain('Pixel Art')
+  expect(await band()).toContain('sc-pixelize')
   expect(await band()).not.toContain('data-look')
 })

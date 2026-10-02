@@ -2,9 +2,7 @@
  * Renders the sample scenes (or a JSON file of your own) to a gallery page, so
  * scenes and styles can be tuned without a Claude session:
  *
- *   bun scripts/preview.ts [scenes.json] [--look <name>|all] [--smooth] > gallery.html
- *
- * `--smooth` draws with pixel art off, as `/fables pixel off` does.
+ *   bun scripts/preview.ts [scenes.json] [--look <name>|all] > gallery.html
  */
 import { readFileSync } from 'node:fs'
 
@@ -15,11 +13,6 @@ import { sceneToSvg } from '../hooks/svg'
 import { SAMPLES } from './samples'
 
 const args = process.argv.slice(2)
-const flag = (name: string) => {
-  const at = args.indexOf(name)
-  return at >= 0 ? args.splice(at, 1).length > 0 : false
-}
-const smooth = flag('--smooth')
 const lookAt = args.indexOf('--look')
 const lookArg = lookAt >= 0 ? args.splice(lookAt, 2)[1] : undefined
 const looks = lookArg === 'all' ? LOOK_NAMES : [lookArg ?? DEFAULT_LOOK]
@@ -29,10 +22,10 @@ const tiles = looks.flatMap(look =>
   scenes.map((raw, i) => {
     const scene = parseScene(raw)
     if (!scene) return `<p>scene ${i}: rejected by parseScene</p>`
-    const svg = sceneToSvg(scene, { look, figure: '3d', pixelArt: !smooth })
+    const svg = sceneToSvg(scene, { look, figure: '3d' })
     // Each scene is its own image: in the band only one is ever on screen, and its ids are its own.
     const src = `data:image/svg+xml,${encodeURIComponent(svg)}`
-    return `<figure><figcaption>${i} · ${look}${smooth ? ' · smooth' : ''} · ${scene.backdrop} · ${scene.hero.action} · ${svg.length} chars</figcaption><img src="${src}" width="960"></figure>`
+    return `<figure><figcaption>${i} · ${look} · ${scene.backdrop} · ${scene.hero.action} · ${svg.length} chars</figcaption><img src="${src}" width="960"></figure>`
   }),
 )
 console.log(`<!doctype html><meta charset="utf-8"><title>Claude Fables preview</title>
