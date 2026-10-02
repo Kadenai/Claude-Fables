@@ -38,7 +38,7 @@ export type PromptInput = {
   story: readonly StoryBeat[]
   /** Set for the closing scene of a turn. */
   ending?: 'answer' | 'aborted' | 'error' | 'refusal'
-  /** The graphic style the scene is drawn in, so the caption can suit it. */
+  /** The graphic style the scene is drawn in, so the caption can suit it; absent for the default look. */
   look?: { label: string; voice: string }
 }
 
@@ -50,7 +50,7 @@ export function buildPrompt({ ask, log, story, ending, look }: PromptInput): str
     past.length ? `Story so far (oldest first):\n${past.join('\n')}` : 'This is the first scene.',
     lines.length ? `Latest activity (oldest first):\n${lines.join('\n')}` : 'No activity yet: the agent is thinking.',
   ]
-  if (look && look.label !== 'Pixel Art') {
+  if (look) {
     parts.push(`This scene is drawn in the style of ${look.label}. Let the caption sound like ${look.voice}, still about the real work.`)
   }
   if (ending === 'answer') parts.push('The agent just FINISHED the task. Draw a short, happy closing scene (celebrate).')

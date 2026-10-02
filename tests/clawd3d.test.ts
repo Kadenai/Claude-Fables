@@ -51,11 +51,11 @@ describe('figures in scenes', () => {
   if (!scene) throw new Error('expected a scene')
 
   test('the figure setting overrides the look', () => {
-    const pixel = sceneToSvg(scene, { look: 'bauhaus', figure: 'pixel' })
-    const model = sceneToSvg(scene, { look: 'bauhaus', figure: '3d' })
-    expect(sceneToSvg(scene, { look: 'bauhaus' })).toBe(model)
+    const pixel = sceneToSvg(scene, { look: 'ukiyoe', figure: 'pixel' })
+    const model = sceneToSvg(scene, { look: 'ukiyoe', figure: '3d' })
+    expect(sceneToSvg(scene, { look: 'ukiyoe' })).toBe(model)
     expect(pixel).not.toBe(model)
-    expect(sceneToSvg(scene, { look: 'pixel', figure: '3d' })).toContain('visibility')
+    expect(sceneToSvg(scene, { look: 'default', figure: '3d' })).toContain('visibility')
   })
 
   test('every look fits the Svg element with either figure, at the widest stage', () => {

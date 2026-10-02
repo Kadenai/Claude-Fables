@@ -1,9 +1,10 @@
 import type { FablesProp, FablesScene } from '../types'
 
 import { type FacePaint, motionSvg } from './hero3d'
+import { gradeFilter } from './grade'
 import { MONOCRAFT, MONOCRAFT_BOLD } from './monocraft'
 import { richBackdrop } from './scenery'
-import { type Cell, type Layer, type Look, lightness, lookFor, remapColors } from './looks'
+import { type Cell, type Look, lookFor, PAPER as CARD_PAPER, type Paper, type Tag, type WordKind } from './looks'
 import { HERO_FRAMES, PALETTE, SPRITES, type SpriteName } from './sprites'
 
 /**
@@ -54,33 +55,12 @@ type Rect = { x: number; y: number; w: number; h: number }
 
 const n = (v: number) => (Math.round(v * 100) / 100).toString()
 
-/** Denser glyphs for darker colors, as a line printer overstrikes. */
-const GLYPHS = '@#%+:'
-
 /**
- * Pixel rows to compact SVG, in art-pixel units, drawn as `cell` says. Solid
- * cells are one <path> per color, each horizontal run of a color one
- * `M x y h w v 1 h -w z` segment; the other cells draw each pixel apart.
+ * Pixel rows to compact SVG, in art-pixel units: one <path> per color, each
+ * horizontal run of a color one `M x y h w v 1 h -w z` segment.
  */
-export function pixelPaths(rows: readonly string[], colorOf: (key: string) => string | undefined, cell: Cell = 'solid'): string {
-  if (cell === 'glyph') {
-    return rows
-      .map((row, y) => {
-        const line = [...row].map(k => {
-          const color = k === '.' ? undefined : colorOf(k)
-          return color ? (GLYPHS[Math.min(GLYPHS.length - 1, Math.floor(lightness(color) * GLYPHS.length))] ?? '#') : ' '
-        })
-        if (!line.some(c => c !== ' ')) return ''
-        return `<text x="0" y="${y + 0.85}" font-family="${FONT}" font-size="1.15" font-weight="700" textLength="${row.length}" lengthAdjust="spacingAndGlyphs" xml:space="preserve" fill="#2a2a2a">${line.join('')}</text>`
-      })
-      .join('')
-  }
+export function pixelPaths(rows: readonly string[], colorOf: (key: string) => string | undefined, _cell: Cell = 'solid'): string {
   const byColor = new Map<string, string[]>()
-  const add = (color: string, d: string) => {
-    const list = byColor.get(color) ?? []
-    list.push(d)
-    byColor.set(color, list)
-  }
   rows.forEach((row, y) => {
     let x = 0
     while (x < row.length) {
@@ -89,27 +69,14 @@ export function pixelPaths(rows: readonly string[], colorOf: (key: string) => st
       let end = x + 1
       while (end < row.length && row[end] === key) end++
       if (color) {
-        if (cell === 'solid') add(color, `M${x} ${y}h${end - x}v1h-${end - x}z`)
-        else {
-          for (let px = x; px < end; px++) {
-            if (cell === 'tile') add(color, `M${px + 0.12} ${y + 0.12}h.76v.76h-.76z`)
-            else if (cell === 'stitch') add(color, `M${px + 0.18} ${y + 0.18}l.64 .64m-.64 0l.64-.64`)
-            else add(color, `M${px} ${y}h1v1h-1z`)
-          }
-        }
+        const list = byColor.get(color) ?? []
+        list.push(`M${x} ${y}h${end - x}v1h-${end - x}z`)
+        byColor.set(color, list)
       }
       x = end
     }
   })
-  const paint = (color: string) =>
-    cell === 'stitch'
-      ? `fill="none" stroke="${color}" stroke-width=".3" stroke-linecap="round" shape-rendering="geometricPrecision"`
-      : cell === 'lead'
-        ? `fill="${color}" stroke="#1a1414" stroke-width=".2"`
-        : cell === 'draft'
-          ? `fill="${color}" fill-opacity=".16" stroke="${color}" stroke-width=".1"`
-          : `fill="${color}"`
-  return [...byColor].map(([color, d]) => `<path ${paint(color)} d="${d.join('')}"/>`).join('')
+  return [...byColor].map(([color, d]) => `<path fill="${color}" d="${d.join('')}"/>`).join('')
 }
 
 const widthOf = (rows: readonly string[]) => Math.max(0, ...rows.map(r => r.length))
@@ -301,10 +268,7 @@ function particles(scene: FablesScene, rand: () => number, sw: number): string {
 
 // ---------------------------------------------------------------- props
 
-/**
- * A hex color as rgb(): the palette remap only rewrites hex colors, so a label
- * written this way keeps the colors it was given inside a remapped layer.
- */
+/** A hex color as rgb(), as prop labels have always been written. */
 function fixed(hex: string): string {
   const m = /^#([0-9a-f]{6})$/i.exec(hex)
   if (!m?.[1]) return hex
@@ -312,7 +276,7 @@ function fixed(hex: string): string {
   return `rgb(${(v >> 16) & 255},${(v >> 8) & 255},${v & 255})`
 }
 
-/** Label colors: the prop's own tint in the plain look, the look's caption colors in every other. */
+/** Label colors: the prop's own tint. */
 export type TagStyle = { fill: string; ink: string; stroke: string }
 
 function label(text: string, cx: number, y: number, tag: TagStyle, sw: number): string {
@@ -326,7 +290,7 @@ function label(text: string, cx: number, y: number, tag: TagStyle, sw: number): 
 }
 
 /** One prop, drawn flat on the pixel stage, with its label tag above it. */
-function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cell: Cell, look: Look): string {
+function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cell: Cell): string {
   const art = artFor(prop)
   const w = widthOf(art.rows) * U
   const h = art.rows.length * U
@@ -361,7 +325,7 @@ function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cel
       break
   }
   const tint = prop.color ?? '#d9d4c7'
-  const style: TagStyle = look.color ? { fill: look.caption.fill, ink: look.caption.ink, stroke: look.caption.stroke } : { fill: INK, ink: tint, stroke: tint }
+  const style: TagStyle = { fill: INK, ink: tint, stroke: tint }
   const tag = prop.label ? label(prop.label, cx, y, style, sw) : ''
   return `<g>${body}${tag}${motion}</g>`
 }
@@ -483,23 +447,14 @@ const MONO_FONT = "Monocraft, ui-monospace, SFMono-Regular, Menlo, Consolas, mon
 const MONO_FACE =
   `<defs><style>@font-face{font-family:Monocraft;font-weight:400;src:url(data:font/woff2;base64,${MONOCRAFT}) format("woff2")}` +
   `@font-face{font-family:Monocraft;font-weight:700;src:url(data:font/woff2;base64,${MONOCRAFT_BOLD}) format("woff2")}</style></defs>`
-const CARD = '#f6f1e7'
-const CARD_INK = '#2b2420'
-const paper = (shape: string) =>
+const paper = (shape: string, skin: Paper) =>
   `<g transform="translate(1.2 1.8)" fill="black" opacity=".22">${shape}</g>` +
-  `<g fill="${CARD_INK}" stroke="${CARD_INK}" stroke-width="2.2" stroke-linejoin="round">${shape}</g><g fill="${CARD}">${shape}</g>`
+  `<g fill="${skin.ink}" stroke="${skin.ink}" stroke-width="2.2" stroke-linejoin="round">${shape}</g><g fill="${skin.card}">${shape}</g>`
 
 /** What a word of the caption is, so it can be set apart: the bubble stays the same, the words change. */
 type Kind = 'plain' | 'code' | 'path' | 'fn' | 'num' | 'bad' | 'good' | 'face'
-const KIND: Record<Exclude<Kind, 'plain'>, string> = {
-  code: 'fill="#186a5a"',
-  path: 'fill="#2b5f9e"',
-  fn: 'fill="#7b3fa0"',
-  num: 'fill="#b5541a" font-weight="700"',
-  bad: 'fill="#b3261e" font-weight="700"',
-  good: 'fill="#2e7d32" font-weight="700"',
-  face: 'fill="#c4613f"',
-}
+/** How a kind of word is set: in its color from the paper, and numbers, failures and successes in bold. */
+const kindAttrs = (kind: WordKind, skin: Paper) => `fill="${skin.kinds[kind]}"${kind === 'num' || kind === 'bad' || kind === 'good' ? ' font-weight="700"' : ''}`
 const FACE = /^(\^_\^|\^\^;?|>_<|>\.<|o_O|O_o|o\.O|:-?[)(DPpO3|/]|;-?\)|[xX]D|T_T|-_-|\._\.|\\o\/|<3|¯\\_\(ツ\)_\/¯|\(•_•\)|\(⌐■_■\)|->|=>|<-|~>|>>>|\.\.\.|\[(OK|ok|WIP|TODO|DONE)\]|\/\/|#!|\$|&&|\|\|)$/
 const BAD = /^(✗|FAIL(ED)?|failed|failing|fails|broke|broken|crash(ed|es)?|red|\w*Error|\w*Exception|N\+1|panic|segfault|404|500)$/
 const GOOD = /^(✓|PASS(ED)?|passed|passes|passing|green|clean|fixed|ships?|shipped|done|OK|merged|liftoff|LGTM)$/i
@@ -575,8 +530,8 @@ function wrapWords(list: readonly Word[], width: number): Word[][] {
   return lines
 }
 const lineLen = (line: readonly Word[]) => line.reduce((t, w) => t + wordLen(w), 0) + line.length - 1
-const lineSvg = (line: readonly Word[]) =>
-  line.map(w => escapeXml(w.lead) + (w.kind === 'plain' ? escapeXml(w.core) : `<tspan ${KIND[w.kind]}>${escapeXml(w.core)}</tspan>`) + escapeXml(w.tail)).join(' ')
+const lineSvg = (line: readonly Word[], skin: Paper) =>
+  line.map(w => escapeXml(w.lead) + (w.kind === 'plain' ? escapeXml(w.core) : `<tspan ${kindAttrs(w.kind, skin)}>${escapeXml(w.core)}</tspan>`) + escapeXml(w.tail)).join(' ')
 
 const overlap = (a: Rect, b: Rect) =>
   Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))
@@ -617,7 +572,8 @@ function caption(
 ): string {
   const { fill, stroke, radius } = look.caption
   const onPaper = tone !== undefined
-  const ink = onPaper ? CARD_INK : look.caption.ink
+  const skin = look.paper ?? CARD_PAPER
+  const ink = onPaper ? skin.ink : look.caption.ink
   const heroX = hero.x
   const heroY = hero.y
   // Claude's box, reaching as high as Claude jumps.
@@ -670,7 +626,7 @@ function caption(
         `<clipPath id="${id}"><rect x="${n(x)}" y="${n(y + 2 + i * type.line)}" width="0" height="${type.line + 2}">` +
         `<animate attributeName="width" from="0" to="${w}" dur="${n(dur)}s" begin="${n(delay)}s" fill="freeze"/></rect></clipPath>`
       delay += dur
-      return reveal + `<text clip-path="url(#${id})" x="${n(x + 7)}" y="${n(y + type.base + i * type.line)}" font-family="${type.font}" font-size="${type.size}" fill="${ink}">${lineSvg(line)}</text>`
+      return reveal + `<text clip-path="url(#${id})" x="${n(x + 7)}" y="${n(y + type.base + i * type.line)}" font-family="${type.font}" font-size="${type.size}" fill="${ink}">${lineSvg(line, skin)}</text>`
     })
     .join('')
   // While Claude walks, the bubble walks with it along the same path, held inside the stage.
@@ -697,7 +653,7 @@ function caption(
     const shape =
       `<rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="6"/>` +
       `<path d="M${n(base[0][0])} ${n(base[0][1])}L${n(tip[0])} ${n(tip[1])}L${n(base[1][0])} ${n(base[1][1])}z"/>`
-    return `<g data-part="speech" data-tone="${tone}"${follow || ''}>${MONO_FACE}${paper(shape)}${rows}${fade}</g>`
+    return `<g data-part="speech" data-tone="${tone}"${follow || ''}>${MONO_FACE}${paper(shape, skin)}${rows}${fade}</g>`
   }
   return `<g data-part="speech"${follow || ''}><rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>${rows}${fade}</g>`
 }
@@ -710,6 +666,14 @@ function title(text: string, color: string, look: Look): string {
     `<path d="M6 12V6h6M${n(6 + w)} 12V6h-6" fill="none" stroke="${color}" stroke-width="1"/>` +
     `<text x="14" y="10">${escapeXml(text)}</text></g>`
   )
+}
+
+/** The chapter tag as the look draws it, or the plain tag with the room it takes. */
+function chapterTag(text: string, color: string, look: Look, rich: boolean): Tag {
+  const inset = look.inset ?? 0
+  if (look.tag) return look.tag(text, inset)
+  const shown = rich ? { ...look, font: MONO_FONT, charW: 6.3 } : look
+  return { svg: title(text, color, shown), w: text.length * look.charW + 34 + inset, h: 16 + inset }
 }
 
 // ---------------------------------------------------------------- the scene
@@ -731,7 +695,7 @@ const PIXEL = 2
  * (a tiny dot of a tiled grid, cut out of the drawing) and spread over its whole
  * square. The grid starts at the stage's corner, so pixels line up with it.
  */
-const PIXELIZE = (sw: number, claude: Rect) => {
+const PIXELIZE = (sw: number, claude: Rect, grade = '') => {
   const dot = 0.4
   const r = n((PIXEL - dot) / 2)
   // The grid: one dot tiled every PIXEL, seeded inside the filter's region on a whole pixel
@@ -769,8 +733,11 @@ const PIXELIZE = (sw: number, claude: Rect) => {
     `<feMorphology in="body" operator="dilate" radius="${PIXEL}"/><feComposite in2="body" operator="out" result="ring"/>` +
     `<feFlood flood-color="${SPRITE_OUTLINE}"/><feComposite in2="ring" operator="in" result="outline"/>` +
     `<feMerge><feMergeNode in="all"/><feMergeNode in="outline"/><feMergeNode in="body"/><feMergeNode in="eyes"/></feMerge></filter>` +
-    // The rest sampled crisp, at the middle of each square, so colors stay as rich as drawn.
-    `<filter id="sc-pixelize" ${region(stage)} color-interpolation-filters="sRGB">${grid(stage)}${sample('SourceGraphic', 'px')}</filter>`
+    // The rest sampled crisp, at the middle of each square, so colors stay as rich as drawn. A look's
+    // grade runs first in the same filter: one pass over the stage costs far less than two nested.
+    `<filter id="sc-pixelize" ${region(stage)} color-interpolation-filters="sRGB">` +
+    (grade ? `${grade}<feMerge result="graded"><feMergeNode/></feMerge>` : '') +
+    `${grid(stage)}${sample(grade ? 'graded' : 'SourceGraphic', 'px')}</filter>`
   )
 }
 
@@ -790,54 +757,65 @@ export function sceneToSvg(
   const width = options.width ?? sw
   const height = options.height ?? Math.round((width * H) / sw)
   const look = lookFor(options.look)
-  const paint = (layer: Layer, svg: string) => (look.color ? remapColors(svg, hex => look.color?.(hex, layer) ?? hex) : svg)
-  const tint = (layer: Layer, hex: string) => look.color?.(hex, layer) ?? hex
   const rand = rng(`${scene.backdrop}|${scene.caption}`)
   const wants = options.figure && options.figure !== 'auto' ? options.figure : look.figure
-  const figure: Figure = wants === '3d' ? { kind: '3d', paint: look.facePaint ?? 'solid' } : { kind: 'pixel', cell: look.cell }
+  const figure: Figure = wants === '3d' ? { kind: '3d', paint: 'solid' } : { kind: 'pixel', cell: look.cell }
   // The 3D Claude gets scenery and props with depth to match; the pixel sprite keeps the flat pixel stage.
   const rich = figure.kind === '3d'
   // Pixel art (the default) pixelizes the whole stage crisply; without it the scenery takes a soft blur instead.
   const pixelArt = rich && options.pixelArt !== false
-  const stageAt = (lean: boolean) => (rich ? richBackdrop(scene, rng(`${scene.backdrop}|${scene.caption}|stage`), sw, GROUND_Y, W, lean, !pixelArt) : flatStage(backdrop(scene, rand, sw)))
+  // Smooth, the scenery is softened so Claude reads first; a look's grade brings its own treatment instead,
+  // and softening under it would be redone on every frame.
+  const stageAt = (lean: boolean) =>
+    rich ? richBackdrop(scene, rng(`${scene.backdrop}|${scene.caption}|stage`), sw, GROUND_Y, W, lean, !pixelArt && !look.grade) : flatStage(backdrop(scene, rand, sw))
   let stage = stageAt(false)
   const dust = particles(scene, rand, sw)
   // The rich stage tells the story in words alone: no props stand about the scene.
-  const props = rich ? [] : scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell, look))
+  const props = rich ? [] : scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell))
   const plan = hero(scene, stage.floor, sw, figure)
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
-  const sky = tint('sky', stage.sky)
-  const ground = tint('ground', stage.ground)
+  const sky = stage.sky
+  const ground = stage.ground
+  // A look's grade takes the stage, Claude and all, before any pixelizing; past the stage's edges its own color shows.
+  const gradeBody = look.grade?.(sw, H, pixelArt) ?? ''
+  // Smooth, the grade is a filter of its own; on a pixel-art stage it runs inside the pixelizer.
+  const grade = gradeBody && !pixelArt ? `<defs>${gradeFilter('lk-grade', sw, H, gradeBody)}</defs>` : ''
+  const edge = look.edge ?? sky
+  const tag = scene.title ? chapterTag(scene.title, look.titleColor ?? (rich ? '#efe6d2' : accent), look, rich) : undefined
   // What the speech bubble keeps clear of: the props still drawn, their labels, the chapter tag.
   const avoid = (propCount: number): Rect[] => [
     ...scene.props.slice(0, propCount).flatMap(p => propRects(p, stage.floor, sw, U)),
-    ...(scene.title ? [{ x: 0, y: 0, w: scene.title.length * look.charW + 34 + (look.inset ?? 0), h: 16 + (look.inset ?? 0) }] : []),
+    ...(tag ? [{ x: 0, y: 0, w: tag.w, h: tag.h }] : []),
     ...stage.keep,
   ]
   // Everywhere Claude goes, jumps and digs included: the region its own pixelizing covers.
   const claudeBox: Rect = { x: Math.min(plan.startX, plan.endX) - 30, y: plan.endY - 40, w: Math.abs(plan.endX - plan.startX) + HERO_W + 60, h: HERO_H + 56 }
   const fore = (withDust: boolean, propCount: number) =>
-    paint('fore', (withDust ? dust : '') + props.slice(0, propCount).join('') + (pixelArt ? `<g filter="url(#sc-pixelize-claude)">${plan.svg}</g>` : plan.svg))
+    (withDust ? dust : '') + props.slice(0, propCount).join('') + (pixelArt ? `<g filter="url(#sc-pixelize-claude)">${plan.svg}</g>` : plan.svg)
 
   // Sky and ground run far past the stage, so a box the stage could not match
   // (past MIN_W or MAX_W) shows more sky and ground instead of the frame's page.
   const build = (withDust: boolean, propCount: number) =>
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${sw} ${H}" width="${width}" height="${height}" ` +
-    `shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" style="display:block;background:${ground}">` +
-    (look.defs ? `<defs>${look.defs}</defs>` : '') +
-    `<rect x="${-sw * 4}" y="${-H * 4}" width="${sw * 9}" height="${H * 4 + GROUND_Y}" fill="${sky}"/>` +
-    (pixelArt ? `<defs>${PIXELIZE(sw, claudeBox)}</defs><g filter="url(#sc-pixelize)">` : '') +
-    (look.under?.(sw, H, GROUND_Y) ?? '') +
-    paint('back', stage.back) +
+    `shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" style="display:block;background:${look.grade ? edge : ground}"${look.grade ? ` data-look="${look.name}"` : ''}>` +
+    grade +
+    `<rect x="${-sw * 4}" y="${-H * 4}" width="${sw * 9}" height="${H * 4 + GROUND_Y}" fill="${look.grade ? edge : sky}"/>` +
+    (pixelArt ? `<defs>${PIXELIZE(sw, claudeBox, gradeBody)}</defs><g filter="url(#sc-pixelize)">` : '') +
+    (grade ? `<g filter="url(#lk-grade)">` : '') +
+    // The graded stage carries its own sky, so the grade sees the whole picture.
+    (look.grade ? `<rect width="${sw}" height="${H}" fill="${sky}"/>` : '') +
+    stage.back +
     `<rect x="${-sw * 4}" y="${stage.groundTop}" width="${sw * 9}" height="${H * 4}" fill="${ground}"/>` +
     // Ground-level scenery goes down before anything that stands on it.
-    paint('back', stage.near) +
-    (look.foreFilter ? `<g filter="url(#${look.foreFilter})">${fore(withDust, propCount)}</g>` : fore(withDust, propCount)) +
+    stage.near +
+    fore(withDust, propCount) +
     stage.lens +
+    (grade ? '</g>' : '') +
     (pixelArt ? '</g>' : '') +
-    (look.over?.(sw, H, GROUND_Y) ?? '') +
-    (scene.title ? title(scene.title, look.titleColor ?? (rich ? '#efe6d2' : accent), rich ? { ...look, font: MONO_FONT, charW: 6.3 } : look) : '') +
+    (look.texture?.(sw, H, GROUND_Y, pixelArt) ?? '') +
+    (look.frame?.(sw, H, GROUND_Y) ?? '') +
+    (tag?.svg ?? '') +
     caption(scene.caption, { startX: plan.startX, x: plan.endX, y: plan.endY, arrive: plan.arrive, jump: scene.hero.action === 'celebrate' ? 16 : scene.hero.action === 'fly' ? 2 : 0, sway: scene.hero.action === 'inspect' ? 2 * U : 0 }, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined) +
     `</svg>`
 

@@ -1,61 +1,85 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { buildPrompt } from '../hooks/narrator'
-import { LOOK_NAMES, LOOKS, lookFor, nearest, remapColors } from '../hooks/looks'
+import { DEFAULT_LOOK, findLook, LOOK_NAMES, LOOKS, lookFor, STYLE_NAMES } from '../hooks/looks'
 import { parseScene } from '../hooks/scene'
 import { MAX_SVG, sceneToSvg } from '../hooks/svg'
 
 const SCENE = {
   backdrop: 'forest',
   hero: { action: 'walk', from: 5, to: 35 },
-  props: [{ sprite: 'bug', x: 60, y: 'ground', motion: 'shake', label: 'issue #123' }],
   particles: { kind: 'leaves', density: 0.5 },
   caption: 'Chasing #abc through the undergrowth.',
   title: 'field notes',
+  tone: 'work',
 }
+const BACKDROPS = ['forest', 'space', 'city', 'desert', 'volcano', 'lab', 'night']
 
 describe('looks', () => {
-  test('remapping recolors paint, never text', () => {
-    const svg = '<rect fill="#abc" stroke="#112233"/><animate values="#fff;#000"/><text fill="#abc">see #abc</text>'
-    const out = remapColors(svg, () => '#ff0000')
-    expect(out).toBe('<rect fill="#ff0000" stroke="#ff0000"/><animate values="#ff0000;#ff0000"/><text fill="#ff0000">see #abc</text>')
-  })
-
-  test('nearest picks the closest palette color', () => {
-    expect(nearest('#fe0102', ['#000000', '#ff0000', '#00ff00'])).toBe('#ff0000')
-    expect(nearest('#0a0a0a', ['#000000', '#ffffff'])).toBe('#000000')
-  })
-
   test('an unknown look draws the default', () => {
-    expect(lookFor('no-such-look').name).toBe('pixel')
-    expect(lookFor(undefined).name).toBe('pixel')
+    expect(lookFor('no-such-look').name).toBe(DEFAULT_LOOK)
+    expect(lookFor(undefined).name).toBe(DEFAULT_LOOK)
   })
 
-  test('every look draws every backdrop within the Svg limit, keeping the text', () => {
-    for (const name of LOOK_NAMES) {
-      for (const backdrop of ['forest', 'space', 'city', 'desert', 'volcano', 'lab', 'night']) {
-        const scene = parseScene({ ...SCENE, backdrop, props: Array.from({ length: 8 }, (_, i) => ({ ...SCENE.props[0], x: i * 12 })) })
-        if (!scene) throw new Error('expected a scene')
-        const svg = sceneToSvg(scene, { width: 2400, height: 192, look: name })
-        expect(svg.length).toBeLessThan(MAX_SVG)
-        expect(svg).toContain('Chasing #abc')
-        expect(svg.endsWith('</svg>')).toBe(true)
+  test('the eleven styles are there, and found by any fair spelling', () => {
+    expect(STYLE_NAMES.length).toBe(11)
+    expect(findLook('Ukiyo-e')?.name).toBe('ukiyoe')
+    expect(findLook('golden age')?.name).toBe('golden')
+    expect(findLook('frutiger aero')?.name).toBe('aero')
+    expect(findLook('copperplate')?.name).toBe('engraving')
+    expect(findLook('millefleur')?.name).toBe('tapestry')
+    expect(findLook('cave painting')?.name).toBe('cave')
+    expect(findLook('nonsense')).toBeUndefined()
+  })
+
+  test('every style draws every backdrop within the Svg limit, pixelized or smooth, keeping the text', () => {
+    for (const look of STYLE_NAMES) {
+      for (const backdrop of BACKDROPS) {
+        for (const pixelArt of [true, false]) {
+          const scene = parseScene({ ...SCENE, backdrop })
+          if (!scene) throw new Error('expected a scene')
+          const svg = sceneToSvg(scene, { width: 2400, height: 192, look, figure: '3d', pixelArt })
+          expect(svg.length).toBeLessThan(MAX_SVG)
+          expect(svg).toContain('Chasing #abc')
+          expect(svg).toContain(`data-look="${look}"`)
+          expect(svg.includes('filter="url(#lk-grade)"')).toBe(!pixelArt)
+          expect(svg.endsWith('</svg>')).toBe(true)
+        }
       }
     }
   })
 
-  test('a look changes the drawing, and the default changes nothing', () => {
+  test('ids are never defined twice in one drawing', () => {
+    for (const look of LOOK_NAMES) {
+      const scene = parseScene(SCENE)
+      if (!scene) throw new Error('expected a scene')
+      const svg = sceneToSvg(scene, { look, figure: '3d' })
+      const ids = [...svg.matchAll(/\sid="([^"]+)"/g)].map(m => m[1])
+      expect(ids.length).toBe(new Set(ids).size)
+    }
+  })
+
+  test('the default look changes nothing, and every style draws differently', () => {
     const scene = parseScene(SCENE)
     if (!scene) throw new Error('expected a scene')
-    expect(sceneToSvg(scene, { look: 'pixel' })).toBe(sceneToSvg(scene))
-    const drawn = new Set(LOOK_NAMES.map(look => sceneToSvg(scene, { look })))
+    expect(sceneToSvg(scene, { look: DEFAULT_LOOK })).toBe(sceneToSvg(scene))
+    expect(sceneToSvg(scene, { look: DEFAULT_LOOK, figure: '3d' })).not.toContain('data-look')
+    const drawn = new Set(LOOK_NAMES.map(look => sceneToSvg(scene, { look, figure: '3d' })))
     expect(drawn.size).toBe(LOOK_NAMES.length)
+  })
+
+  test('the caption takes the style paper and inks', () => {
+    const scene = parseScene({ ...SCENE, caption: 'Ran `npm test`: 3 failed' })
+    if (!scene) throw new Error('expected a scene')
+    const svg = sceneToSvg(scene, { look: 'handheld', figure: '3d' })
+    expect(svg).toContain('fill="#9bbc0f"')
+    expect(svg).toContain('<tspan fill="#0f380f">npm</tspan>')
   })
 
   test('the narrator hears which style it writes for', () => {
     const look = LOOKS.sampler
     if (!look) throw new Error('expected the sampler look')
     expect(buildPrompt({ ask: 'x', log: [], story: [], look })).toContain('Victorian')
-    expect(buildPrompt({ ask: 'x', log: [], story: [], look: lookFor('pixel') })).not.toContain('style of')
+    expect(buildPrompt({ ask: 'x', log: [], story: [] })).not.toContain('style of')
   })
 })

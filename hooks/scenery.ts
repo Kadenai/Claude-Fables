@@ -14,8 +14,8 @@
  * scene has no visible seam at any width. Motion is slow and belongs to the
  * story: mist drifting, smoke rising, a train going home.
  *
- * Shading uses the named colors `black` and `white`: a look's palette remap
- * only touches hex colors, so the shading survives every look.
+ * Shading uses the named colors `black` and `white`. A style (looks.ts) grades
+ * the finished picture, so nothing here needs to know which style it is drawn in.
  */
 import type { FablesScene } from '../types'
 

@@ -51,6 +51,8 @@ declare module 'claude-code' {
       enabled: boolean
       /** Draw the stage as pixel art (the default), or smooth. */
       pixelArt: boolean
+      /** The graphic style scenes are drawn in (looks.ts); 'default' for none. */
+      style: string
     }
   }
 }

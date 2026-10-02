@@ -5,19 +5,19 @@ import type { FablesScene } from '../types'
 
 import { type Activity, pushActivity, summarizeSpeech, summarizeTool } from './activity'
 import { backoffMs, buildPrompt, remember, sceneFromReply, type StoryBeat, SYSTEM } from './narrator'
+import { DEFAULT_LOOK, findLook, LOOKS, lookFor, STYLE_NAMES } from './looks'
 import { H, sceneToSvg, W } from './svg'
 
 const scene = atom({ plugin: 'fables', key: 'scene' } as const, null)
 const enabled = atom({ plugin: 'fables', key: 'enabled' } as const, true)
 const pixelArt = atom({ plugin: 'fables', key: 'pixelArt' } as const, true)
+const style = atom({ plugin: 'fables', key: 'style' } as const, DEFAULT_LOOK)
 
 const STORE_ENABLED = 'enabled'
 const STORE_PIXEL = 'pixelArt'
-/**
- * Every scene is drawn in the default look with the 3D Claude. The other looks
- * (looks.ts) and the pixel Claude are paused while the scenes are perfected.
- */
-const DRAWN = { look: 'pixel', figure: '3d' } as const
+const STORE_STYLE = 'style'
+/** Every scene is drawn with the 3D Claude, in the style the person chose (looks.ts). */
+const FIGURE = '3d'
 /** How long the closing scene of a turn stays up. */
 const LINGER_MS = 30000
 /** This plugin's own tools, if it ever registers any, are not part of the story. */
@@ -56,6 +56,8 @@ type Narrator = {
   nextAt: number
   failures: number
   turn: number
+  /** The style scenes are drawn in, so the narrator can write in its voice. */
+  look: string
   linger: Timer | undefined
 }
 
@@ -74,7 +76,7 @@ async function narrate($: EngineInterface, n: Narrator) {
     const reply = await $.model.complete({
       model: n.model,
       system: SYSTEM,
-      prompt: buildPrompt({ ask: n.ask, log: n.log, story: n.story, ending: closing }),
+      prompt: buildPrompt({ ask: n.ask, log: n.log, story: n.story, ending: closing, look: n.look === DEFAULT_LOOK ? undefined : lookFor(n.look) }),
       maxTokens: 2000,
       effort: 'low',
       timeoutMs: 30000,
@@ -132,6 +134,7 @@ export const register: Register = (on, options) => {
     nextAt: 0,
     failures: 0,
     turn: 0,
+    look: DEFAULT_LOOK,
     linger: undefined,
   }
 
@@ -140,10 +143,13 @@ export const register: Register = (on, options) => {
     await update($, enabled, () => n.isOn)
     await update($, pixelArt, () => true)
     if ((await $.store.get(STORE_PIXEL)) === false) await update($, pixelArt, () => false)
+    const saved = await $.store.get(STORE_STYLE)
+    n.look = typeof saved === 'string' && LOOKS[saved] ? saved : DEFAULT_LOOK
+    await update($, style, () => n.look)
     await $.command.register({
       name: 'fables',
-      description: 'Claude Fables: turn the cartoons above the prompt on or off, or switch pixel art',
-      argumentHint: '[on|off|pixel [on|off]]',
+      description: 'Claude Fables: turn the cartoons above the prompt on or off, switch pixel art, or pick a style',
+      argumentHint: '[on|off|pixel [on|off]|style [name|off]]',
     })
     $.clock.every(1000, () => void tick($, n))
     return next(e)
@@ -151,8 +157,20 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'fables' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
-    if (/^(style|styles|figure)\b/.test(arg)) {
-      return { text: 'Styles are paused for now: Claude Fables draws every scene in its default look.' }
+    const st = /^(?:style|styles|look)\b\s*(.*)$/.exec(arg)
+    if (st) {
+      const want = (st[1] ?? '').trim()
+      if (!want) {
+        const list = STYLE_NAMES.map(name => `${name === n.look ? '▸' : ' '} ${name} · ${lookFor(name).label}`).join('\n')
+        const now = n.look === DEFAULT_LOOK ? 'the default look' : lookFor(n.look).label
+        return { text: `Scenes are drawn in ${now}. Pick a style with /fables style <name>, or /fables style off:\n${list}` }
+      }
+      const look = /^(off|none|default|plain)$/.test(want) ? lookFor(DEFAULT_LOOK) : findLook(want)
+      if (!look) return { text: `No style called "${want}". /fables style lists them.` }
+      n.look = look.name
+      await $.store.set(STORE_STYLE, look.name)
+      await update($, style, () => look.name)
+      return { text: look.name === DEFAULT_LOOK ? 'Back to the default look.' : `Scenes are now drawn as ${look.label}.` }
     }
     const px = /^pixel(?:\s+(on|off))?$/.exec(arg)
     if (px) {
@@ -221,7 +239,7 @@ export const register: Register = (on, options) => {
     const { width, height } = bandBox(e.props.bodyColumns)
     return (
       <Svg
-        source={sceneToSvg(current, { width, height, ...DRAWN, pixelArt: await read($, pixelArt) })}
+        source={sceneToSvg(current, { width, height, look: await read($, style), figure: FIGURE, pixelArt: await read($, pixelArt) })}
         alt={current.caption}
         width={width}
         height={height}

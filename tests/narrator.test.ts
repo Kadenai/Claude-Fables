@@ -101,3 +101,32 @@ test('/fables off clears the stage and stops asking', async ($, on) => {
   expect(await desktop.find({ type: 'Svg' })).toBe(undefined)
   await desktop.unmount()
 })
+
+test('a style is chosen by name and draws the band, until it is turned off', async ($, on) => {
+  const clock = world(on)
+  const asked: string[] = []
+  on('model.complete', (_, e) => {
+    asked.push(e.prompt)
+    return answer(JSON.stringify(SCENE))
+  })
+  const run = (args: string) => $.command.run({ command: 'fables', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })
+  const band = async () => {
+    const desktop = await $.ui.mount({ ...BAND, surface: 'desktop' })
+    const svg = await desktop.find({ type: 'Svg' })
+    await desktop.unmount()
+    return String((svg?.props as { source?: unknown } | undefined)?.source)
+  }
+
+  await $.session.start({ cwd: '/work', surface: 'desktop', isInteractive: true })
+  expect((await run('style')).text).toContain('ukiyoe')
+  expect((await run('style Ukiyo-e')).text).toContain('Ukiyo-e')
+  expect((await run('style nonsense')).text).toContain('No style')
+
+  await $.prompt.submit({ text: 'tidy the README', wait: false, origin: { kind: 'composer' } })
+  await clock.advance(1000)
+  expect(asked[0]).toContain('woodblock')
+  expect(await band()).toContain('data-look="ukiyoe"')
+
+  expect((await run('style off')).text).toContain('default')
+  expect(await band()).not.toContain('data-look')
+})

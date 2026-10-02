@@ -33,7 +33,8 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 | `hooks/scene.ts` | The scene format and its validator |
 | `hooks/sprites.ts` | The pixel-art library: Claude in two walk frames, plus 30+ props |
 | `hooks/svg.ts` | Scene → animated SVG: backdrops, particles, props, hero, caption |
-| `hooks/looks.ts` | The graphic styles (paused): color remaps, pixel treatments, textures and frames |
+| `hooks/looks.ts` | The styles: each one's grade, texture, frame, chapter tag and caption paper |
+| `hooks/grade.ts` | The filter building blocks the styles grade with: ramps, hue masks, outlines, screens, tesserae |
 | `hooks/clawd3d.ts` | The 3D Claude: the box model, its motions and its projection (ported from the gallery) |
 | `hooks/hero3d.ts` | Bakes the posed 3D model into SVG frames that SMIL plays in turn |
 | `hooks/scenery.ts` | The seven authored scenes: light maps, materials, reflections |
@@ -61,6 +62,7 @@ To try it from the terminal for one session instead, run `claude --plugin-dir ~/
 
 - `/fables`: toggle the mod on or off. `/fables on` and `/fables off` also work. The setting is remembered across sessions.
 - `/fables pixel`: toggle pixel art (on by default). `/fables pixel on` and `/fables pixel off` also work, and it is remembered too.
+- `/fables style <name>`: draw every scene in one of the styles below, for example `/fables style ukiyo-e` or `/fables style golden age`. `/fables style` lists them, and `/fables style off` goes back to the default look. It is remembered too.
 - **Scene model:** Sonnet by default. You can switch to `haiku` (cheaper, faster) or `opus` in the config menu, or under `pluginConfigs.fables.model` in settings.
 
 Every scene is one small Sonnet request, so this costs a few requests per minute while Claude is working.
@@ -113,9 +115,27 @@ The narrator also picks a tone for the moment. Trouble leads the caption with a 
 
 The model and its projection are ported from the gallery's engine by [ChetasLua](https://github.com/ChetasLua), under the MIT License.
 
-## Styles (paused)
+## Styles
 
-The eighteen graphic styles after the [Claude Mascot Style Gallery](https://github.com/henrik-thevibe/Claude-Mascot-Style-Gallery) (blueprint, neon, ukiyo-e, golden age comic, stained glass and the rest) are switched off for now, so that every scene can be made as good as it can be in one look. `/fables style` says so. The code stays in `hooks/looks.ts`, and `sceneToSvg` still accepts a `look`, so they can come back.
+Eleven styles from the [Claude Mascot Style Gallery](https://github.com/henrik-thevibe/Claude-Mascot-Style-Gallery) restyle the whole scene, scenery and Claude together. They are cosmetic only: the story, the scenery and Claude's path stay as they are, and nothing is added to the scene.
+
+| Style | `/fables style …` | How it looks |
+| --- | --- | --- |
+| Cave Painting | `cave` | Charcoal, umber and ochre daubed on lit limestone, Claude in red earth |
+| Blueprint | `blueprint` | Cyanotype blues with every contour drawn in white line, on a drafting grid |
+| Mosaic | `mosaic` | Set in tesserae of marble, terracotta and slate, with grout and a meander border |
+| Sampler | `sampler` | Cross-stitched in a few skeins of thread on bare linen, with a stitched hem |
+| Frutiger Aero | `aero` | Lifted, sky-blue and grass-green, with a glossy highlight and a glass frame |
+| Handheld | `handheld` | Four shades of LCD green behind a bezel |
+| Copperplate Engraving | `engraving` | Sepia line hatching on cream, crossed in the shadows, inside a plate mark |
+| Millefleur Tapestry | `tapestry` | Woven in weld, woad and madder on deep green, with a woven border |
+| Golden Age Comic | `golden` | Bold colors in Ben-Day dots on yellowed newsprint, with black keylines |
+| Ukiyo-e | `ukiyoe` | Prussian blue and indigo in flat inks, vermilion for warm things, key-block lines and bokashi |
+| Kamon | `kamon` | Two tones only, cream on black lacquer, with Claude cut in cream |
+
+The authored scenes keep much of their color in filters (materials, light, the lens), so a style does not recolor the drawing. It grades the finished picture through one SVG filter: lightness mapped through the style's inks, hue masks that keep warm things (Claude, lava, lamplight) in their own ramp, outlines found by comparing the picture with a shifted copy of itself, and threshold screens for hatching and halftone. With pixel art on, the grade runs inside the pixelizer's own filter before the stage is sampled, so the pixels take the style's colors and its lines land on whole pixels. With pixel art off, the grade stands in for the scenery's softening. Over the graded stage a style lays a static texture (paper, weave, grout, an LCD grid), a frame, and its own chapter tag. The caption keeps its bubble, its type and its kinds of words, on the style's paper and in its inks. The narrator also hears the style's voice, so a caption can sound like a 1938 comic or a woodblock print while still being about the real work.
+
+The default look stays exactly as it was: a scene drawn with no style is the same drawing, byte for byte.
 
 ## Develop
 
@@ -123,6 +143,7 @@ The eighteen graphic styles after the [Claude Mascot Style Gallery](https://gith
 claude plugin validate .              # manifest, hooks and state contract
 claude plugin test .                  # unit tests plus engine tests (stubbed Sonnet)
 bun scripts/preview.ts > gallery.html # render sample scenes to a page in the browser
+bun scripts/preview.ts --look all --smooth > styles.html # every style, pixel art off
 ```
 
 `scripts/scenarios.ts` holds five whole sessions (prompt, tool calls, Claude's words, and the scenes for each moment) that the viewer plays back on the mod's own narration loop; a test keeps every scripted scene valid. `bun scripts/preview.ts my-scenes.json` renders your own scenes, which is handy for tuning sprites or trying out what Sonnet sent back.
