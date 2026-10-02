@@ -28,7 +28,7 @@
 </p>
 
 > [!NOTE]
-> Claude Fables was developed entirely in Claude Code cloud environments, so there may be bugs and rough edges. [Issues](https://github.com/henrik-thevibe/Claude-Fables/issues) and pull requests are very welcome.
+> Claude Fables was developed entirely in Claude Code cloud environments and tested locally in the desktop app as well. Still, there may be bugs and rough edges. [Issues](https://github.com/henrik-thevibe/Claude-Fables/issues) and pull requests are very welcome.
 
 While Claude works, Fables watches each tool call it makes and each line it says. Every few seconds it asks Sonnet (or Haiku, if you prefer) to retell the latest moment as a scene. Bug hunts turn into nature documentaries and bad regexes get pulled over by the train police. Claude appears as a small orange critter walking, sneaking or flying through the story. When the turn ends there is a closing scene, and it stays up for 30 seconds.
 
@@ -249,7 +249,7 @@ The images in this README are drawn by the mod itself: `bun scripts/readme-gifs.
 
 <p align="center"><img src="assets/cloud.gif" alt="Claude flying over the moon: Built entirely in the cloud. Bugs may lurk." width="960"></p>
 
-Claude Fables was developed entirely in Claude Code cloud environments: the mod, its tests, the scenes and styles, this README's images and the launch video. So there may be bugs, and some may only show up in real use on your machine. If something looks off, run `claude --debug` and [open an issue](https://github.com/henrik-thevibe/Claude-Fables/issues) with what the log says.
+Claude Fables was developed entirely in Claude Code cloud environments: the mod, its tests, the scenes and styles, this README's images and the launch video. It was also tested locally in the desktop app, but there may still be bugs, and some may only show up on your setup. If something looks off, run `claude --debug` and [open an issue](https://github.com/henrik-thevibe/Claude-Fables/issues) with what the log says.
 
 ## Credits
 
