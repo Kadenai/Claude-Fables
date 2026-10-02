@@ -40,10 +40,30 @@ describe('looks', () => {
           if (!scene) throw new Error('expected a scene')
           const svg = sceneToSvg(scene, { width: 2400, height: 192, look, figure: '3d', pixelArt })
           expect(svg.length).toBeLessThan(MAX_SVG)
-          expect(svg).toContain('Chasing #abc')
+          // A drafting hand letters in capitals.
+          expect(svg.toLowerCase()).toContain('chasing #abc')
           expect(svg).toContain(`data-look="${look}"`)
-          expect(svg.includes('filter="url(#lk-grade)"')).toBe(!pixelArt)
+          // A graded style runs its own filter when smooth; an artwork has none to run.
+          if (LOOKS[look]?.grade) expect(svg.includes('filter="url(#lk-grade)"')).toBe(!pixelArt)
           expect(svg.endsWith('</svg>')).toBe(true)
+        }
+      }
+    }
+  })
+
+  test('a style drawn as art repaints every element, leaving none of the lit light or materials', () => {
+    const arts = LOOK_NAMES.filter(name => LOOKS[name]?.art)
+    expect(arts).toContain('ukiyoe')
+    expect(arts).toContain('blueprint')
+    for (const look of arts) {
+      for (const backdrop of BACKDROPS) {
+        for (const pixelArt of [true, false]) {
+          const scene = parseScene({ ...SCENE, backdrop })
+          if (!scene) throw new Error('expected a scene')
+          const svg = sceneToSvg(scene, { look, figure: '3d', pixelArt })
+          const lit = [...svg.matchAll(/filter="url\(#(sc-[\w-]+)\)"/g)].map(m => m[1]).filter(id => !id?.startsWith('sc-pixelize'))
+          expect(lit).toEqual([])
+          expect(svg).not.toContain('mix-blend-mode')
         }
       }
     }

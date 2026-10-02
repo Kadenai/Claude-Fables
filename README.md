@@ -133,7 +133,42 @@ Eleven styles from the [Claude Mascot Style Gallery](https://github.com/henrik-t
 | Ukiyo-e | `ukiyoe` | Prussian blue and indigo in flat inks, vermilion for warm things, key-block lines and bokashi |
 | Kamon | `kamon` | Two tones only, cream on black lacquer, with Claude cut in cream |
 
-The authored scenes keep much of their color in filters (materials, light, the lens), so a style does not recolor the drawing. It grades the finished picture through one SVG filter: lightness mapped through the style's inks, hue masks that keep warm things (Claude, lava, lamplight) in their own ramp, outlines found by comparing the picture with a shifted copy of itself, and threshold screens for hatching and halftone. With pixel art on, the grade runs inside the pixelizer's own filter before the stage is sampled, so the pixels take the style's colors and its lines land on whole pixels. With pixel art off, the grade stands in for the scenery's softening. Over the graded stage a style lays a static texture (paper, weave, grout, an LCD grid), a frame, and its own chapter tag. The caption keeps its bubble, its type and its kinds of words, on the style's paper and in its inks. The narrator also hears the style's voice, so a caption can sound like a 1938 comic or a woodblock print while still being about the real work.
+### Styles drawn as artworks
+
+Ukiyo-e and Blueprint are drawn as artworks of their own: every element of every scene, and Claude, is redrawn in the style's medium, translated from the gallery's original plate.
+
+Every element of a scene is handed to a painter under a *role* that says what it is and how deep it stands (`hooks/art/roles.ts`): a fir, a mist bank, a mesa, the lamp's cone, the wet street. The default painter keeps the lit, photographic painting. A style's painter (`hooks/art/painter.ts`) reads that painting for its shapes and tones and paints it again:
+- its blooms, materials and lens are left out;
+- each lit color becomes one of the style's inks, chosen by the element's family and depth;
+- gradients are carried into those inks;
+- shapes take the style's line.
+
+Elements that have no edge in the art form are redrawn outright (`hooks/styles/*.ts`). Claude is drawn by the style's own hero painter, from the 3D model's parts, outline hulls and edges, which are classed as outline, crease or hidden as in the gallery's engine.
+
+- **Ukiyo-e** (after the gallery's *Ukiyo-e, after Hokusai*):
+  - Every mass is a flat block of Prussian blue, sap green, ochre or vermilion, printed over a key-block line.
+  - Distance is told in paler blues, skies are printed in bokashi, and mist lies across the scene in kasumi bands.
+  - The sun is a vermilion disc and the moon a cream one. Water and wet floors are combed in foam.
+  - Claude is cut in the plate's coral blocks with a glint in his eyes.
+  - The chapter sits in a cartouche with a red seal, and the caption is printed on a cartouche of its own.
+- **Blueprint** (after the gallery's *Blueprint: patent drawing*):
+  - The scene is white line work on a mottled cyanotype sheet with a fine grid. Every shape is filled with the sheet itself, so nearer things hide the lines behind them.
+  - Line weight follows depth, and shade is section-hatched.
+  - Clouds, mist and light are phantom lines, the sun and moon are circles with centre marks, and anything that glows is a solid white mark.
+  - Claude has solid outlines, thin creases, dashed hidden edges and a dash-dot centre line.
+  - The chapter is "FIG. 1", and the caption is lettered in drafting capitals in a title block with a leader to Claude.
+
+With pixel art on, a style draws its pixel-native variant (lines and patterns sized to whole pixels, hatched silhouettes where a hairline would vanish) and the pixelizer samples it. The narrator also hears the style's voice.
+
+### Styles graded as a whole
+
+The other nine styles still grade the finished picture through one SVG filter, while they wait their turn to be redrawn:
+- lightness is mapped through the style's inks;
+- hue masks keep warm things (Claude, lava, lamplight) in their own ramp;
+- outlines come from comparing the picture with a shifted copy of itself;
+- threshold screens give hatching and halftone.
+
+With pixel art on, the grade runs inside the pixelizer's own filter. Over it the style lays a static texture, a frame and its own chapter tag, and the caption takes the style's paper and inks.
 
 The default look stays exactly as it was: a scene drawn with no style is the same drawing, byte for byte.
 

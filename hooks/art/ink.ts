@@ -178,3 +178,28 @@ export const wrap = (svg: string, attrs: string) => (svg ? `<g ${attrs}>${svg}</
 
 const n = (v: number) => (Math.round(v * 100) / 100).toString()
 export { n as num }
+
+/** A number to a tenth, without a leading zero: path data for many baked frames stays small. */
+export const t1 = (v: number) => {
+  const r = Math.round(v * 10) / 10
+  const s = r.toString()
+  return s.startsWith('0.') ? s.slice(1) : s.startsWith('-0.') ? `-${s.slice(2)}` : s
+}
+
+/** A closed polygon as compact path data: its first point, then each step from the last. */
+export function poly(points: readonly (readonly [number, number])[], dx = 0, dy = 0, close = true): string {
+  if (!points.length) return ''
+  let px = Math.round(((points[0]?.[0] ?? 0) + dx) * 10)
+  let py = Math.round(((points[0]?.[1] ?? 0) + dy) * 10)
+  let d = `M${t1(px / 10)} ${t1(py / 10)}l`
+  for (const [x, y] of points.slice(1)) {
+    const qx = Math.round((x + dx) * 10)
+    const qy = Math.round((y + dy) * 10)
+    const sx = t1((qx - px) / 10)
+    const sy = t1((qy - py) / 10)
+    d += `${sx}${sy.startsWith('-') ? '' : ' '}${sy} `
+    px = qx
+    py = qy
+  }
+  return d.trimEnd() + (close ? 'z' : '')
+}

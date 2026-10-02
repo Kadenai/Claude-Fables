@@ -13,6 +13,8 @@
  */
 
 import type { Painter } from './art/roles'
+import { BLUEPRINT } from './styles/blueprint'
+import { UKIYOE } from './styles/ukiyoe'
 import type { HeroPainter } from './hero3d'
 import { BAYER4, cells, edges, gray, hueMask, ink, lift, lumMask, posterize, ramp, screen, screened, screenGray, through } from './grade'
 
@@ -244,31 +246,7 @@ export const LOOKS: Record<string, Look> = {
     },
   }),
 
-  blueprint: style({
-    name: 'blueprint',
-    label: 'Blueprint',
-    voice: 'an engineer annotating a technical drawing',
-    paper: oneInk('#e8f0ff', '#163d85', '#b0442c'),
-    edge: '#1a4590',
-    inset: 4,
-    titleColor: '#e8f0ff',
-    // Everything in cyanotype blues by its lightness, every contour drawn over it in white line.
-    grade: (sw, h, pixel) =>
-      gray('SourceGraphic', 'g') +
-      lift('g', 0.75, 'gl') +
-      ramp('gl', ['#123778', '#1a4590', '#2453a6', '#3466b8', '#5583c9'], 'blue') +
-      edges('SourceGraphic', 'line', { reach: pixel ? 1.2 : 0.8, threshold: 0.07 }) +
-      ink('#e8f0ff', 'line', 'blue', 'drawn', 0.9),
-    texture: (sw, h, _ground, pixel) =>
-      `<defs><pattern id="lk-grid" width="16" height="16" patternUnits="userSpaceOnUse">` +
-      `<path d="M0 0h16v${pixel ? 1 : 0.6}h-16zM0 0h${pixel ? 1 : 0.6}v16h-${pixel ? 1 : 0.6}z" fill="#e8f0ff" opacity=".16"/>` +
-      (pixel ? '' : `<path d="M8 0h.4v16h-.4zM0 8h16v.4h-16z" fill="#e8f0ff" opacity=".06"/>`) +
-      `</pattern></defs>` +
-      cover(sw, h, 'url(#lk-grid)'),
-    frame: (sw, h) => frame(sw, h, '#e8f0ff', 1, 4) + frame(sw, h, '#e8f0ff', 0.4, 6),
-    tag: (text, inset) =>
-      plaque(`FIG. 1 — ${text.toUpperCase()}`, inset, { fill: '#1a4590', stroke: '#e8f0ff', ink: '#e8f0ff', size: 7, strokeW: 0.8, spacing: 0.4 }),
-  }),
+  blueprint: BLUEPRINT,
 
   mosaic: style({
     name: 'mosaic',
@@ -509,43 +487,7 @@ export const LOOKS: Record<string, Look> = {
       plaque(`${text.toUpperCase()}!`, inset, { fill: '#f3c623', stroke: '#d0201a', ink: '#141010', size: 8, weight: '700', strokeW: 1.6 }),
   }),
 
-  ukiyoe: style({
-    name: 'ukiyoe',
-    label: 'Ukiyo-e',
-    voice: 'a calm Edo-period woodblock print',
-    paper: { card: '#efe3c8', ink: '#1b2a4a', kinds: { code: '#2f4d7a', path: '#2f4d7a', fn: '#5a3a6a', num: '#b03a2e', bad: '#b03a2e', good: '#3a5a3a', face: '#b03a2e' } },
-    edge: '#efe3c8',
-    inset: 4,
-    titleColor: '#1b2a4a',
-    // Printed from blocks in flat inks: Prussian blue and indigo by lightness on cream
-    // paper, warm things in vermilion, leaves in a muted green, and the key block's dark
-    // lines over all of it.
-    grade: (sw, h, pixel) =>
-      gray('SourceGraphic', 'g') +
-      lift('g', 0.65, 'gl') +
-      ramp('gl', ['#14203a', '#1b2a4a', '#2f4d7a', '#6e8fb5', '#b9c8d6', '#efe3c8'], 'blue', true) +
-      hueMask('SourceGraphic', 'warm', 'warm') +
-      ramp('gl', ['#6a2418', '#9c3b26', '#b03a2e', '#d9663f', '#e8a07a'], 'red', true) +
-      through('red', 'warm', 'blue', 'a') +
-      hueMask('SourceGraphic', 'green', 'leaf') +
-      ramp('gl', ['#22301e', '#3a4a2e', '#5a6a46', '#9aa070'], 'green', true) +
-      through('green', 'leaf', 'a', 'b') +
-      edges('SourceGraphic', 'line', { reach: pixel ? 1.2 : 0.9, threshold: 0.1 }) +
-      ink('#14203a', 'line', 'b', 'keyed'),
-    texture: (sw, h, ground) =>
-      // Bokashi: the sky's blue graded down from the top, and the grain of the paper.
-      `<defs><linearGradient id="lk-bokashi" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2a4a" stop-opacity=".55"/><stop offset="1" stop-color="#1b2a4a" stop-opacity="0"/></linearGradient></defs>` +
-      `<rect width="${sw}" height="${n(ground * 0.32)}" fill="url(#lk-bokashi)"/>` +
-      grain('lk-washi', sw, h, '.9 .25', 0.16, '.45 .35 .2'),
-    frame: (sw, h) => frame(sw, h, '#1b2a4a', 1.5, 3),
-    tag: (text, inset) => {
-      // A cartouche with the artist's red seal beside it.
-      const t = plaque(text, inset, { fill: '#efe3c8', stroke: '#1b2a4a', ink: '#1b2a4a', font: SERIF, size: 8, charW: 6.6 })
-      const x = t.w - 1
-      const y = inset + 4
-      return { svg: t.svg + `<rect x="${n(x)}" y="${y}" width="9" height="9" fill="#b03a2e"/><path d="M${n(x + 2.5)} ${y + 2.5}h4v4h-4z" fill="none" stroke="#efe3c8" stroke-width=".8"/>`, w: x + 13, h: t.h }
-    },
-  }),
+  ukiyoe: UKIYOE,
 
   kamon: style({
     name: 'kamon',

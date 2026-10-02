@@ -460,7 +460,7 @@ const BAD = /^(✗|FAIL(ED)?|failed|failing|fails|broke|broken|crash(ed|es)?|red
 const GOOD = /^(✓|PASS(ED)?|passed|passes|passing|green|clean|fixed|ships?|shipped|done|OK|merged|liftoff|LGTM)$/i
 const NUM = /^[~+\-]?\d[\d.,]*(%|x|×|s|ms|kb|mb|gb|k)?$|^\d+\/\d+$/i
 const FN = /^[\w.$#]+\(\)$/
-const PATH = /^[\w@~./-]*\w\.(tsx?|jsx?|mjs|cjs|py|rb|go|rs|java|kt|swift|json|ya?ml|toml|css|scss|html|md|sql|sh|lock|env|test\.ts)$|^~?\.?\/?[\w@.-]+\/[\w@./-]*$/
+const PATH = /^[\w@~./-]*\w\.(tsx?|jsx?|mjs|cjs|py|rb|go|rs|java|kt|swift|json|ya?ml|toml|css|scss|html|md|sql|sh|lock|env|test\.ts)$|^~?\.?\/?[\w@.-]+\/[\w@./-]*$/i
 const CMD = /^(npm|npx|pnpm|yarn|bun|git|pytest|tsc|eslint|cargo|go|make|pip|docker|curl|gh)$|^--?\w/
 
 type Word = { lead: string; core: string; tail: string; kind: Kind }
