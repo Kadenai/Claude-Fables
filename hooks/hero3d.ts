@@ -45,7 +45,7 @@ function paintAttrs(fill: string, paint: FacePaint): string {
       return `fill="${fill}" stroke="#c9a227" stroke-width=".9" stroke-linejoin="round"`
     default:
       // A hairline in the face's own color closes the seams between faces.
-      return `fill="${fill}" stroke="${fill}" stroke-width=".5" stroke-linejoin="round"`
+      return `fill="${fill}" stroke="${fill}"`
   }
 }
 
@@ -60,7 +60,9 @@ export function modelSvg(m: Model, cx: number, floor: number, paint: FacePaint):
     if (last && last.fill === fill) last.d.push(poly(f.pts, cx, floor))
     else runs.push({ fill, d: [poly(f.pts, cx, floor)] })
   }
-  const faces = runs.map(r => `<path ${paintAttrs(r.fill, paint)} d="${r.d.join('')}"/>`).join('')
+  const paths = runs.map(r => `<path ${paintAttrs(r.fill, paint)} d="${r.d.join('')}"/>`).join('')
+  // Solid faces share their hairline's width and join, set once for the frame.
+  const faces = paint !== 'solid' ? paths : `<g stroke-width=".5" stroke-linejoin="round">${paths}</g>`
   const eyes = m.eyes
     .map(e =>
       e.poly

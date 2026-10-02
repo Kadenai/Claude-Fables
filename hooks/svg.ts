@@ -755,7 +755,7 @@ export function sceneToSvg(
     stage.lens +
     thinks(propCount).svg +
     (look.over?.(sw, H, GROUND_Y) ?? '') +
-    (scene.title ? title(scene.title, look.titleColor ?? accent, look) : '') +
+    (scene.title ? title(scene.title, look.titleColor ?? (rich ? '#efe6d2' : accent), look) : '') +
     caption(scene.caption, plan.endX, plan.endY, idPrefix, sw, look, avoid(propCount)) +
     `</svg>`
 

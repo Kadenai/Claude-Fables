@@ -366,26 +366,41 @@ function forest(c: Ctx): Scene {
     for (let i = 0; i < tierCount; i++) {
       // Tiers from the top down: each wider than the last, drooping at its tips.
       const k = (i + 1) / tierCount
-      const top = -UNIT + (UNIT * 0.78 * i) / tierCount
-      const bottom = top + (UNIT * 0.78) / tierCount + UNIT * 0.12
+      const top = -UNIT + (UNIT * 0.7 * i) / tierCount
+      const bottom = top + (UNIT * 0.7) / tierCount + UNIT * 0.13
       const hw = (w / 2) * (0.3 + 0.7 * k)
       const sag = 2 + k * 3
-      const midY = top + (bottom - top) * 0.5
-      // The tier's lower edge follows its droop and ends in ragged tufts of needles.
-      let edge = ''
-      const teeth = Math.max(3, Math.round(hw / 2.2))
-      for (let q = 0; q <= teeth * 2; q++) {
-        const u = -hw + (hw * q) / teeth
-        edge += `L${f(u)} ${f(bottom - sag * 0.6 * (1 - (u / hw) ** 2) + (q % 2 ? 0 : 1.6) + (rand() - 0.5) * 0.6)}`
+      // Each side reaches its own way, so no tier is a mirror image.
+      const hl = hw * between(rand, 0.82, 1.12)
+      const hr = hw * between(rand, 0.82, 1.12)
+      const lean = (rand() - 0.5) * 1.2
+      // The sides are ragged: branch tips stick out of the slope on the way down.
+      const side = (h: number, dir: number) => {
+        let d = ''
+        for (const t of [0.3, 0.55, 0.8]) {
+          const x = dir * h * t * (0.75 + t * 0.2)
+          const y = top + (bottom - top) * t
+          d += `L${f(x + dir * between(rand, 0.8, 2))} ${f(y + between(rand, 0.4, 1.4))}L${f(x)} ${f(y - 0.6)}`
+        }
+        return d
       }
-      const leftSide = `Q${f(-hw * 0.4)} ${f(midY)} ${f(-hw)} ${f(bottom)}`
-      body += `M0 ${f(top)}${leftSide}${edge}Q${f(hw * 0.4)} ${f(midY)} 0 ${f(top)}z`
+      // The lower edge: drooping tufts of needles, longer toward the tips of the branches.
+      const tuft: P[] = []
+      const teeth = Math.max(4, Math.round((hl + hr) / 3.6))
+      for (let q = 0; q <= teeth * 2; q++) {
+        const u = -hl + ((hl + hr) * q) / (teeth * 2)
+        const reach = Math.abs(u) / (u < 0 ? hl : hr)
+        const y = bottom - sag * 0.6 * (1 - reach ** 2) + (q % 2 ? 0 : 1.2 + reach * 1.4) + (rand() - 0.5) * 0.8
+        tuft.push([u + lean * (1 - reach), y])
+      }
+      const edge = tuft.map(([x, y]) => `L${f(x)} ${f(y)}`).join('')
+      const left = side(hl, -1)
+      body += `M${f(lean)} ${f(top)}${left}${edge}${side(hr, 1).split('L').filter(Boolean).reverse().map(q => 'L' + q).join('')}z`
       // The side away from the sun is a step deeper in shade.
-      half += `M0 ${f(top)}${leftSide}L0 ${f(bottom - sag * 0.6)}z`
-      // The underside: a smooth dark band just above the tufts, following the droop.
-      const lo = bottom + 0.8
-      under += `M${f(-hw)} ${f(lo)}Q0 ${f(lo - sag * 1.2)} ${f(hw)} ${f(lo)}l0 -2.6Q0 ${f(lo - sag * 1.2 - 2.6)} ${f(-hw)} ${f(lo - 2.6)}z`
-      rimD += `M0 ${f(top)}Q${f(hw * 0.4)} ${f(midY)} ${f(hw)} ${f(bottom)}l-2 -1.2Q${f(hw * 0.3)} ${f(top + (bottom - top) * 0.55)} 0 ${f(top + 1.5)}z`
+      half += `M${f(lean)} ${f(top)}${left}L${f(-hl)} ${f(bottom)}L${f(lean * 0.5)} ${f(bottom - sag * 0.6)}z`
+      // The underside: a dark band that follows the tufts, a needle's length above them.
+      under += `M${tuft.map(([x, y]) => `${f(x)} ${f(y + 0.2)}`).join('L')}L${[...tuft].reverse().map(([x, y]) => `${f(x)} ${f(y - 2.4 - (1 - Math.abs(x) / hw) * 0.8)}`).join('L')}z`
+      rimD += `M${f(lean)} ${f(top)}L${f(hr * 0.85)} ${f(bottom - 0.5)}l${f(-2.4)} -1.4L${f(lean)} ${f(top + 1.6)}z`
     }
     templates +=
       `<g id="sc-fir${n}"><path d="${body}"/><path fill="currentColor" opacity=".5" d="${half}"/><path fill="currentColor" d="${under}"/></g>` +
@@ -403,7 +418,8 @@ function forest(c: Ctx): Scene {
   const firs: Placed[] = []
   // Two staggered depths: the back trees smaller and set a little higher, spaced irregularly,
   // in clumps and gaps, and none in the clearing.
-  for (const [depth, lo, hi, gapLo, gapHi] of [[-4, 34, 48, 16, 34], [0, 44, 68, 22, 52]] as const) {
+  // A lean stage keeps only the near depth.
+  for (const [depth, lo, hi, gapLo, gapHi] of ([[-4, 34, 48, 16, 34], [0, 44, 68, 22, 52]] as const).slice(c.detail < 1 ? 1 : 0)) {
     for (let x = between(rand, 4, 20); x < sw - 4; x += between(rand, gapLo, gapHi) * (c.detail < 1 ? 1.2 : 1)) {
       if (Math.abs(x - sunX) < clearing + (depth < 0 ? 0 : 10)) continue
       const kind = depth < 0 ? Math.floor(rand() * 3) : Math.floor(rand() * KINDS)
@@ -455,7 +471,7 @@ function forest(c: Ctx): Scene {
     [-0.3, -0.12, 0.14].map(k => `<ellipse cx="${f(sunX + k * 300)}" cy="${ground + 3}" rx="${f(22 + Math.abs(k) * 30)}" ry="4" fill="${KEY}"/>`).join('')
   const groundLight =
     `<rect x="0" y="${mid - 2}" width="${sw}" height="${H - mid + 2}" fill="url(#sc-groundlight)"/>` +
-    `<g filter="url(#sc-blur3)">${pools}<path fill="${DEEP}" opacity=".7" d="${shadows}"/></g>`
+    `<g filter="url(#sc-blur3)">${pools}<path fill="${DEEP}" opacity=".9" d="${shadows}"/></g>`
   // The path: a band of worn earth along the line Claude walks, wavering at its edges.
   const edgeA = noise(rand, [[2, 120], [1, 40]])
   const edgeB = noise(rand, [[2, 140], [1, 45]])
@@ -479,7 +495,6 @@ function forest(c: Ctx): Scene {
       if (near(bx) > 0.55 && rand() < 0.5) lit += `M${f(bx + lean)} ${f(y - h)}l${f(0.5 * size)} ${f(h * 0.3)}h${f(-0.8 * size)}z`
     }
   }
-  for (let x = between(rand, 8, 30); x < sw; x += between(rand, 30, 70)) clump(x, ground - 2 - edgeA(x) * 0.6, 4, 0.8)
   const edgeBlades = blades
   const edgeLit = lit
   // The front clumps are a few templates, placed along the bottom edge; near the sun a
@@ -509,8 +524,14 @@ function forest(c: Ctx): Scene {
     front += `<use href="#sc-clump${n}" transform="translate(${f(x)} ${H + 1})${flip < 0 ? ' scale(-1 1)' : ''}"/>`
     if (near(x) > 0.55) frontLit += `<path transform="translate(${f(x)} ${H + 1})${flip < 0 ? ' scale(-1 1)' : ''}" d="${tips[n]}"/>`
   }
+  // Along the path's far edge the same clumps, smaller, close enough to hide where it meets the floor.
+  let edgeUses = ''
+  for (let x = between(rand, 4, 20); x < sw; x += between(rand, 10, 24) / c.detail) {
+    const k = between(rand, 0.45, 0.7)
+    edgeUses += `<use href="#sc-clump${Math.floor(rand() * 5)}" transform="translate(${f(x)} ${f(ground - 1.6 - edgeA(x) * 0.6)}) scale(${f(rand() < 0.5 ? -k : k)} ${f(k)})"/>`
+  }
   const grass =
-    `<defs>${clumpDefs}</defs><path fill="#1a2c1a" d="${edgeBlades}"/><g fill="#1a2c1a">${front}</g>` +
+    `<defs>${clumpDefs}</defs><path fill="#1a2c1a" d="${edgeBlades}"/><g fill="#1a2c1a">${edgeUses}${front}</g>` +
     `<path fill="#e8d590" opacity=".55" d="${edgeLit}"/><g fill="#e8d590" opacity=".55">${frontLit}</g>`
 
   // The framing trunks, cropped by the stage edges: bark in shade, a warm edge toward the
@@ -550,6 +571,72 @@ function forest(c: Ctx): Scene {
     return `<circle cx="${f(x)}" cy="${f(y)}" r=".7" fill="#fff0cf" opacity="0"><animate attributeName="opacity" values="0;.9;0" dur="${f(d * 0.7)}s" begin="${f(-rand() * 6)}s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 0;${f(between(rand, -6, 6))} -7" dur="${f(d)}s" repeatCount="indefinite"/></circle>`
   }).join('')
 
+  // Undergrowth where the trees stand: low shrubs, a few templates placed along the far edge
+  // of the floor, so the trunks stand in something instead of on a line.
+  let shrubDefs = ''
+  for (let n = 0; n < 3; n++) {
+    const b = foliage(rand, 0, -3, between(rand, 7, 12), 3.4, 9, { x: 0.6, y: -1 }, { body: DEEP, lit: RIM, deep: '#262c38' })
+    shrubDefs += `<g id="sc-shrub${n}">${b.body}${b.deep}</g><g id="sc-shrublit${n}">${b.lit}</g>`
+  }
+  let shrubs = ''
+  for (let x = between(rand, -10, 10); x < sw + 10; x += between(rand, 22, 64) / c.detail) {
+    if (Math.abs(x - sunX) < clearing * 0.8) continue
+    const n = Math.floor(rand() * 3)
+    const k = between(rand, 0.55, 1.35)
+    const at = `transform="translate(${f(x)} ${f(mid + between(rand, 0, 3))}) scale(${f(rand() < 0.5 ? -k : k)} ${f(k)})"`
+    shrubs += `<use href="#sc-shrub${n}" ${at}/>` + (near(x) > 0.3 ? `<use href="#sc-shrublit${n}" ${at} opacity="${f(near(x) * 0.8)}"/>` : '')
+  }
+  // Leaf litter on the path: warm flecks, and two faint ruts worn along it.
+  let litter = ''
+  for (let i = 0; i < Math.round(60 * c.detail); i++) {
+    const x = between(rand, 0, sw)
+    const y = ground - 1 + rand() * 5
+    litter += `M${f(x)} ${f(y)}h${f(0.8 + rand())}v.5h${f(-0.8 - rand() * 0.5)}z`
+  }
+  let ruts = ''
+  for (const dy of [0.6, 3.2]) {
+    let d = ''
+    for (let x = -10; x <= sw + 10; x += 20) d += `${x === -10 ? 'M' : 'L'}${x} ${f(ground + dy - edgeA(x) * 0.3)}`
+    ruts += d
+  }
+  // Ferns across the very front: one frond drawn once, a handful of them turned and placed
+  // per fern, black against the light, the fronds near the sun rimmed along their tops.
+  const L = 30
+  let frond = ''
+  for (let t = 0.06; t < 0.98; t += 0.06) {
+    const y = -L * t
+    const x = Math.sin(t * 2.2) * 2.4 * t
+    const w = 8.5 * Math.sin(Math.PI * Math.min(1, t * 1.1)) * (1 - t * 0.4)
+    for (const side of [-1, 1]) frond += `M${f(x)} ${f(y)}q${f(side * w * 0.6)} ${f(-w * 0.15)} ${f(side * w)} ${f(-w * 0.55)}q${f(-side * w * 0.5)} ${f(w * 0.05)} ${f(-side * w)} ${f(w * 0.55 + 1.4)}z`
+  }
+  frond += `M-.4 0Q${f(1.2)} ${f(-L * 0.5)} ${f(2.4 * Math.sin(2.2))} ${f(-L)}l.6 .2Q${f(1.8)} ${f(-L * 0.5)} .4 0z`
+  // A fern is a template of fronds fanned out; each placement is one use, plus one for its rim.
+  let fernDefs = ''
+  for (let n = 0; n < 3; n++) {
+    const fronds = 5 + n
+    let g = ''
+    for (let j = 0; j < fronds; j++) {
+      const a = -70 + (140 * (j + 0.5)) / fronds + (rand() - 0.5) * 12
+      g += `<use href="#sc-frond" transform="rotate(${f(a)}) scale(${f(between(rand, 0.75, 1.1))})"/>`
+    }
+    fernDefs += `<g id="sc-fern${n}">${g}</g>`
+  }
+  let ferns = ''
+  let fernsLit = ''
+  for (let x = between(rand, -10, 30); x < sw + 10; x += between(rand, 60, 130) / c.detail) {
+    const n = Math.floor(rand() * 3)
+    const k = between(rand, 0.8, 1.25)
+    const flip = rand() < 0.5 ? -k : k
+    ferns += `<use href="#sc-fern${n}" transform="translate(${f(x)} ${H + 2}) scale(${f(flip)} ${f(k)})"/>`
+    if (near(x) > 0.35) fernsLit += `<use href="#sc-fern${n}" transform="translate(${f(x)} ${H + 1.2}) scale(${f(flip)} ${f(k)})"/>`
+  }
+  const floor =
+    `<defs>${shrubDefs}<path id="sc-frond" d="${frond}"/>${fernDefs}</defs>` +
+    `<path fill="none" stroke="#2a2418" stroke-width=".6" opacity=".45" d="${ruts}"/>` +
+    `<path fill="#c8884a" opacity=".55" d="${litter}"/>` +
+    ''
+  const fernSvg = `<g fill="${RIM}" opacity=".3">${fernsLit}</g><g fill="#0e1912">${ferns}</g>`
+
   const back =
     `<defs>` +
     vgrad('sc-sky', [[0, '#203a3c'], [0.28, '#56726a'], [0.46, '#b4a888'], [0.6, '#ecca94'], [0.75, '#f6dcaa'], [1, '#f8e6bc']]) +
@@ -569,10 +656,10 @@ function forest(c: Ctx): Scene {
     motes
   const near_ =
     `<defs>` +
-    vgrad('sc-groundlight', [[0, '#a8a088'], [0.25, '#767c80'], [1, '#353c4a']]) +
+    vgrad('sc-groundlight', [[0, '#7e8478'], [0.2, '#666e76'], [1, '#353c4a']]) +
     vgrad('sc-pathlight', [[0, '#c8b898'], [1, '#8a8478']]) +
     rgrad('sc-sunpatch', '#ffd690', 0.55) +
-    vgrad('sc-groundmist', [[0, '#d8dcc4', 0.7], [1, '#d8dcc4', 0]]) +
+    vgrad('sc-groundmist', [[0, '#d8dcc4', 0], [0.6, '#d8dcc4', 0.45], [1, '#d8dcc4', 0]]) +
     material('sc-grassmat', ['#1c3420', '#244228', '#2e5030', '#3a5e38'], 0.25, 0.9, 3, 8) +
     material('sc-soil', ['#3c3020', '#463826', '#50412c', '#5a4a32'], 0.35, 1.4, 3, 9, 1.8) +
     material('sc-leaves', ['#1a3320', '#22402a', '#2c5032', '#38603a'], 0.9, 0.9, 2, 13) +
@@ -580,11 +667,14 @@ function forest(c: Ctx): Scene {
     `</defs>` +
     `<g filter="url(#sc-grassmat)">${groundLight}</g>` +
     // The meadow's far edge dissolves into the mist instead of meeting it in a line.
-    `<rect x="0" y="${mid - 3}" width="${sw}" height="9" fill="url(#sc-groundmist)"/>` +
+    `<g filter="url(#sc-needles)">${shrubs}</g>` +
+    `<rect x="0" y="${mid - 8}" width="${sw}" height="10" fill="url(#sc-groundmist)"/>` +
     path +
+    floor +
     // Where the sun lands through the clearing the light is strong enough to add, not just tint.
     `<ellipse cx="${f(sunX)}" cy="${ground}" rx="${f(clearing * 3.4)}" ry="14" fill="url(#sc-sunpatch)" style="mix-blend-mode:screen"/>` +
     grass +
+    fernSvg +
     frame
   return { sky: '#1c3436', soil: '#2c4a30', groundTop: mid - 2, back, near: near_, keep: [[sunX, sunY, 12]] }
 }
@@ -1744,10 +1834,10 @@ export function richBackdrop(scene: FablesScene, rand: Rand, sw: number, ground:
   const s = make({ rand, sw, ground, detail: lean ? 0.4 : 1 })
   const floor = s.floor ?? ground
   const groundTop = s.groundTop ?? ground - 6
-  const accent = scene.palette.accent ? `<rect x="0" y="${floor}" width="${sw}" height="1.2" fill="${scene.palette.accent}" opacity=".6"/>` : ''
   return {
-    sky: scene.palette.sky ?? s.sky,
-    ground: scene.palette.ground ?? s.soil,
+    // The authored scenes keep their own light: a palette from the narrator would only fight it.
+    sky: s.sky,
+    ground: s.soil,
     floor,
     groundTop,
     back:
@@ -1757,7 +1847,7 @@ export function richBackdrop(scene: FablesScene, rand: Rand, sw: number, ground:
       `<filter id="sc-glow" filterUnits="userSpaceOnUse" x="-20" y="-20" width="${sw + 40}" height="${H + 40}"><feGaussianBlur stdDeviation="2.4"/><feComponentTransfer><feFuncA type="linear" slope=".7"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
       `<filter id="sc-deep"><feColorMatrix type="matrix" values=".58 0 0 0 0  0 .58 0 0 0  0 0 .62 0 0  0 0 0 1 0"/></filter></defs>` +
       clip(s.back),
-    near: clip(s.near + accent),
+    near: clip(s.near),
     keep: (s.keep ?? []).map(([x, y, r]) => ({ x: x - r, y: y - r, w: r * 2, h: r * 2 })),
     lens: clip(
       `<defs><filter id="sc-grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="11"/><feColorMatrix type="saturate" values="0"/></filter>` +
