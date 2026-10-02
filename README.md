@@ -61,8 +61,8 @@ To try it from the terminal for one session instead, run `claude --plugin-dir ~/
 ## Use
 
 - `/fables`: toggle the mod on or off. `/fables on` and `/fables off` also work. The setting is remembered across sessions.
-- `/fables pixel`: toggle pixel art (on by default). `/fables pixel on` and `/fables pixel off` also work, and it is remembered too.
-- `/fables style <name>`: draw every scene in one of the styles below, for example `/fables style ukiyo-e` or `/fables style golden age`. `/fables style` lists them, and `/fables style off` goes back to the default look. It is remembered too.
+- `/fables style <name>`: draw every scene in one of the styles below, for example `/fables style ukiyo-e` or `/fables style golden age`. `/fables style` lists them, and `/fables style off` goes back to the default, Pixel Art. It is remembered across sessions.
+- `/fables pixel off` and `/fables pixel on` still work: they switch between the original look drawn smooth and its pixel art.
 - **Scene model:** Sonnet by default. You can switch to `haiku` (cheaper, faster) or `opus` in the config menu, or under `pluginConfigs.fables.model` in settings.
 
 Every scene is one small Sonnet request, so this costs a few requests per minute while Claude is working.
@@ -97,7 +97,7 @@ The band's frame takes at most 131,072 characters, so repeated things are drawn 
 
 The story is told in words. Props aren't drawn on the scene, so nothing competes with Claude and the caption.
 
-With pixel art on (the default), the whole stage, scenery and Claude together, goes through a pixelizer: one SVG filter that samples the drawing at the middle of every two-unit square and spreads each sample over its square, so everything reads as pixel art without any of it being redrawn, and no blur washes the colors out. The grid starts at the stage's corner, so the pixels line up. Claude gets a sprite filter of its own on the same grid: its body sampled crisp, its eyes (finer than a pixel) found by their darkness and thickened just enough to land on whole pixels, and a one-pixel dark outline round it, as a pixel-art character would have. The caption sits above it all, already in pixel type, so it stays sharp. With pixel art off, scenes are drawn smooth and the scenery takes a slight blur instead, so Claude and the caption read first.
+In the Pixel Art look (the default), the whole stage, scenery and Claude together, goes through a pixelizer: one SVG filter that samples the drawing at the middle of every two-unit square and spreads each sample over its square, so everything reads as pixel art without any of it being redrawn, and no blur washes the colors out. The grid starts at the stage's corner, so the pixels line up. Claude gets a sprite filter of its own on the same grid: its body sampled crisp, its eyes (finer than a pixel) found by their darkness and thickened just enough to land on whole pixels, and a one-pixel dark outline round it, as a pixel-art character would have. The caption sits above it all, already in pixel type, so it stays sharp. In the Original look, scenes are drawn smooth and the scenery takes a slight blur instead, so Claude and the caption read first.
 
 The caption is one standard bubble of cartoon paper with a tail pointing at Claude, set in [Monocraft](https://github.com/IdreesInc/Monocraft) by Idrees Hassan (SIL Open Font License, `fonts/Monocraft-OFL.txt`), embedded as a 5 KB subset so it reads the same everywhere. It stays with Claude and never covers it: it takes a spot just beside, above or (for a flying Claude) below, checked against Claude's whole path, jumps and sways included, and while Claude walks the bubble walks along. Inside it, kinds of words are set apart, so a caption reads like a terminal:
 
@@ -117,60 +117,35 @@ The model and its projection are ported from the gallery's engine by [ChetasLua]
 
 ## Styles
 
-Eleven styles from the [Claude Mascot Style Gallery](https://github.com/henrik-thevibe/Claude-Mascot-Style-Gallery) restyle the whole scene, scenery and Claude together. They are cosmetic only: the story, the scenery and Claude's path stay as they are, and nothing is added to the scene.
+Two looks draw the authored scenes as they are: **Pixel Art** (`pixel`, the default) and the **Original** (`original`), the same scenes drawn smooth.
 
-| Style | `/fables style …` | How it looks |
+Eleven more styles, from the [Claude Mascot Style Gallery](https://github.com/henrik-thevibe/Claude-Mascot-Style-Gallery), are artworks of their own. Each one redraws every element of every scene, Claude, the caption bubble, the chapter tag and the frame in its own medium, translated from the gallery's original plate. They are cosmetic only: the story, the scenery's composition and Claude's path stay as they are, and nothing is added to a scene.
+
+| Style | `/fables style …` | The artwork |
 | --- | --- | --- |
-| Cave Painting | `cave` | Charcoal, umber and ochre daubed on lit limestone, Claude in red earth |
-| Blueprint | `blueprint` | Cyanotype blues with every contour drawn in white line, on a drafting grid |
-| Mosaic | `mosaic` | Set in tesserae of marble, terracotta and slate, with grout and a meander border |
-| Sampler | `sampler` | Cross-stitched in a few skeins of thread on bare linen, with a stitched hem |
-| Frutiger Aero | `aero` | Lifted, sky-blue and grass-green, with a glossy highlight and a glass frame |
-| Handheld | `handheld` | Four shades of LCD green behind a bezel |
-| Copperplate Engraving | `engraving` | Sepia line hatching on cream, crossed in the shadows, inside a plate mark |
-| Millefleur Tapestry | `tapestry` | Woven in weld, woad and madder on deep green, with a woven border |
-| Golden Age Comic | `golden` | Bold colors in Ben-Day dots on yellowed newsprint, with black keylines |
-| Ukiyo-e | `ukiyoe` | Prussian blue and indigo in flat inks, vermilion for warm things, key-block lines and bokashi |
-| Kamon | `kamon` | Two tones only, cream on black lacquer, with Claude cut in cream |
+| Cave Painting | `cave` | Ochre, soot and pale earth rubbed thin on torch-lit limestone; no sky, only the wall; broken soot outlines; Claude in red ochre |
+| Blueprint | `blueprint` | White line work on a cyanotype sheet; shade section-hatched, air and light as phantom lines; Claude as a patent drawing with hidden edges dashed |
+| Mosaic | `mosaic` | Laid in the floor's stones and set as tesserae in grout, outlined in rows of dark stones; a meander border |
+| Sampler | `sampler` | Cross-stitched in a few skeins on bare linen, skies left unstitched, back-stitched outlines; a stitched hem |
+| Frutiger Aero | `aero` | Glossy gradients with a white rim on every surface, an azure sky with a sun flare; Claude as tangerine jelly |
+| Handheld | `handheld` | Four shades of LCD green on chunky pixels, dithered between, sprite outlines; a game text box |
+| Copperplate Engraving | `engraving` | One sepia ink on laid paper, every tone cut as hatching along the grain of what it is; a plate mark |
+| Millefleur Tapestry | `tapestry` | Woven in madder, woad, weld and walnut wool on the loom's grid; grass becomes the field of a thousand flowers |
+| Golden Age Comic | `golden` | Flat newsprint inks, shade in Ben-Day dots, heavy keylines; a lettered balloon |
+| Ukiyo-e | `ukiyoe` | Flat woodblock inks over a key line, bokashi skies, kasumi mist, a vermilion sun; a cartouche and seal |
+| Kamon | `kamon` | Cream planes on black silk parted by cuts of one width; Claude as a crest; the vermilion hanko |
 
-### Styles drawn as artworks
+### How a style redraws a scene
 
-Ukiyo-e and Blueprint are drawn as artworks of their own: every element of every scene, and Claude, is redrawn in the style's medium, translated from the gallery's original plate.
+Every element of a scene is handed to a painter under a *role* that says what it is and how deep it stands (`hooks/art/roles.ts`): a fir, a mist bank, a mesa, the lamp's cone, the wet street. The original looks keep the lit, photographic painting. A style's painter (`hooks/art/painter.ts`, `hooks/styles/*.ts`) reads that painting for its shapes and tones and draws it again:
+- the lit look's blooms, materials and lens are left out;
+- each lit color becomes one of the style's inks, wools, stones or threads, chosen by the element's family and depth;
+- shapes take the style's line;
+- what has no edge in the art form (sun and moon, mist, light, water) is redrawn by the style's own conventions.
 
-Every element of a scene is handed to a painter under a *role* that says what it is and how deep it stands (`hooks/art/roles.ts`): a fir, a mist bank, a mesa, the lamp's cone, the wet street. The default painter keeps the lit, photographic painting. A style's painter (`hooks/art/painter.ts`) reads that painting for its shapes and tones and paints it again:
-- its blooms, materials and lens are left out;
-- each lit color becomes one of the style's inks, chosen by the element's family and depth;
-- gradients are carried into those inks;
-- shapes take the style's line.
+Claude is drawn by each style's hero painter, from the 3D model's faces, its parts' outline hulls and its edges, which are classed as outline, crease or hidden as in the gallery's engine. A style made on a grid (Mosaic, Sampler, Tapestry, Handheld) names that grid as its medium: the drawn stage is set into tesserae, stitches, a weave or LCD pixels, and its grout, linen, ribs or pixel grid are laid over it. The narrator hears each style's voice, so a caption can sound like a 1938 comic or a woodblock print while still being about the real work.
 
-Elements that have no edge in the art form are redrawn outright (`hooks/styles/*.ts`). Claude is drawn by the style's own hero painter, from the 3D model's parts, outline hulls and edges, which are classed as outline, crease or hidden as in the gallery's engine.
-
-- **Ukiyo-e** (after the gallery's *Ukiyo-e, after Hokusai*):
-  - Every mass is a flat block of Prussian blue, sap green, ochre or vermilion, printed over a key-block line.
-  - Distance is told in paler blues, skies are printed in bokashi, and mist lies across the scene in kasumi bands.
-  - The sun is a vermilion disc and the moon a cream one. Water and wet floors are combed in foam.
-  - Claude is cut in the plate's coral blocks with a glint in his eyes.
-  - The chapter sits in a cartouche with a red seal, and the caption is printed on a cartouche of its own.
-- **Blueprint** (after the gallery's *Blueprint: patent drawing*):
-  - The scene is white line work on a mottled cyanotype sheet with a fine grid. Every shape is filled with the sheet itself, so nearer things hide the lines behind them.
-  - Line weight follows depth, and shade is section-hatched.
-  - Clouds, mist and light are phantom lines, the sun and moon are circles with centre marks, and anything that glows is a solid white mark.
-  - Claude has solid outlines, thin creases, dashed hidden edges and a dash-dot centre line.
-  - The chapter is "FIG. 1", and the caption is lettered in drafting capitals in a title block with a leader to Claude.
-
-With pixel art on, a style draws its pixel-native variant (lines and patterns sized to whole pixels, hatched silhouettes where a hairline would vanish) and the pixelizer samples it. The narrator also hears the style's voice.
-
-### Styles graded as a whole
-
-The other nine styles still grade the finished picture through one SVG filter, while they wait their turn to be redrawn:
-- lightness is mapped through the style's inks;
-- hue masks keep warm things (Claude, lava, lamplight) in their own ramp;
-- outlines come from comparing the picture with a shifted copy of itself;
-- threshold screens give hatching and halftone.
-
-With pixel art on, the grade runs inside the pixelizer's own filter. Over it the style lays a static texture, a frame and its own chapter tag, and the caption takes the style's paper and inks.
-
-The default look stays exactly as it was: a scene drawn with no style is the same drawing, byte for byte.
+The styles draw as fast as the original look or faster, since they leave out the lit look's material filters, and every one fits the band's size limit at every width.
 
 ## Develop
 
@@ -178,7 +153,7 @@ The default look stays exactly as it was: a scene drawn with no style is the sam
 claude plugin validate .              # manifest, hooks and state contract
 claude plugin test .                  # unit tests plus engine tests (stubbed Sonnet)
 bun scripts/preview.ts > gallery.html # render sample scenes to a page in the browser
-bun scripts/preview.ts --look all --smooth > styles.html # every style, pixel art off
+bun scripts/preview.ts --look all > styles.html # every look
 ```
 
 `scripts/scenarios.ts` holds five whole sessions (prompt, tool calls, Claude's words, and the scenes for each moment) that the viewer plays back on the mod's own narration loop; a test keeps every scripted scene valid. `bun scripts/preview.ts my-scenes.json` renders your own scenes, which is handy for tuning sprites or trying out what Sonnet sent back.

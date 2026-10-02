@@ -91,12 +91,13 @@ describe('looks', () => {
     expect(drawn.size).toBe(LOOK_NAMES.length)
   })
 
-  test('the caption takes the style paper and inks', () => {
+  test('the caption takes the style\'s bubble and inks', () => {
     const scene = parseScene({ ...SCENE, caption: 'Ran `npm test`: 3 failed' })
     if (!scene) throw new Error('expected a scene')
     const svg = sceneToSvg(scene, { look: 'handheld', figure: '3d' })
-    expect(svg).toContain('fill="#9bbc0f"')
-    expect(svg).toContain('<tspan fill="#0f380f">npm</tspan>')
+    // The handheld's text box: the lightest LCD shade, its words in the darkest, set in capitals.
+    expect(svg).toContain('fill="#c5d36b"')
+    expect(svg).toContain('<tspan fill="#1f3415">NPM</tspan>')
   })
 
   test('the narrator hears which style it writes for', () => {
