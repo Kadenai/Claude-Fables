@@ -2,7 +2,7 @@
 
 A Claude Code mod for the **desktop app**. It turns whatever Claude is doing into a small animated pixel-art cartoon, played in the band above the prompt.
 
-While Claude works, Fables watches each tool call it makes and each line it says. Every few seconds it asks Sonnet to retell the latest moment as a scene. Bug hunts turn into nature documentaries and bad regexes get pulled over by the train police. Claude appears as a small orange critter walking, swimming or flying through the story. When the turn ends there is a closing scene, and it stays up for 30 seconds.
+While Claude works, Fables watches each tool call it makes and each line it says. Every few seconds it asks Sonnet to retell the latest moment as a scene. Bug hunts turn into nature documentaries and bad regexes get pulled over by the train police. Claude appears as a small orange critter walking, sneaking or flying through the story. When the turn ends there is a closing scene, and it stays up for 30 seconds.
 
 ## How it works
 
@@ -73,15 +73,15 @@ Every scene is one small Sonnet request, so this costs a few requests per minute
 
 Claude is drawn as the gallery's 3D model: the same box body, arms, legs and pill eyes, lit and depth-sorted. The band's frame runs no script, so the model can't be drawn live. `hooks/clawd3d.ts` poses it 6 to 12 times per motion, `hooks/hero3d.ts` bakes each pose into flat SVG polygons, and the scene flips through them with SMIL. The model can't follow the cursor or be dragged; those need the live engine.
 
-The narrator picks one of 24 actions for each scene, each tied to a kind of work:
+The narrator picks one of 20 actions for each scene, each tied to a kind of work:
 
 | plays | actions |
 |---|---|
-| crossing the stage, from `from` to `to` | walk, run, swim, fly, push (long installs and builds), carry (moving files), sneak (bug hunts), jump, climb (up and over), tumble (obstacles, retries) |
-| in place, looping | dig (searching), inspect (reading code), think, build (editing), point (found it), peek, spin (refactors), wave (hello), sleep (long waits), panic (errors), dance, celebrate (milestones) |
+| crossing the stage, from `from` to `to` | walk, run, fly, carry (moving files), sneak (bug hunts), jump, tumble (obstacles, retries) |
+| in place, looping | dig (searching), inspect (reading and editing code), think, point (found it), peek, spin (refactors), wave (hello), sleep (long waits), panic (errors), dance, celebrate (milestones) |
 | in place, once | trip (a test fails), shrug (nothing found) |
 
-A scene can chain a second action with `then`, played in place where the first one ends: a sneak then a peek, a trip then a shrug, a climb then a celebration. Without one, Claude stands idle after crossing or after a one-off, and an idle Claude looks about, blinks, shifts its weight and stretches. Along the way its eyes go wide, narrow in focus, cross when it's dizzy and worry under a brow.
+A scene can chain a second action with `then`, played in place where the first one ends: a sneak then a peek, a trip then a shrug, a jump then a celebration. Without one, Claude stands idle after crossing or after a one-off, and an idle Claude looks about, blinks, shifts its weight and stretches. Along the way its eyes go wide, narrow in focus, cross when it's dizzy and worry under a brow.
 
 Each of the seven backdrops in `hooks/scenery.ts` is an authored scene with one brief, one light source and a small palette:
 

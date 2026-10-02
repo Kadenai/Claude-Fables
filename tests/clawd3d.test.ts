@@ -49,12 +49,13 @@ describe('the 3D Clawd', () => {
   })
 
   test('tumbling, crouching and shoving keep Claude standing on the ground', () => {
+    // A trip leaves the ground on purpose (the lurch, the spring back up), but never sinks into it.
     for (const motion of ['tumble', 'sneak', 'sleep', 'peek', 'trip'] as const) {
       for (let k = 0; k < MOTION_TIMING[motion].frames; k++) {
         const m = build(poseAt(motion, k / MOTION_TIMING[motion].frames, 0.55), 1)
         const ys = m.parts.flatMap(p => p.hull.map(q => q[1]))
         expect(Math.max(...ys)).toBeLessThan(1.5)
-        expect(Math.max(...ys)).toBeGreaterThan(-0.5)
+        if (motion !== 'trip') expect(Math.max(...ys)).toBeGreaterThan(-0.5)
       }
     }
   })
@@ -103,11 +104,13 @@ describe('figures in scenes', () => {
     const sneak = svg({ action: 'sneak', from: 0, to: 40, then: 'peek' })
     expect(sneak).toMatch(/repeatDur="\d+(\.\d+)?s"/)
     expect(sneak).toMatch(/begin="\d+(\.\d+)?s" repeatCount="indefinite"/)
-    // A trip plays once (2.2s), then Claude stands idle.
-    expect(svg({ action: 'trip', from: 30, to: 30 })).toContain('begin="2.2s"')
+    // A trip plays once (2.6s), then Claude stands idle; its stars circle only while it is down.
+    const trip = svg({ action: 'trip', from: 30, to: 30 })
+    expect(trip).toContain('begin="2.6s"')
+    expect(trip).toContain('keyTimes="0;.32;.36;.68;.72;1"')
     // A loop has two turns (2 x 3.2s of sleep) before the wave; the sleeper's z's show only until then.
     const nap = svg({ action: 'sleep', from: 30, to: 30, then: 'wave' })
-    expect(nap).toContain('>z</text>')
+    expect(nap).toContain('>Z</text>')
     expect(nap).toContain('<set attributeName="visibility" to="visible" end="6.4s"/>')
   })
 
@@ -123,7 +126,7 @@ describe('figures in scenes', () => {
     for (const look of LOOK_NAMES) {
       for (const figure of ['pixel', '3d'] as const) {
         // The heaviest Claude: a twelve-frame tumble handing over to a twelve-frame inspect.
-        for (const [action, then] of [['walk'], ['celebrate'], ['tumble', 'inspect'], ['trip', 'dance']]) {
+        for (const [action, then] of [['walk'], ['celebrate'], ['tumble', 'inspect'], ['trip', 'sleep']]) {
           const rich = parseScene({
             backdrop: 'city',
             hero: { action, from: 0, to: 60, then },

@@ -25,10 +25,10 @@ Reply with ONE JSON object and nothing else, in this shape:
   "title"?: a 1-3 word chapter tag
 }
 
-Actions. Moving across the stage, from "from" to "to": "walk" | "run" | "swim" | "fly" | "push" (long installs, builds) | "carry" (moving, renaming files) | "sneak" (bug hunts) | "jump" | "climb" | "tumble" (obstacles, retries).
-In place: "dig" (searching) | "inspect" (reading code) | "think" | "build" (editing) | "point" (found it) | "peek" (bug hunts) | "spin" (refactors) | "wave" (a first scene) | "sleep" (long waits) | "panic" (errors) | "dance" | "celebrate" (milestones).
+Actions. Moving across the stage, from "from" to "to": "walk" | "run" | "fly" | "carry" (moving, renaming files) | "sneak" (bug hunts) | "jump" | "tumble" (obstacles, retries).
+In place: "dig" (searching) | "inspect" (reading code, editing) | "think" | "point" (found it) | "peek" (bug hunts) | "spin" (refactors) | "wave" (a first scene) | "sleep" (long waits) | "panic" (errors) | "dance" | "celebrate" (milestones).
 Played once: "trip" (a test fails) | "shrug" (nothing found).
-"then" chains a second action after the first: walk then inspect, trip then shrug, climb then celebrate. Use it when the work has two beats.
+"then" chains a second action after the first: walk then inspect, trip then shrug, jump then celebrate. Use it when the work has two beats.
 
 Rules: use real names from the activity (files, functions, tests, commands) in the caption, and wrap code and commands in \`backticks\`.
 Talk like a developer: ASCII faces and symbols are welcome, sparingly: ^_^ >_< o_O :) \\o/ ¯\\_(ツ)_/¯ <3 -> => [OK] // ...

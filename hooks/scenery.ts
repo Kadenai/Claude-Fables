@@ -546,17 +546,17 @@ function forest(c: Ctx): Scene {
     `<path fill="#e8d590" opacity=".55" d="${edgeLit}"/><g fill="#e8d590" opacity=".55">${frontLit}</g>`
 
   // The framing trunks, cropped by the stage edges: bark in shade, a warm edge toward the
-  // light, moss at the foot. They stand beyond the path, roots flaring into its far edge,
+  // light, moss at the foot. They stand at the path's far edge, rooted down under it,
   // so the path, the grass and the ferns all pass in front of them.
   const bigTrunk = (x: number, w: number, side: 1 | -1) => {
     const inner = side > 0 ? x + w : x
     return (
-      `<path fill="${SHADE}" d="M${f(x)} -4h${f(w)}l${f(w * 0.06)} ${ground - 10}q${f(w * 0.3)} 4 ${f(w * 0.6)} 7H${f(x - w * 0.6)}q${f(w * 0.36)} -3 ${f(w * 0.6)} -7z"/>` +
-      `<path fill="${DEEP}" d="M${f(side > 0 ? x : x + w * 0.6)} -4h${f(w * 0.4)}v${ground}h${f(-w * 0.4)}z" opacity=".6"/>` +
+      `<path fill="${SHADE}" d="M${f(x)} -4h${f(w)}l${f(w * 0.06)} ${ground - 8}q${f(w * 0.3)} 6 ${f(w * 0.7)} 12H${f(x - w * 0.7)}q${f(w * 0.4)} -6 ${f(w * 0.7)} -12z"/>` +
+      `<path fill="${DEEP}" d="M${f(side > 0 ? x : x + w * 0.6)} -4h${f(w * 0.4)}v${ground + 6}h${f(-w * 0.4)}z" opacity=".6"/>` +
       `<path fill="${KEY}" opacity=".7" d="M${f(inner - side * 2)} -4h2v${ground - 6}h-2z"/>`
     )
   }
-  const moss = (x: number, w: number) => `<path fill="#4d7a3a" d="M${f(x - w * 0.7)} ${ground - 2}q${f(w * 0.9)} -8 ${f(w * 2.2)} 0z" opacity=".85"/>`
+  const moss = (x: number, w: number) => `<path fill="#4d7a3a" d="M${f(x - w * 0.9)} ${ground + 1}q${f(w * 1.1)} -9 ${f(w * 2.6)} 0z" opacity=".85"/>`
   const canopyLight = (cx: number, dir: 1 | -1) => {
     let d = ''
     let e = ''

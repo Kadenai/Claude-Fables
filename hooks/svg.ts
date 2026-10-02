@@ -348,18 +348,18 @@ const MODEL_STAGE_H = 40
 
 /** The pixel sprite knows fewer moves: each newer action stands in as the nearest one it has. */
 const SPRITE_ACTION: Record<FablesHeroAction, FablesHeroAction> = {
-  walk: 'walk', run: 'run', swim: 'swim', fly: 'fly', dig: 'dig', inspect: 'inspect', celebrate: 'celebrate', think: 'think',
-  push: 'walk', carry: 'walk', sneak: 'walk', climb: 'walk', jump: 'run', tumble: 'run',
-  build: 'dig', panic: 'inspect', sleep: 'think', dance: 'celebrate', spin: 'celebrate', wave: 'celebrate', point: 'inspect', peek: 'inspect',
+  walk: 'walk', run: 'run', fly: 'fly', dig: 'dig', inspect: 'inspect', celebrate: 'celebrate', think: 'think',
+  carry: 'walk', sneak: 'walk', jump: 'run', tumble: 'run',
+  panic: 'inspect', sleep: 'think', dance: 'celebrate', spin: 'celebrate', wave: 'celebrate', point: 'inspect', peek: 'inspect',
   trip: 'think', shrug: 'think',
 }
 
 /** How fast Claude crosses the stage, per travelling action (units a second). */
-const SPEED: Partial<Record<FablesHeroAction, number>> = { run: 110, fly: 80, tumble: 90, jump: 60, climb: 40, carry: 30, sneak: 25, push: 22 }
+const SPEED: Partial<Record<FablesHeroAction, number>> = { run: 110, fly: 80, tumble: 90, jump: 60, carry: 30, sneak: 25 }
 
 /** How high Claude's moves take it above its box, for the caption to keep clear of. */
 export const heroReach = (action: FablesHeroAction): number =>
-  action === 'celebrate' ? 16 : action === 'climb' ? 24 : action === 'jump' ? 18 : action === 'dance' ? 6 : action === 'fly' || action === 'panic' ? 2 : 0
+  action === 'celebrate' ? 16 : action === 'jump' ? 18 : action === 'dance' ? 6 : action === 'fly' || action === 'panic' ? 2 : 0
 
 /** A loop that hands over to another plays this long first (seconds). */
 const LOOP_FIRST = (motion: Motion) => Math.max(2.4, 2 * MOTION_TIMING[motion].dur)
@@ -374,16 +374,16 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure, tin
   const span = sw - HERO_W
   const fromX = Math.round((span * scene.hero.from) / 100)
   const toX = Math.round((span * scene.hero.to) / 100)
-  const baseY = action === 'fly' ? 34 : action === 'swim' ? floor - HERO_H + 12 : floor - HERO_H
+  const baseY = action === 'fly' ? 34 : floor - HERO_H
   const speed = SPEED[action] ?? 45
   const moveDur = isMoving ? Math.max(0.6, Math.abs(toX - fromX) / speed) : 0
   const step = action === 'run' ? 0.18 : 0.32
   const steps = isMoving ? Math.max(2, Math.round(moveDur / step)) : 0
   const flip = toX < fromX ? ` translate(${HERO_W} 0) scale(-1 1)` : ''
   // When the first move gives way to the next: on arrival, after a single play, or after a loop has had its turn.
-  // Swimming and flying keep going unless told otherwise; walking, running and the rest stand idle on arrival.
+  // Flying keeps going unless told otherwise; walking, running and the rest stand idle on arrival.
   const second: Motion | undefined =
-    figure.kind === 'pixel' ? undefined : (then ?? (kind === 'once' || (isMoving && action !== 'swim' && action !== 'fly') ? 'idle' : undefined))
+    figure.kind === 'pixel' ? undefined : (then ?? (kind === 'once' || (isMoving && action !== 'fly') ? 'idle' : undefined))
   const handover = second === undefined ? undefined : isMoving ? moveDur : kind === 'once' ? MOTION_TIMING[action].dur : LOOP_FIRST(action)
 
   const legs = (frame: number, values: string) =>
@@ -407,8 +407,7 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure, tin
   const until = handover === undefined ? 'repeatCount="indefinite"' : `repeatDur="${n(handover)}s"`
   let inner = ''
   const baked = figure.kind === '3d'
-  switch (baked && action !== 'swim' && action !== 'fly' && action !== 'inspect' ? 'baked' : action) {
-    case 'swim':
+  switch (baked && action !== 'fly' && action !== 'inspect' ? 'baked' : action) {
     case 'fly':
       inner = `<animateTransform attributeName="transform" type="translate" values="0 0;0 -${U};0 0" dur="1.2s" ${until} additive="sum"/>`
       break
@@ -437,10 +436,7 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure, tin
   const extras = shown(flourish(action, figure), handover === undefined ? undefined : 0, handover) + (second && handover !== undefined ? shown(flourish(second, figure), handover) : '')
 
   const travel = isMoving
-    ? action === 'climb'
-      ? // Up and over: the climb rises to its height halfway and comes down the far side.
-        `<animateTransform attributeName="transform" type="translate" values="${fromX} ${baseY};${n((fromX + toX) / 2)} ${baseY - 24};${toX} ${baseY}" keyTimes="0;.5;1" calcMode="spline" keySplines=".3 0 .6 1;.4 0 .7 1" dur="${n(moveDur)}s" fill="freeze"/>`
-      : `<animateTransform attributeName="transform" type="translate" values="${fromX} ${baseY};${toX} ${baseY}" dur="${n(moveDur)}s" fill="freeze"/>`
+    ? `<animateTransform attributeName="transform" type="translate" values="${fromX} ${baseY};${toX} ${baseY}" dur="${n(moveDur)}s" fill="freeze"/>`
     : ''
   const at = isMoving ? fromX : toX
   const svg =
@@ -476,14 +472,28 @@ function flourish(action: Motion, figure: Figure): string {
       )
       .join('')
   }
-  // A sleeper's z's, rising from above Claude and fading as they go.
+  // A sleeper's Z's: big outlined letters puffing up from over its head, growing as they drift away.
   if (action === 'sleep') {
-    return [0, 1, 2]
+    return [0, 1, 2, 3]
       .map(
         i =>
-          `<text x="${HERO_W * 0.7}" y="${HERO_H - MODEL_STAGE_H + 4}" font-family="Georgia, serif" font-size="${6 + i * 1.5}" font-weight="700" fill="#e8e2d0" opacity="0"><animateTransform attributeName="transform" type="translate" values="0 0;${6 + i * 2} -16" dur="2.4s" begin="${i * 0.8}s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;.9;0" dur="2.4s" begin="${i * 0.8}s" repeatCount="indefinite"/>z</text>`,
+          `<g transform="translate(${HERO_W * 0.62} ${HERO_H - MODEL_STAGE_H + 2})" opacity="0"><animateTransform attributeName="transform" type="translate" values="${HERO_W * 0.62} ${HERO_H - MODEL_STAGE_H + 2};${HERO_W * 0.62 + 10 + (i % 2) * 6} ${HERO_H - MODEL_STAGE_H - 30}" dur="2.8s" begin="${n(i * 0.7)}s" repeatCount="indefinite"/>` +
+          `<animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.7;1" dur="2.8s" begin="${n(i * 0.7)}s" repeatCount="indefinite"/>` +
+          `<g><animateTransform attributeName="transform" type="scale" values=".5;1.8" dur="2.8s" begin="${n(i * 0.7)}s" repeatCount="indefinite"/>` +
+          `<text x="0" y="0" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="13" font-weight="900" fill="#f6f1e2" stroke="#1d1a2e" stroke-width="1.4" stroke-linejoin="round" paint-order="stroke">Z</text></g></g>`,
       )
       .join('')
+  }
+  // Tripped: stars circling over the fallen Claude while it lies dazed.
+  if (action === 'trip') {
+    const { dur } = MOTION_TIMING.trip
+    const star = (x: number, y: number) => `<path d="M${x} ${y - 5}l1.5 3.5 3.5 1.5-3.5 1.5-1.5 3.5-1.5-3.5-3.5-1.5 3.5-1.5z"/>`
+    return (
+      `<g opacity="0"><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.32;.36;.68;.72;1" dur="${dur}s" fill="freeze"/>` +
+      `<g transform="translate(${HERO_W / 2 + 8} ${HERO_H - MODEL_STAGE_H - 10}) scale(1 .45)"><g fill="#ffd84a" stroke="#3a2a10" stroke-width=".8" stroke-linejoin="round">` +
+      `<animateTransform attributeName="transform" type="rotate" values="0;360" dur=".9s" repeatCount="indefinite"/>` +
+      `${star(15, 0)}${star(-7.5, 13)}${star(-7.5, -13)}</g></g></g>`
+    )
   }
   return ''
 }
