@@ -20,7 +20,7 @@
  *   smoothed patch of wall, ringed in soot. A torch warms the wall.
  */
 import type { HeroPainter } from '../hero3d'
-import type { Model } from '../clawd3d'
+import { type Model, outlinedFaces } from '../clawd3d'
 import { isGreen, isWarm, lum, meanOf, num as n, poly } from '../art/ink'
 import { painter } from '../art/painter'
 import type { Family } from '../art/roles'
@@ -62,8 +62,8 @@ const scenery = () =>
         family === 'sky' || family === 'stars' || family === 'life' || family === 'lens' || family === 'air' || family === 'beam' || family === 'glow' || family === 'fire'
           ? ''
           : `stroke="${SOOT}" stroke-width="${n(0.5 + depth * 0.9)}" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="${n(14 + depth * 10)} ${n(1.5 + depth)}" stroke-opacity=".8"`,
-      // Rubbed thin: the rock shows through every mass.
-      post: (svg, _family, depth) => `<g opacity="${n(strength(depth))}">${svg}</g>`,
+      // Rubbed thin: the rock shows through every mass, but rock, hills and buildings are laid on thick enough to hide what stands behind them.
+      post: (svg, family, depth) => `<g opacity="${n(family === 'rock' || family === 'land' || family === 'built' ? 0.92 : strength(depth))}">${svg}</g>`,
       lineless: 0.6,
       faint: 'hide',
       redraw: {
@@ -104,7 +104,7 @@ const hero = (): HeroPainter => (m: Model, cx: number, floor: number) => {
   const body = m.parts.filter(p => p.name !== 'leg').map(pt => poly(pt.hull, cx, floor)).join('')
   const legs = m.parts.filter(p => p.name === 'leg').map(pt => poly(pt.hull, cx, floor)).join('')
   let dabs = ''
-  for (const f of m.faces) {
+  for (const f of outlinedFaces(m)) {
     if (f.part === 'leg') continue
     const tone = f.light > 0.65 ? OCH_P : f.light > 0.4 ? OCH_L : OCH_D
     dabs += `<path fill="${tone}" opacity="${n(0.35 + f.light * 0.4)}" d="${poly(f.pts, cx, floor)}"/>`
@@ -119,9 +119,10 @@ const hero = (): HeroPainter => (m: Model, cx: number, floor: number) => {
   return (
     `<path fill="${SOOT}" opacity=".3" stroke="${SOOT}" stroke-width="1.6" stroke-linejoin="round" d="${legs}"/>` +
     `<path fill="${SOOT}" opacity=".85" d="${legs}"/>` +
-    `<path fill="${OCH}" opacity=".9" d="${body}"/>` +
+    // The soot contour goes on first and the ochre over it, so only its outer half shows: one line round the whole figure.
+    `<path fill="none" stroke="${SOOT}" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="11 2.5 6 2" d="${body}"/>` +
+    `<path fill="${OCH}" d="${body}"/>` +
     `<g filter="url(#cv-blow)">${dabs}</g>` +
-    `<path fill="none" stroke="${SOOT}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="11 2.5 6 2" d="${body}"/>` +
     eyes +
     // A grain of the rock over the paint.
     `<path fill="url(#cv-pits)" d="${body}"/>`

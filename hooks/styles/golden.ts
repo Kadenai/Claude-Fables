@@ -20,7 +20,7 @@
  *   caption lettered in capitals in a white balloon.
  */
 import type { HeroPainter } from '../hero3d'
-import type { Model } from '../clawd3d'
+import { type Model, outlinedFaces } from '../clawd3d'
 import { isGreen, isWarm, lum, meanOf, mix, num as n, poly, step, t1 } from '../art/ink'
 import { painter, type Ctx } from '../art/painter'
 import type { Family } from '../art/roles'
@@ -157,7 +157,7 @@ const hero = (): HeroPainter => (m: Model, cx: number, floor: number) => {
   const hulls = m.parts.map(pt => poly(pt.hull, cx, floor)).join('')
   const plate = m.parts.map(pt => poly(pt.hull, cx + 1.1, floor + 0.8)).join('')
   let faces = ''
-  for (const f of m.faces) {
+  for (const f of outlinedFaces(m)) {
     const tone = f.part === 'leg' ? (f.name === 'front' ? P.leg : P.legDark) : f.name === 'top' ? P.top : f.name === 'front' ? P.front : P.side
     const fill = f.name !== 'front' && f.name !== 'top' ? 'url(#ga-claude)' : tone
     faces += `<path fill="${fill}" d="${poly(f.pts, cx, floor)}"/>`

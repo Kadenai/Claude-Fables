@@ -338,9 +338,9 @@ function forest(c: Ctx): Scene {
   const far = () =>
     c.p.el('forest.ridge', farRidge, { sw }) +
     c.p.el('forest.firs-far', farRow, { sw }) +
-    c.p.el('forest.mist', farMist, { sw, y: 74, h: 20 }) +
+    c.p.el('forest.mist', farMist, { lean: c.detail < 1, sw, y: 74, h: 20 }) +
     c.p.el('forest.firs-mid', midRow, { sw }) +
-    c.p.el('forest.mist', midMist, { sw, y: 86, h: 16 })
+    c.p.el('forest.mist', midMist, { lean: c.detail < 1, sw, y: 86, h: 16 })
 
   // Shafts of light fanning from the sun down to the ground, soft-edged, breathing slowly.
   const shafts = [-0.5, -0.26, -0.06, 0.16, 0.38]
@@ -468,7 +468,7 @@ function forest(c: Ctx): Scene {
         const paint = i === 0 && rows.length > 1 ? 'fill="#8a98a0" color="#6a7682"' : `fill="${SHADE}" color="${DEEP}"`
         const depth = { sw, back: i === 0 && rows.length > 1 }
         return (
-          (i > 0 ? c.p.el('forest.mist', veil, { sw, y: mid - 34, h: 36, veil: true }) : '') +
+          (i > 0 ? c.p.el('forest.mist', veil, { lean: c.detail < 1, sw, y: mid - 34, h: 36, veil: true }) : '') +
           c.p.el('forest.fir-trunks', `<g filter="url(#sc-bark)" ${paint}>${r.trunks}</g>`, depth) +
           c.p.el('forest.firs', `<g filter="url(#sc-needles)" ${paint}>${r.tiers}</g>`, depth)
         )
@@ -678,7 +678,7 @@ function forest(c: Ctx): Scene {
     c.p.el('forest.meadow', `<g filter="url(#sc-grassmat)">${groundLight}</g>`, { sw, y: mid - 2 }) +
     // The meadow's far edge dissolves into the mist instead of meeting it in a line.
     c.p.el('forest.shrubs', `<g filter="url(#sc-needles)">${shrubs}</g>`) +
-    c.p.el('forest.groundmist', `<rect x="0" y="${mid - 8}" width="${sw}" height="10" fill="url(#sc-groundmist)"/>`, { sw, y: mid - 8, h: 10 }) +
+    c.p.el('forest.groundmist', `<rect x="0" y="${mid - 8}" width="${sw}" height="10" fill="url(#sc-groundmist)"/>`, { lean: c.detail < 1, sw, y: mid - 8, h: 10 }) +
     c.p.el('forest.path', path, { sw }) +
     floor() +
     // Where the sun lands through the clearing the light is strong enough to add, not just tint.
@@ -1030,6 +1030,12 @@ function desert(c: Ctx): Scene {
       const cap = t + h * (kind > 0.82 ? 0.7 : 0.34)
       const l = x + talus
       const r = l + w
+      // A notch is left where the sun sets, so nothing stands in front of it.
+      const clear = 18
+      if (x < sunX + clear && r + talus > sunX - clear) {
+        x = sunX + clear + between(rand, 2, 10)
+        continue
+      }
       // The skirt bows outward a little, and the cliff's foot is ragged.
       const body =
         `M${f(x)} ${base}Q${f(l - talus * 0.15)} ${f(cap + (base - cap) * 0.25)} ${f(l)} ${f(cap)}` +
@@ -1828,7 +1834,7 @@ function night(c: Ctx): Scene {
     sky() +
     c.p.el('night.hills-far', `<path fill="#3a4880" opacity=".7" d="${ridge(sw, 0, x => -(far(x) - 6 - farH(x * 1.7) * 0.4))}" filter="url(#sc-dof)"/>` + farHills, { sw }) +
     // Mist lying in the valley between the far hills and the village's hill.
-    c.p.el('night.mist', `<g filter="url(#sc-haze)"><rect x="${-sw * 0.1}" y="66" width="${sw * 1.2}" height="20" fill="url(#sc-lowmist)"><animateTransform attributeName="transform" type="translate" values="0 0;${f(sw * 0.03)} 0;0 0" dur="40s" repeatCount="indefinite"/></rect></g>`, { sw, y: 66, h: 20 }) +
+    c.p.el('night.mist', `<g filter="url(#sc-haze)"><rect x="${-sw * 0.1}" y="66" width="${sw * 1.2}" height="20" fill="url(#sc-lowmist)"><animateTransform attributeName="transform" type="translate" values="0 0;${f(sw * 0.03)} 0;0 0" dur="40s" repeatCount="indefinite"/></rect></g>`, { lean: c.detail < 1, sw, y: 66, h: 20 }) +
     c.p.el('night.hill', `<g filter="url(#sc-nightgrass)">${hillLight}</g>`, { sw }) +
     // The crest catches the moon: a fine line of light along it, strongest toward the moon.
     c.p.el('night.crest', `<g filter="url(#sc-soft)" style="mix-blend-mode:screen"><path fill="none" stroke="url(#sc-crest)" stroke-width="1.6" d="${crestLine(sw, hill)}"/></g>`, { d: crestLine(sw, hill) }) +

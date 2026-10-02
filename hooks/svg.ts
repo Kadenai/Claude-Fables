@@ -340,7 +340,7 @@ const heroColor = (k: string) => PALETTE[k]
 type HeroPlan = { svg: string; startX: number; endX: number; endY: number; arrive: number }
 
 /** How the hero is drawn: the pixel sprite in a cell style, or the 3D model painted one way. */
-export type Figure = { kind: 'pixel'; cell: Cell } | { kind: '3d'; hero?: HeroPainter }
+export type Figure = { kind: 'pixel'; cell: Cell } | { kind: '3d'; hero?: HeroPainter; lean?: boolean }
 
 /** The 3D model stands a little taller than the sprite, arms reaching past its box. */
 const MODEL_STAGE_H = 40
@@ -365,7 +365,7 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure, tin
       ? `<animate attributeName="opacity" values="${values}" dur="${step * 2}s" calcMode="discrete" repeatCount="${steps / 2}"/>`
       : '') +
     `</g>`
-  const model = (motion: Parameters<typeof motionSvg>[0], when: { until?: number; from?: number } = {}) =>
+  const model = (motion: Parameters<typeof motionSvg>[0], when: { until?: number; from?: number; maxFrames?: number } = {}) =>
     figure.kind === '3d'
       ? motionSvg(motion, { height: MODEL_STAGE_H, cx: HERO_W / 2, floor: HERO_H, yaw: 0.55, hero: figure.hero, ...when }).svg
       : ''
@@ -374,7 +374,7 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure, tin
     figure.kind === 'pixel'
       ? legs(0, '1;0') + legs(1, '0;1')
       : action === 'walk' || action === 'run'
-        ? model(action, { until: moveDur }) + model('idle', { from: moveDur })
+        ? model(action, { until: moveDur }) + model('idle', { from: moveDur, maxFrames: figure.kind === '3d' && figure.lean ? 2 : undefined })
         : model(action)
 
   let inner = ''
@@ -777,7 +777,8 @@ export function sceneToSvg(
   // The rich stage tells the story in words alone: no props stand about the scene.
   const props = rich ? [] : scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell))
   // A style paints Claude's confetti and dug-up earth in its own inks too.
-  const plan = hero(scene, stage.floor, sw, figure, painter ? svg => painter.el('particles', svg) : undefined)
+  const tint = painter ? (svg: string) => painter.el('particles', svg) : undefined
+  let plan = hero(scene, stage.floor, sw, figure, tint)
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
   const sky = art?.sky ?? stage.sky
@@ -834,6 +835,11 @@ export function sceneToSvg(
     svg = build(true, propsShown)
   }
   if (svg.length > BUDGET) svg = build(false, propsShown)
+  // Then Claude, once he has arrived, stands breathing in two poses instead of a full idle loop.
+  if (svg.length > BUDGET && figure.kind === '3d') {
+    plan = hero(scene, stage.floor, sw, { ...figure, lean: true }, tint)
+    svg = build(false, propsShown)
+  }
   // Still over (a look whose colors spell long), the rich stage gives way to the flat one
   // before any prop goes; the flat stage always fits.
   if (svg.length > BUDGET && rich) {

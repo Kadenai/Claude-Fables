@@ -25,7 +25,7 @@
  *   ruled title block, with a leader running to Claude.
  */
 import type { HeroPainter } from '../hero3d'
-import type { Model } from '../clawd3d'
+import { type Model, outlinedOrder } from '../clawd3d'
 import { lum, num as n, poly, t1 } from '../art/ink'
 import { painter, type Ctx } from '../art/painter'
 import type { Family } from '../art/roles'
@@ -158,7 +158,7 @@ const hero =
     const seg = (e: { a: readonly [number, number]; b: readonly [number, number] }) => poly([e.a, e.b], cx, floor, false)
     let parts = ''
     let hidden = ''
-    for (const pt of m.parts) {
+    for (const pt of outlinedOrder(m)) {
       // The sheet knocked back in over whatever is behind this part, outlined: a box's outline is its hull.
       parts += `<path fill="url(#bp-sheet)" d="${poly(pt.hull, cx, floor)}"/>`
       const c = pt.edges.filter(e => e.kind === 'crease').map(seg).join('')

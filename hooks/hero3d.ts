@@ -75,9 +75,11 @@ export type Frames3d = {
  */
 export function motionSvg(
   motion: Motion,
-  o: { height: number; cx: number; floor: number; yaw: number; hero?: HeroPainter; until?: number; from?: number },
+  o: { height: number; cx: number; floor: number; yaw: number; hero?: HeroPainter; until?: number; from?: number; maxFrames?: number },
 ): Frames3d {
-  const { frames, dur } = MOTION_TIMING[motion]
+  // A scene short of room may bake a motion in fewer poses, played over the same time.
+  const frames = Math.min(MOTION_TIMING[motion].frames, o.maxFrames ?? Infinity)
+  const { dur } = MOTION_TIMING[motion]
   const s = o.height / MODEL_H
   const timing =
     o.until !== undefined

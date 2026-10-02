@@ -20,8 +20,9 @@
  *   The caption is dyed cream on a silk panel, ruled twice.
  */
 import type { HeroPainter } from '../hero3d'
-import type { Model } from '../clawd3d'
+import { type Model, outlinedFaces } from '../clawd3d'
 import { lum, meanOf, num as n, poly } from '../art/ink'
+import { MIST_TILE, mistBanks, tiled } from '../art/mist'
 import { painter, type Ctx } from '../art/painter'
 import type { Family } from '../art/roles'
 import type { Look } from '../looks'
@@ -81,11 +82,14 @@ const scenery = () =>
         'forest.sun': (_s, c) => futae(c, (c.meta.r ?? 7) * 1.6),
         'desert.sun': (_s, c) => futae(c, (c.meta.r ?? 11) * 1.3),
         'night.moon': (_s, c) => futae(c, (c.meta.r ?? 9) * 1.3),
+        // Mist as kumo: cream banks of lobes, each lobe parted from the next by a silk cut, as the crest's cloud is.
         air: (svg, c) => {
-          const y = c.meta.y ?? 80
-          const h = c.meta.h ?? 12
-          const w = c.meta.sw ?? 640
-          return `<g><rect x="-20" y="${n(y + h * 0.42)}" width="${w + 40}" height="${n(Math.max(1.2, h * 0.16))}" fill="${CREAM}"/>${c.motion(svg)}</g>`
+          const banks = mistBanks({ w: Math.min(MIST_TILE, c.meta.sw ?? 640), y: c.meta.y ?? 80, h: c.meta.h ?? 12, seed: 5, rows: (c.meta.h ?? 12) < 12 || c.meta.veil ? 1 : 2, lean: c.meta.lean === true })
+          const art =
+            `<path fill="${CREAM}" stroke="${SILK}" stroke-width=".9" stroke-linejoin="round" d="${banks.map(b => b.d).join('')}"/>` +
+            `<path fill="none" stroke="${SILK}" stroke-width=".8" stroke-linecap="round" d="${banks.map(b => b.echo).join('')}"/>`
+          // Drawn for one tile and repeated, the banks drifting as the mist they replace did.
+          return `<g>${tiled(`km-mist-${Math.round(c.meta.y ?? 80)}-${Math.round(c.meta.h ?? 12)}`, art, c.meta.sw ?? 640)}${c.motion(svg)}</g>`
         },
       },
     },
@@ -108,7 +112,7 @@ function futae(c: Ctx, r: number): string {
 /** Claude as the gallery's emblem: cream planes parted by cuts, eyes cut through, a cut round him. */
 const hero = (): HeroPainter => (m: Model, cx: number, floor: number) => {
   const hulls = m.parts.map(pt => poly(pt.hull, cx, floor)).join('')
-  const faces = m.faces.map(f => poly(f.pts, cx, floor)).join('')
+  const faces = outlinedFaces(m).map(f => poly(f.pts, cx, floor)).join('')
   const eyes = m.eyes
     .map(e => (e.poly ? `<path fill="${SILK}" d="${poly(e.poly, cx, floor)}"/>` : `<path fill="none" stroke="${SILK}" stroke-width="1.1" stroke-linecap="round" d="${poly(e.line ?? [], cx, floor, false)}"/>`))
     .join('')

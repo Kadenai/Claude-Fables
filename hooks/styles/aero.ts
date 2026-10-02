@@ -1,64 +1,139 @@
 /**
  * Frutiger Aero, after the gallery's "Frutiger Aero: glossy eco-tech,
- * mid-2000s" (henrik-styles.js, style 29, `eaero`).
+ * mid-2000s" (henrik-styles.js, style 29, `eaero`), and the look's own sources:
+ * the Windows Vista and 7 wallpapers, "Bliss", the eco-tech stock art of
+ * 2004 to 2013.
  *
- * The art bible, translated from the gallery's desktop to the Fables' worlds:
+ * The art bible, translated to the Fables' worlds:
  *
- * - Everything is clean, bright and glossy: azure skies fading to pale aqua at
- *   the horizon, grass-green hills, white clouds as soft puffs, a white sun
- *   with a lens flare. Night scenes go deep blue but stay just as clean.
- * - Every surface is a smooth gradient, lighter at the top, and carries a
- *   glossy rim of white light along its top edge; shapes have no dark outline.
- * - Colors are pushed toward the Aero palette: sky blue, aqua, grass green,
- *   white, with warm things kept as glowing orange.
+ * - Saturated, never washed out. Skies are deep azure at the top, clear
+ *   blue in the middle, aqua at the horizon; grass is a vivid Bliss green;
+ *   water and glass are clear aqua and teal. Contrast is high: the darks are
+ *   a deep navy or forest green, never grey.
+ * - Every surface is a smooth gradient with a gloss: lighter where it faces
+ *   up, a little deeper below, and a thin white highlight along its top.
+ *   Nothing carries a dark outline.
+ * - Clouds are puffy white cumulus with soft blue undersides. The sun is
+ *   white, with a bloom and a lens flare. Light falling through the air is
+ *   drawn as soft beams; stars and sparks are bokeh, soft rings of light;
+ *   motes and dust are little soap bubbles.
+ * - Night is Frutiger Aurora, the Vista look: deep navy fading to teal, with
+ *   ribbons of aurora green and cyan across the sky, the land in deep blues
+ *   and greens with the same gloss.
  * - Claude is the gallery's tangerine jelly: rounded, light at the top left
- *   and deep at the bottom right, a darker inner edge, a glossy window cap
- *   over his top and a white hot spot, dark glassy eyes with a white glint.
+ *   and deep at the bottom right, a glossy window cap over his top and a
+ *   white hot spot, dark glassy eyes with a white glint.
  * - The screen is framed in rounded glass; the chapter is a glossy pill, and
  *   the caption a frosted glass panel.
  */
 import type { HeroPainter } from '../hero3d'
-import type { Model } from '../clawd3d'
-import { isGreen, isWarm, lum, mix, num as n, poly, step, t1 } from '../art/ink'
-import { painter } from '../art/painter'
+import { type Model, outlinedFaces } from '../clawd3d'
+import { isGreen, isWarm, lum, meanOf, mix, num as n, poly, step, t1 } from '../art/ink'
+import { painter, type Ctx } from '../art/painter'
 import type { Family } from '../art/roles'
 import type { Look } from '../looks'
 
 const K = { light: '#ffbd5c', mid: '#ff7f17', deep: '#e0480a', edge: '#b23a06', eye: '#5c1d05' }
 const SANS = "'Segoe UI', 'Frutiger', 'Myriad Pro', 'Helvetica Neue', Arial, sans-serif"
 
-/** Aero's ramps, dark to light. */
+/** Aero's ramps, dark to light: saturated all the way down. */
 const R = {
-  sky: ['#0a3d73', '#0d6fd6', '#3aa3ef', '#a5e0fb', '#d9f5ff'],
-  green: ['#1f6a1f', '#2f8f12', '#58c21f', '#8ee23f', '#c8f09a'],
-  aqua: ['#0a4a6a', '#1478a8', '#3ab0d8', '#9fe0f2', '#e8fbff'],
-  warm: ['#b23a06', K.deep, K.mid, K.light, '#ffe6b0'],
-  glass: ['#3a5a7a', '#6a90b4', '#a9c6dc', '#e8f3fb', '#ffffff'],
+  green: ['#0b3d10', '#14621a', '#1f8a1c', '#3fb42a', '#7fd83d', '#c2f070'],
+  aqua: ['#032a46', '#05507c', '#0a7ab4', '#18a6dc', '#62d2f2', '#c4f2ff'],
+  steel: ['#0c2238', '#163e62', '#245f90', '#3f86ba', '#7bb6dc', '#cfe9f8'],
+  warm: ['#8a2a04', '#b23a06', K.deep, K.mid, K.light, '#ffe6b0'],
+  sand: ['#5a3a12', '#8a5e22', '#c08a3a', '#e6b864', '#f6dca0', '#fff4d8'],
 }
 
+/** A lit color in the scene's own lightness, carried onto Aero's saturated ramps. */
 function tone(color: string, family: Family): string {
-  // Aero is bright: everything lifted well into the light.
-  const t = Math.min(0.99, 0.25 + Math.pow(lum(color), 0.6) * 0.85)
-  if (family === 'fire' || family === 'lamp' || family === 'body') return step(R.warm, t)
-  if (family === 'stars' || family === 'life') return '#ffffff'
-  if (family === 'sky' || family === 'cloud' || family === 'air') return step(R.sky, t)
-  if (family === 'foliage' || family === 'grass' || family === 'land') return isWarm(color) ? step(R.warm, t) : step(R.green, t)
-  if (family === 'water' || family === 'glass') return step(R.aqua, t)
-  if (isWarm(color)) return step(R.warm, t)
-  if (isGreen(color)) return step(R.green, t)
-  return step(R.glass, t)
+  let t = Math.min(0.99, Math.pow(lum(color), 0.75) * 1.12)
+  const warm = isWarm(color)
+  switch (family) {
+    case 'fire':
+    case 'lamp':
+      return step(R.warm, Math.max(0.5, t))
+    case 'foliage':
+    case 'grass':
+      return step(R.green, t)
+    // The land is never chalk: its palest tone stays the ramp's fourth, so it keeps its color under the sky.
+    case 'land':
+      t = Math.min(t, 0.66)
+      return warm ? step(R.sand, t) : isGreen(color) ? step(R.green, t) : step(R.steel, t)
+    case 'water':
+    case 'glass':
+      return step(R.aqua, t)
+    case 'bark':
+      return step(R.sand, t * 0.6)
+    case 'ground':
+    case 'rock':
+    case 'mark':
+      t = Math.min(t, 0.66)
+      return isGreen(color) ? step(R.green, t) : warm || brownish(color) ? step(R.sand, t) : step(R.steel, t)
+    default:
+      return warm ? step(R.warm, t) : isGreen(color) ? step(R.green, t) : step(R.aqua, t)
+  }
+}
+function brownish(color: string): boolean {
+  const c = color.replace('#', '')
+  if (c.length !== 6) return false
+  return parseInt(c.slice(0, 2), 16) > parseInt(c.slice(4, 6), 16) + 16
 }
 
-/** A surface's gradient: its tone lighter at the top, a little deeper below, as glossy plastic is. */
+/** A surface's gradient: its tone lighter at the top, deeper below, as glossy plastic is. */
 let made = new Set<string>()
 let pending = ''
 function glossy(color: string): string {
   const id = `ae-g${color.slice(1)}`
   if (!made.has(id)) {
     made.add(id)
-    pending += `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${mix(color, '#ffffff', 0.35)}"/><stop offset=".55" stop-color="${color}"/><stop offset="1" stop-color="${mix(color, '#000000', 0.18)}"/></linearGradient>`
+    pending += `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${mix(color, '#ffffff', 0.28)}"/><stop offset=".5" stop-color="${color}"/><stop offset="1" stop-color="${mix(color, '#001428', 0.22)}"/></linearGradient>`
   }
   return `url(#${id})`
+}
+
+/**
+ * The sky: day is deep azure to aqua at the horizon; dusk keeps the blue above
+ * a warm glow at the horizon; night is Frutiger Aurora, navy to teal with ribbons
+ * of aurora across it.
+ */
+function sky(svg: string, c: Ctx): string {
+  const g = c.gradient(svg)
+  const stops = g?.stops ?? []
+  const top = stops[0]?.color ?? '#3060a0'
+  const low = stops[stops.length - 1]?.color ?? '#80a0c0'
+  const sw = c.meta.sw ?? 640
+  const night = lum(top) < 0.2 && lum(low) < 0.45
+  const dusk = !night && isWarm(low)
+  if (night) {
+    return (
+      `<rect width="${sw}" height="128" fill="url(#ae-night)"/>` +
+      `<g opacity=".7"><path d="M-20 34C${n(sw * 0.2)} 6 ${n(sw * 0.45)} 54 ${n(sw * 0.7)} 20S${n(sw + 20)} 30 ${n(sw + 20)} 30v14C${n(sw * 0.8)} 34 ${n(sw * 0.6)} 64 ${n(sw * 0.35)} 40S-20 46 -20 46z" fill="url(#ae-aurora)">` +
+      `<animate attributeName="opacity" values=".8;1;.8" dur="9s" repeatCount="indefinite"/></path>` +
+      `<path d="M-20 58C${n(sw * 0.3)} 36 ${n(sw * 0.55)} 72 ${n(sw + 20)} 44v8C${n(sw * 0.55)} 82 ${n(sw * 0.3)} 46 -20 66z" fill="url(#ae-aurora2)" opacity=".7"/></g>`
+    )
+  }
+  return `<rect width="${sw}" height="128" fill="url(#${dusk ? 'ae-dusk' : 'ae-day'})"/>`
+}
+
+/**
+ * Bokeh: each star or spark a soft round of light. Every shape becomes a group
+ * keeping its own attributes and animation, holding a soft disc at each point
+ * the shape was drawn at.
+ */
+function bokeh(svg: string, c: Ctx): string {
+  const discs = (pts: [string, string][]) => pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.3"/>`).join('')
+  return c
+    .repaint(svg)
+    .replace(/<(path|rect)\b([^>]*?)(\/?)>/g, (_all, tag: string, attrs: string, close: string) => {
+      const pts: [string, string][] =
+        tag === 'path'
+          ? [...(/\sd="([^"]*)"/.exec(attrs)?.[1] ?? '').matchAll(/M([\d.-]+) ([\d.-]+)/g)].map(m => [m[1]!, m[2]!])
+          : [[/\sx="([^"]*)"/.exec(attrs)?.[1] ?? '0', /\sy="([^"]*)"/.exec(attrs)?.[1] ?? '0']]
+      const kept = attrs.replace(/\s(d|x|y|width|height|fill|stroke|stroke-width|stroke-linecap)="[^"]*"/g, '')
+      return `<g${kept} fill="url(#ae-bokeh)">${discs(pts)}${close ? '</g>' : ''}`
+    })
+    .replace(/<\/(path|rect)>/g, '</g>')
 }
 
 const scenery = () => {
@@ -66,31 +141,38 @@ const scenery = () => {
   pending = ''
   const p = painter(
     {
-      ink: (color, family, _depth, attr) => (attr === 'stroke' ? '#ffffff' : attr === 'stop-color' ? tone(color, family) : family === 'sky' || family === 'stars' || family === 'life' ? tone(color, family) : glossy(tone(color, family))),
-      // Gradients stay gradients here: Aero is made of them, carried into its own colors.
+      ink: (color, family, _depth, attr) =>
+        attr === 'stroke' ? '#ffffff' : attr === 'stop-color' ? tone(color, family) : family === 'stars' || family === 'life' ? '#ffffff' : glossy(tone(color, family)),
+      // A gradient of the lit scene becomes one glossy surface in its overall tone; a wash of light is not drawn.
+      url: (_id, family, attr, g) => (attr === 'stroke' ? '#ffffff' : g && meanOf(g).opacity < 0.5 ? 'none' : glossy(tone(g ? meanOf(g).color : '#808080', family))),
+      // The gloss: a thin white highlight round the nearer surfaces, never a dark outline.
       line: (family, depth) =>
-        family === 'sky' || family === 'stars' || family === 'life' || family === 'lens' || family === 'air' || family === 'beam' || family === 'glow' || family === 'fire' || family === 'lamp'
+        family === 'sky' || family === 'stars' || family === 'life' || family === 'lens' || family === 'air' || family === 'beam' || family === 'glow' || family === 'fire' || family === 'lamp' || depth < 0.25
           ? ''
-          : `stroke="#ffffff" stroke-opacity="${n(0.25 + depth * 0.3)}" stroke-width="${n(0.4 + depth * 0.4)}" stroke-linejoin="round"`,
+          : `stroke="#ffffff" stroke-opacity="${n(0.18 + depth * 0.22)}" stroke-width="${n(0.35 + depth * 0.3)}" stroke-linejoin="round"`,
       lineless: 0.6,
       faint: 'hide',
       redraw: {
+        sky,
         lens: () => '',
         glow: () => '',
-        // A white sun with its flare: a few rings along the line toward the middle of the stage.
+        stars: bokeh,
+        // A white sun with its bloom and a lens flare toward the middle of the stage; the Earth a glossy globe.
         body: (_svg, c) => {
           const cx = c.meta.cx ?? 0
           const cy = c.meta.cy ?? 0
           const r = c.meta.r ?? 8
-          if (c.meta.part === 'halo') return `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r * 7)}" fill="url(#ae-flare)"/>`
-          if (c.role === 'space.earth') return `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="url(#ae-earth)"/><ellipse cx="${n(cx - r * 0.3)}" cy="${n(cy - r * 0.55)}" rx="${n(r * 0.5)}" ry="${n(r * 0.25)}" fill="#fff" opacity=".5"/>`
-          const rings = [0.35, 0.6, 0.85].map((k, i) => `<circle cx="${n(cx + (320 - cx) * k)}" cy="${n(cy + (70 - cy) * k)}" r="${[5, 9, 3.5][i]}" fill="none" stroke="#fff" stroke-opacity=".3" stroke-width=".8"/>`).join('')
-          return `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r * 4)}" fill="url(#ae-flare)"/><circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r * 1.1)}" fill="#ffffff"/>` + rings
+          if (c.role === 'space.earth') return `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="url(#ae-earth)"/><ellipse cx="${n(cx - r * 0.25)}" cy="${n(cy - r * 0.55)}" rx="${n(r * 0.55)}" ry="${n(r * 0.28)}" fill="#fff" opacity=".45"/>`
+          if (c.meta.part === 'halo') return `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r * 6)}" fill="url(#ae-flare)"/>`
+          if (c.role === 'night.moon') return `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r * 3)}" fill="url(#ae-flare)" opacity=".6"/><circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r * 1.1)}" fill="#eaf8ff"/>`
+          const rings = [0.3, 0.55, 0.8].map((k, i) => `<circle cx="${n(cx + (320 - cx) * k)}" cy="${n(cy + (80 - cy) * k)}" r="${[4, 8, 3][i]}" fill="${i === 1 ? 'url(#ae-ring)' : 'none'}" stroke="#fff" stroke-opacity=".35" stroke-width=".7"/>`).join('')
+          return `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r * 3)}" fill="url(#ae-flare)"/><circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r * 1.05)}" fill="#ffffff"/>` + rings
         },
-        // Clouds as soft white puffs.
-        cloud: (svg, c) => `<g opacity=".85">${c.repaint(svg).replace(/\sfill="[^"]*"/g, ' fill="#ffffff"')}</g>`,
-        air: (svg, c) => `<g opacity=".55">${c.repaint(svg).replace(/\sfill="[^"]*"/g, ' fill="#ffffff"')}</g>`,
-        beam: (svg, c) => `<g opacity=".35">${c.repaint(svg).replace(/\sfill="[^"]*"/g, ' fill="#ffffff"')}</g>`,
+        // Cumulus: white, its underside a soft blue.
+        cloud: (svg, c) => `<g>${c.repaint(svg).replace(/\sfill="[^"]*"/g, ' fill="url(#ae-cloud)"').replace(/\sopacity="[^"]*"/g, '')}</g>`,
+        air: (svg, c) => `<g opacity=".5">${c.repaint(svg).replace(/\sfill="[^"]*"/g, ' fill="#ffffff"')}</g>`,
+        // Light falling through the air: soft white beams.
+        beam: (svg, c) => `<g opacity=".3">${c.repaint(svg).replace(/\sfill="[^"]*"/g, ' fill="url(#ae-beam)"')}</g>`,
       },
     },
     'ae',
@@ -128,7 +210,7 @@ const hero = (): HeroPainter => (m: Model, cx: number, floor: number) => {
       `<ellipse cx="${t1(x0 + w * 0.25)}" cy="${t1(y0 + h * 0.18)}" rx="${t1(w * 0.07)}" ry="${t1(h * 0.05)}" fill="#fff" opacity=".95"/>`
   }
   // The faces turn the jelly faintly, so its shape still reads.
-  const faces = m.faces
+  const faces = outlinedFaces(m)
     .filter(f => f.part === 'body' && f.name !== 'front')
     .map(f => `<path fill="${f.name === 'top' ? '#ffeec8' : '#aa3205'}" opacity="${f.name === 'top' ? 0.3 : n(0.22 * (1 - f.light))}" d="${poly(f.pts, cx, floor)}"/>`)
     .join('')
@@ -167,16 +249,25 @@ export const AERO: Look = {
   art: {
     painter: scenery,
     hero,
-    sky: '#3aa3ef',
-    ground: '#58c21f',
+    sky: '#0d78dc',
+    ground: '#1f8a1c',
     defs: () =>
+      `<linearGradient id="ae-day" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0646a8"/><stop offset=".35" stop-color="#0d78dc"/><stop offset=".7" stop-color="#3fb0f0"/><stop offset="1" stop-color="#a8e6fb"/></linearGradient>` +
+      `<linearGradient id="ae-dusk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a3a8a"/><stop offset=".45" stop-color="#2a7ad0"/><stop offset=".75" stop-color="#8ac8ea"/><stop offset="1" stop-color="#ffc878"/></linearGradient>` +
+      `<linearGradient id="ae-night" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#020c2a"/><stop offset=".55" stop-color="#06305a"/><stop offset="1" stop-color="#0a6a7a"/></linearGradient>` +
+      `<linearGradient id="ae-aurora" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3cff9a" stop-opacity="0"/><stop offset=".3" stop-color="#3cff9a" stop-opacity=".55"/><stop offset=".65" stop-color="#3ce0ff" stop-opacity=".5"/><stop offset="1" stop-color="#3ce0ff" stop-opacity="0"/></linearGradient>` +
+      `<linearGradient id="ae-aurora2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5affd0" stop-opacity="0"/><stop offset=".5" stop-color="#5affd0" stop-opacity=".4"/><stop offset="1" stop-color="#7a9aff" stop-opacity="0"/></linearGradient>` +
+      `<linearGradient id="ae-cloud" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#f4fbff"/><stop offset="1" stop-color="#b8dcf4"/></linearGradient>` +
+      `<linearGradient id="ae-beam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>` +
+      `<radialGradient id="ae-bokeh"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".6" stop-color="#cff4ff" stop-opacity=".5"/><stop offset="1" stop-color="#cff4ff" stop-opacity="0"/></radialGradient>` +
+      `<radialGradient id="ae-ring"><stop offset=".6" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#bff0ff" stop-opacity=".35"/></radialGradient>` +
       `<radialGradient id="ae-flare"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".15" stop-color="#fffff0" stop-opacity=".6"/><stop offset=".45" stop-color="#fff" stop-opacity=".15"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>` +
       `<radialGradient id="ae-earth" cx=".35" cy=".35" r=".75"><stop offset="0" stop-color="#9fe0f2"/><stop offset=".6" stop-color="#1478a8"/><stop offset="1" stop-color="#0a3d73"/></radialGradient>` +
       `<linearGradient id="ae-jelly" x1="0" y1="0" x2=".7" y2="1"><stop offset="0" stop-color="${K.light}"/><stop offset=".4" stop-color="${K.mid}"/><stop offset="1" stop-color="${K.deep}"/></linearGradient>` +
       `<linearGradient id="ae-cap" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".6" stop-color="#fff" stop-opacity=".2"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>` +
       `<linearGradient id="ae-eye" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c0c02"/><stop offset=".6" stop-color="${K.eye}"/><stop offset="1" stop-color="#b8460f"/></linearGradient>` +
       `<radialGradient id="ae-shadow"><stop offset="0" stop-color="#ff9628" stop-opacity=".5"/><stop offset=".6" stop-color="#1e5a0a" stop-opacity=".25"/><stop offset="1" stop-color="#1e5a0a" stop-opacity="0"/></radialGradient>` +
-      `<linearGradient id="ae-gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".38"/><stop offset=".4" stop-color="#fff" stop-opacity=".08"/><stop offset=".41" stop-color="#fff" stop-opacity="0"/></linearGradient>` +
+      `<linearGradient id="ae-gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".3" stop-color="#fff" stop-opacity=".04"/><stop offset=".31" stop-color="#fff" stop-opacity="0"/></linearGradient>` +
       `<linearGradient id="ae-pill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ad0f7"/><stop offset=".5" stop-color="#2a8ad8"/><stop offset="1" stop-color="#1a6ab8"/></linearGradient>`,
   },
   texture: (sw, h) => `<rect width="${sw}" height="${h}" fill="url(#ae-gloss)"/>`,

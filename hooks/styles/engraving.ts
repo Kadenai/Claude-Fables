@@ -22,8 +22,9 @@
  *   and the chapter in spaced capitals; the caption is an engraved legend.
  */
 import type { HeroPainter } from '../hero3d'
-import type { Model } from '../clawd3d'
+import { type Model, outlinedFaces } from '../clawd3d'
 import { lum, meanOf, num as n, poly, t1 } from '../art/ink'
+import { MIST_TILE, mistBanks, tiled } from '../art/mist'
 import { painter, type Ctx } from '../art/painter'
 import type { Family } from '../art/roles'
 import type { Look } from '../looks'
@@ -178,16 +179,23 @@ const scenery = () =>
         // The Milky Way as a drift of fine dots, no band.
         'space.milkyway': (svg, c) => c.repaint(svg.replace(/<ellipse[^>]*\/>/, '')),
         lens: () => '',
+        // No reflections: the street and the floor stay plain.
+        water: () => '',
         glow: () => '',
         'forest.sun': (_s, c) => reserved(c, true),
         'desert.sun': (_s, c) => reserved(c, true),
         'night.moon': (_s, c) => reserved(c, false),
-        // Mist and light falling through the air are the paper showing through the cut.
+        // Mist is reserved paper, its banks cut round with a fine contour along their tops and a few
+        // level strokes of shade beneath them, as an engraver sculpts cloud.
         air: (svg, c) => {
-          const y = c.meta.y ?? 80
-          const h = c.meta.h ?? 12
-          const w = c.meta.sw ?? 640
-          return `<g><rect x="${-20}" y="${n(y + h * 0.25)}" width="${w + 40}" height="${n(h * 0.5)}" rx="${n(h * 0.25)}" fill="${PAPER}" opacity=".8"/>${c.motion(svg)}</g>`
+          const banks = mistBanks({ w: Math.min(MIST_TILE, c.meta.sw ?? 640), y: c.meta.y ?? 80, h: c.meta.h ?? 12, seed: 8, rows: (c.meta.h ?? 12) < 12 || c.meta.veil ? 1 : 2, lean: c.meta.lean === true })
+          const shade = banks.map(b => b.under).join('')
+          const art =
+            `<path fill="${PAPER}" stroke="${INK}" stroke-width=".45" stroke-dasharray="40 2 12 1.5" d="${banks.map(b => b.d).join('')}"/>` +
+            `<path fill="none" stroke="${INK}" stroke-width=".35" d="${shade}"/>` +
+            `<path fill="none" stroke="${INK}" stroke-width=".22" stroke-opacity=".7" d="${banks.map(b => b.echo).join('')}"/>`
+          // Drawn for one tile and repeated, the banks drifting as the mist they replace did.
+          return `<g>${tiled(`eg-mist-${Math.round(c.meta.y ?? 80)}-${Math.round(c.meta.h ?? 12)}`, art, c.meta.sw ?? 640)}${c.motion(svg)}</g>`
         },
         beam: (svg, c) => `<g opacity=".35">${c.repaint(svg).replace(/\sfill="[^"]*"/g, ` fill="${PAPER}"`)}</g>`,
       },
@@ -200,12 +208,22 @@ const scenery = () =>
 /** Claude cut as the gallery cuts him: each face along its own axis, its darkness from the light. */
 const hero = (): HeroPainter => (m: Model, cx: number, floor: number) => {
   const hulls = m.parts.map(pt => poly(pt.hull, cx, floor)).join('')
+  // Faces cut alike in a row share one path; draw order is kept, so overlaps stay right.
   let faces = ''
-  for (const f of m.faces) {
+  let fill = ''
+  let d = ''
+  for (const f of outlinedFaces(m)) {
     const g: Grain = f.name === 'front' || f.name === 'back' ? 'h' : f.name === 'top' ? 'd' : 'v'
     const t = Math.min(0.95, (1 - f.light) * 0.85 + (f.part === 'leg' ? 0.25 : 0.08))
-    faces += `<path fill="${cut(t, g)}" d="${poly(f.pts, cx, floor)}"/>`
+    const c = cut(t, g)
+    if (c !== fill && d) {
+      faces += `<path fill="${fill}" d="${d}"/>`
+      d = ''
+    }
+    fill = c
+    d += poly(f.pts, cx, floor)
   }
+  if (d) faces += `<path fill="${fill}" d="${d}"/>`
   const eyes = m.eyes
     .map(e =>
       e.poly

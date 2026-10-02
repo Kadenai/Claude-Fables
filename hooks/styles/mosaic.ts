@@ -18,7 +18,7 @@
  *   lettered tablet in Roman capitals, and the caption on a cream panel ruled in black.
  */
 import type { HeroPainter } from '../hero3d'
-import type { Model } from '../clawd3d'
+import { type Model, outlinedFaces } from '../clawd3d'
 import { isGreen, isWarm, lum, meanOf, num as n, poly } from '../art/ink'
 import { painter } from '../art/painter'
 import type { Family } from '../art/roles'
@@ -106,6 +106,8 @@ const scenery = () =>
       faint: 'hide',
       redraw: {
         lens: () => '',
+        // No reflections: the street and the floor stay plain.
+        water: () => '',
         glow: () => '',
         beam: () => '',
         'space.milkyway': (svg, c) => c.repaint(svg.replace(/<ellipse[^>]*\/>/, '')),
@@ -124,7 +126,7 @@ const scenery = () =>
 const hero = (): HeroPainter => (m: Model, cx: number, floor: number) => {
   const hulls = m.parts.map(pt => poly(pt.hull, cx, floor)).join('')
   let faces = ''
-  for (const f of m.faces) {
+  for (const f of outlinedFaces(m)) {
     const tone = f.part === 'leg' ? (f.name === 'front' ? P.leg : P.legDark) : f.name === 'top' ? P.top : f.name === 'front' ? P.front : P.side
     faces += `<path fill="${tone}" d="${poly(f.pts, cx, floor)}"/>`
   }
@@ -169,12 +171,13 @@ export const MOSAIC: Look = {
   },
   texture: (sw, h) => `<rect width="${sw}" height="${h}" filter="url(#ms-stone)" opacity=".2"/><rect width="${sw}" height="${h}" fill="url(#ms-grout)"/>`,
   frame: (sw, h) => {
-    // A meander along the top and bottom edges, black on cream.
-    const key = (x: number, y: number, flip: boolean) => `M${x} ${y}h8v${flip ? -6 : 6}h-6v${flip ? 3 : -3}h3`
-    const row = (y: number, flip: boolean) => Array.from({ length: Math.ceil(sw / 10) }, (_, i) => key(i * 10 + 1, y, flip)).join('')
+    // A meander along the top and bottom edges, black on cream: one key laid once and tiled.
+    const key = (id: string, flip: boolean) =>
+      `<pattern id="${id}" width="10" height="8" patternUnits="userSpaceOnUse"><rect width="10" height="8" fill="${P.cream}"/>` +
+      `<path d="M1 ${flip ? 7 : 1}h8v${flip ? -6 : 6}h-6v${flip ? 3 : -3}h3" fill="none" stroke="${P.black}" stroke-width="1.4"/></pattern>`
     return (
-      `<rect width="${sw}" height="8" fill="${P.cream}"/><rect y="${h - 8}" width="${sw}" height="8" fill="${P.cream}"/>` +
-      `<path d="${row(1, false)}${row(h - 1, true)}" fill="none" stroke="${P.black}" stroke-width="1.4"/>` +
+      `<defs>${key('ms-key', false)}${key('ms-keyb', true)}</defs>` +
+      `<rect width="${sw}" height="8" fill="url(#ms-key)"/><g transform="translate(0 ${h - 8})"><rect width="${sw}" height="8" fill="url(#ms-keyb)"/></g>` +
       `<rect x="0" y="0" width="${sw}" height="${h}" fill="none" stroke="${P.black}" stroke-width="2"/>`
     )
   },

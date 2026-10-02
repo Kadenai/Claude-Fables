@@ -34,9 +34,9 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 | `hooks/sprites.ts` | The pixel-art library: Claude in two walk frames, plus 30+ props |
 | `hooks/svg.ts` | Scene → animated SVG: backdrops, particles, props, hero, caption |
 | `hooks/looks.ts` | The looks: Pixel Art, the Original, and the registry of styles |
-| `hooks/styles/*.ts` | The eleven gallery styles, each an art bible: inks, how each kind of element is drawn, Claude, caption, tag, frame |
+| `hooks/styles/*.ts` | The nine gallery styles, each an art bible: inks, how each kind of element is drawn, Claude, caption, tag, frame |
 | `hooks/art/roles.ts`, `hooks/art/painter.ts`, `hooks/art/ink.ts` | The roles scenes paint their elements under, and the painter a style redraws them with |
-| `hooks/grade.ts` | The medium a grid style sets the drawn stage into: tesserae, stitches, a weave, LCD pixels |
+| `hooks/grade.ts` | The medium a grid style sets the drawn stage into: tesserae or a weave |
 | `hooks/clawd3d.ts` | The 3D Claude: the box model, its motions and its projection (ported from the gallery) |
 | `hooks/hero3d.ts` | Bakes the posed 3D model into SVG frames that SMIL plays in turn |
 | `hooks/scenery.ts` | The seven authored scenes: light maps, materials, reflections |
@@ -80,7 +80,7 @@ Each of the seven backdrops in `hooks/scenery.ts` is an authored scene with one 
 | forest | Dawn in an old forest: a low sun behind two rows of firs on brown trunks, mist between them, light falling through in shafts and pooling in a clearing, two great trunks framing the edges |
 | space | Earthrise over a lunar outpost: a low sun rakes the regolith, so every swell has a lit crest, every crater a black bowl and a bright far wall, every rock a long shadow |
 | city | Blue hour after rain: towers with lit west edges and dark east faces, offices lit a floor at a time, a spire, an elevated train, and the whole skyline mirrored in the wet street |
-| desert | Mesa sunset: the sun sets behind the formations, so they face us in violet shade with their sunward sides burning, and their shadows fan toward us across the sand |
+| desert | Mesa sunset: the sun sets in a notch the ranges leave clear, so they face us in violet shade with their sunward sides burning, and their shadows fan toward us across the sand |
 | volcano | A night eruption: the crater lights its own ash column from beneath, lava runs down a gullied cone, and a stream crosses a black crust crazed with glowing cracks |
 | lab | Working late: an architect's lamp warms the board-formed concrete and the bench, dust turns in its cone, rain beads on the window over a city opened into bokeh, and the polished floor mirrors the room |
 | night | A sleeping village: hills under a high moon, cottages with one lit window and a thread of smoke, a great oak framing the view, fireflies |
@@ -121,16 +121,14 @@ The model and its projection are ported from the gallery's engine by [ChetasLua]
 
 Two looks draw the authored scenes as they are: **Pixel Art** (`pixel`, the default) and the **Original** (`original`), the same scenes drawn smooth.
 
-Eleven more styles, from the [Claude Mascot Style Gallery](https://github.com/henrik-thevibe/Claude-Mascot-Style-Gallery), are artworks of their own. Each one redraws every element of every scene, Claude, the caption bubble, the chapter tag and the frame in its own medium, translated from the gallery's original plate. They are cosmetic only: the story, the scenery's composition and Claude's path stay as they are, and nothing is added to a scene.
+Nine more styles, from the [Claude Mascot Style Gallery](https://github.com/henrik-thevibe/Claude-Mascot-Style-Gallery), are artworks of their own. Each one redraws every element of every scene, Claude, the caption bubble, the chapter tag and the frame in its own medium, translated from the gallery's original plate. They are cosmetic only: the story, the scenery's composition and Claude's path stay as they are, and nothing is added to a scene.
 
 | Style | `/fables style …` | The artwork |
 | --- | --- | --- |
 | Cave Painting | `cave` | Ochre, soot and pale earth rubbed thin on torch-lit limestone; no sky, only the wall; broken soot outlines; Claude in red ochre |
 | Blueprint | `blueprint` | White line work on a cyanotype sheet; shade section-hatched, air and light as phantom lines; Claude as a patent drawing with hidden edges dashed |
 | Mosaic | `mosaic` | Laid in the floor's stones and set as tesserae in grout, outlined in rows of dark stones; a meander border |
-| Sampler | `sampler` | Cross-stitched in a few skeins on bare linen, skies left unstitched, back-stitched outlines; a stitched hem |
-| Frutiger Aero | `aero` | Glossy gradients with a white rim on every surface, an azure sky with a sun flare; Claude as tangerine jelly |
-| Handheld | `handheld` | Four shades of LCD green on chunky pixels, dithered between, sprite outlines; a game text box |
+| Frutiger Aero | `aero` | Saturated glossy gradients with a white rim on every surface: a deep azure sky with cumulus and a sun flare, Frutiger Aurora ribbons and bokeh at night; Claude as tangerine jelly |
 | Copperplate Engraving | `engraving` | One sepia ink on laid paper, every tone cut as hatching along the grain of what it is; a plate mark |
 | Millefleur Tapestry | `tapestry` | Woven in madder, woad, weld and walnut wool on the loom's grid; grass becomes the field of a thousand flowers |
 | Golden Age Comic | `golden` | Flat newsprint inks, shade in Ben-Day dots, heavy keylines; a lettered balloon |
@@ -145,7 +143,7 @@ Every element of a scene is handed to a painter under a *role* that says what it
 - shapes take the style's line;
 - what has no edge in the art form (sun and moon, mist, light, water) is redrawn by the style's own conventions.
 
-Claude is drawn by each style's hero painter, from the 3D model's faces, its parts' outline hulls and its edges, which are classed as outline, crease or hidden as in the gallery's engine. A style made on a grid (Mosaic, Sampler, Tapestry, Handheld) names that grid as its medium: the drawn stage is set into tesserae, stitches, a weave or LCD pixels, and its grout, linen, ribs or pixel grid are laid over it. The narrator hears each style's voice, so a caption can sound like a 1938 comic or a woodblock print while still being about the real work.
+Claude is drawn by each style's hero painter, from the 3D model's faces, its parts' outline hulls and its edges, which are classed as outline, crease or hidden as in the gallery's engine. A style made on a grid (Mosaic, Tapestry) names that grid as its medium: the drawn stage is set into tesserae or a weave, and its grout or the weave's ribs are laid over it. The narrator hears each style's voice, so a caption can sound like a 1938 comic or a woodblock print while still being about the real work.
 
 The styles draw as fast as the original look or faster, since they leave out the lit look's material filters, and every one fits the band's size limit at every width.
 

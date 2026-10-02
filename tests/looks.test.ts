@@ -21,8 +21,8 @@ describe('looks', () => {
     expect(lookFor(undefined).name).toBe(DEFAULT_LOOK)
   })
 
-  test('the eleven styles are there, and found by any fair spelling', () => {
-    expect(STYLE_NAMES.length).toBe(11)
+  test('the nine styles are there, and found by any fair spelling', () => {
+    expect(STYLE_NAMES.length).toBe(9)
     expect(findLook('Ukiyo-e')?.name).toBe('ukiyoe')
     expect(findLook('golden age')?.name).toBe('golden')
     expect(findLook('frutiger aero')?.name).toBe('aero')
@@ -94,16 +94,16 @@ describe('looks', () => {
   test('the caption takes the style\'s bubble and inks', () => {
     const scene = parseScene({ ...SCENE, caption: 'Ran `npm test`: 3 failed' })
     if (!scene) throw new Error('expected a scene')
-    const svg = sceneToSvg(scene, { look: 'handheld', figure: '3d' })
-    // The handheld's text box: the lightest LCD shade, its words in the darkest, set in capitals.
-    expect(svg).toContain('fill="#c5d36b"')
-    expect(svg).toContain('<tspan fill="#1f3415">NPM</tspan>')
+    const svg = sceneToSvg(scene, { look: 'golden', figure: '3d' })
+    // The comic's balloon: newsprint white, lettered in capitals, code in the comic's blue.
+    expect(svg).toContain('fill="#fffbe8"')
+    expect(svg).toContain('<tspan fill="#1d3f8f">NPM</tspan>')
   })
 
   test('the narrator hears which style it writes for', () => {
-    const look = LOOKS.sampler
-    if (!look) throw new Error('expected the sampler look')
-    expect(buildPrompt({ ask: 'x', log: [], story: [], look })).toContain('Victorian')
+    const look = LOOKS.ukiyoe
+    if (!look) throw new Error('expected the ukiyoe look')
+    expect(buildPrompt({ ask: 'x', log: [], story: [], look })).toContain('woodblock')
     expect(buildPrompt({ ask: 'x', log: [], story: [] })).not.toContain('style of')
   })
 })

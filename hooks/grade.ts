@@ -1,7 +1,7 @@
 /**
  * The medium a style is made on (looks.ts): a filter over the drawn stage, so
  * every element and Claude are set into it together. A style laid in
- * tesserae, worked in stitches, woven or shown on an LCD samples the stage on
+ * tesserae or woven on a loom samples the stage on
  * its grid; one daubed on rock wavers the edges of its pigment.
  */
 
@@ -9,7 +9,7 @@ const f = (v: number) => (Math.round(v * 1000) / 1000).toString()
 
 /**
  * The image sampled at the middle of every `size` square and spread over the
- * square, from the stage's corner: tesserae, stitches, coarse pixels.
+ * square, from the stage's corner: tesserae, the picks of a weave.
  */
 export function cells(from: string, size: number, result: string): string {
   const dot = Math.min(0.4, size / 4)

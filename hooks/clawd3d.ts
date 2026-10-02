@@ -294,3 +294,22 @@ export function poseAt(motion: Motion, t: number, yaw: number): Partial<Pose> {
       return { yaw: yaw * 0.5, sq: 1 + 0.015 * sin, eyes: t > 0.78 && t < 0.9 ? 'closed' : 'open' }
   }
 }
+
+/**
+ * The parts in the order a style that outlines them draws them: as painted,
+ * but every leg under the body, so a leg's top (which reaches up into the
+ * body) never shows its lines through it.
+ */
+export function outlinedOrder(m: Model): ModelPart[] {
+  const legs = m.parts.filter(p => p.name === 'leg')
+  const out: ModelPart[] = []
+  for (const p of m.parts) {
+    if (p.name === 'leg') continue
+    if (p.name === 'body') out.push(...legs)
+    out.push(p)
+  }
+  return out
+}
+
+/** The shown faces in that order. */
+export const outlinedFaces = (m: Model): Face[] => outlinedOrder(m).flatMap(p => p.faces)

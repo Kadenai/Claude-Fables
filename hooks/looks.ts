@@ -8,7 +8,7 @@
  * Each gallery style is an artwork of its own (styles/*.ts): every element of
  * the scenery and Claude himself redrawn in its medium, with its own texture,
  * frame, chapter tag and caption bubble. A style made on a grid (tesserae,
- * stitches, a loom, an LCD) also names that grid as its medium.
+ * a loom) also names that grid as its medium.
  */
 
 import type { Painter } from './art/roles'
@@ -18,10 +18,8 @@ import { BLUEPRINT } from './styles/blueprint'
 import { CAVE } from './styles/cave'
 import { ENGRAVING } from './styles/engraving'
 import { GOLDEN } from './styles/golden'
-import { HANDHELD } from './styles/handheld'
 import { KAMON } from './styles/kamon'
 import { MOSAIC } from './styles/mosaic'
-import { SAMPLER } from './styles/sampler'
 import { TAPESTRY } from './styles/tapestry'
 import { UKIYOE } from './styles/ukiyoe'
 
@@ -97,7 +95,7 @@ export type Look = {
   titleColor?: string
   /**
    * The medium a style is made on, as filter primitives from SourceGraphic over
-   * the drawn stage: the grid of tesserae, stitches or LCD pixels its elements
+   * the drawn stage: the grid of tesserae or weave its elements
    * are set into, or the wavering of daubed pigment.
    */
   grade?: (sw: number, h: number, pixel: boolean) => string
@@ -153,11 +151,7 @@ export const LOOKS: Record<string, Look> = {
 
   mosaic: MOSAIC,
 
-  sampler: SAMPLER,
-
   aero: AERO,
-
-  handheld: HANDHELD,
 
   engraving: ENGRAVING,
 

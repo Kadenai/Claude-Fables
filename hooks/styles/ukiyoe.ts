@@ -19,7 +19,7 @@
  *   the scene as in every Edo landscape. Light that falls through the air is
  *   a few pale strokes, not a glow. The sun is a vermilion disc; the moon a
  *   cream one.
- * - Water and wet streets are combed in foam lines, the wave's language.
+ * - Wet streets and polished floors show no reflection: a print leaves them plain.
  * - Claude is cut in the plate's flat coral blocks (top, front, side, legs
  *   in shade), under a key-line outline, with key eyes and a foam glint.
  * - The paper shows through everywhere: a cream ground, its grain and fibres,
@@ -27,8 +27,9 @@
  *   the caption is printed on a cartouche of its own.
  */
 import type { HeroPainter } from '../hero3d'
-import type { Model } from '../clawd3d'
+import { type Model, outlinedFaces } from '../clawd3d'
 import { isGreen, isWarm, lum, num as n, poly, step, t1 } from '../art/ink'
+import { MIST_TILE, mistBanks, tiled } from '../art/mist'
 import { painter, type Ctx } from '../art/painter'
 import type { Family } from '../art/roles'
 import type { Look } from '../looks'
@@ -127,39 +128,24 @@ function hueIsBrown(color: string): boolean {
 const UNLINED: readonly Family[] = ['sky', 'glow', 'beam', 'stars', 'life', 'lens', 'water', 'air']
 
 /**
- * Kasumi: long bands of flat cream lying across the scene, edged in key,
- * broken into a few lengths with rounded ends. Replaces mist and haze.
+ * Kasumi: banks of cream mist lying across the scene, their scalloped tops
+ * keyed in indigo with a second line echoing them inside, as the bands of mist
+ * in an Edo landscape are cut. Replaces mist and haze.
  */
 function kasumi(c: Ctx, sw: number): string {
-  const y = c.meta.y ?? 80
-  const h = Math.max(3, (c.meta.h ?? 12) * 0.42)
-  const width = c.meta.sw ?? sw
-  // A seeded break pattern from the band's height, so each band lies differently.
-  let seed = Math.round(y * 7.3)
-  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280)
-  let d = ''
-  for (let x = -20 + rnd() * 30; x < width + 20; ) {
-    const len = 60 + rnd() * 140
-    const yy = y + h * 0.5 + (rnd() - 0.5) * h * 0.8
-    const r = h / 2
-    d += `M${n(x + r)} ${n(yy - r)}H${n(x + len - r)}a${n(r)} ${n(r)} 0 0 1 0 ${n(h)}H${n(x + r)}a${n(r)} ${n(r)} 0 0 1 0 ${n(-h)}z`
-    x += len + 30 + rnd() * 90
-  }
+  const banks = mistBanks({ w: Math.min(MIST_TILE, c.meta.sw ?? 640), y: c.meta.y ?? 80, h: c.meta.h ?? 12, seed: 36, rows: (c.meta.h ?? 12) < 12 || c.meta.veil ? 1 : 2, lean: c.meta.lean === true })
   const fill = c.meta.veil ? '#e4dcc4' : '#efe6cc'
-  // The band drifts as the mist it replaces did.
-  return `<g><path fill="${fill}" fill-opacity=".92" stroke="${P.key}" stroke-width=".4" d="${d}"/>${(c.meta.anim as string | undefined) ?? ''}</g>`
+  // The banks drift as the mist they replace did.
+  const art =
+    `<path fill="${fill}" stroke="${P.key}" stroke-width=".5" stroke-linejoin="round" d="${banks.map(b => b.d).join('')}"/>` +
+    `<path fill="none" stroke="${P.mid}" stroke-width=".35" stroke-opacity=".7" d="${banks.map(b => b.echo).join('')}"/>`
+    // Drawn for one tile and repeated, the banks drifting as the mist they replace did.
+    return `<g>${tiled(`uk-mist-${Math.round(c.meta.y ?? 80)}-${Math.round(c.meta.h ?? 12)}`, art, c.meta.sw ?? 640)}${(c.meta.anim as string | undefined) ?? ''}</g>`
 }
 
 /** A disc cut in one ink with a key line: the sun, the moon. */
 const disc = (cx: number, cy: number, r: number, fill: string) =>
   `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="${fill}" stroke="${P.key}" stroke-width=".5"/>`
-
-/** Water and wet floors, combed: foam lines laid across them, the wave's language. */
-const comb = (c: Ctx, sw: number) => {
-  const y = c.meta.y ?? 100
-  const h = c.meta.h ?? 28
-  return `<rect x="0" y="${n(y)}" width="${c.meta.sw ?? sw}" height="${n(h)}" fill="url(#uk-comb)" opacity=".55"/>`
-}
 
 /** The Ukiyo-e scenery painter. */
 const scenery = (sw: number) =>
@@ -187,8 +173,8 @@ const scenery = (sw: number) =>
             `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="none" stroke="${P.key}" stroke-width=".6"/>`
           )
         },
-        'city.reflection': (svg, c) => c.repaint(svg) + comb(c, sw),
-        'lab.reflection': (svg, c) => c.repaint(svg) + comb(c, sw),
+        // A print has no reflections: the wet street and the polished floor stay plain.
+        water: () => '',
         lens: () => '',
       },
     },
@@ -207,7 +193,7 @@ const hero =
     let faces = ''
     let tone = ''
     let d = ''
-    for (const f of m.faces) {
+    for (const f of outlinedFaces(m)) {
       const t = f.part === 'leg' ? (f.name === 'front' ? P.leg : P.legDark) : f.name === 'top' ? P.top : f.name === 'front' ? P.front : P.side
       if (t !== tone && d) {
         faces += `<path fill="${tone}" d="${d}"/>`
@@ -257,8 +243,6 @@ export const UKIYOE: Look = {
     sky: P.paper,
     ground: P.key,
     defs: () =>
-      // Foam combing for water: fine curved lines, one block's cut repeated.
-      `<pattern id="uk-comb" width="14" height="3" patternUnits="userSpaceOnUse"><path d="M0 1.5q3.5 -1 7 0t7 0" fill="none" stroke="${P.foam}" stroke-width=".45"/></pattern>` +
       `<filter id="uk-paper" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".8 .5" numOctaves="3" seed="36"/>` +
       `<feColorMatrix values="0 0 0 0 .35  0 0 0 0 .27  0 0 0 0 .15  -1.6 0 0 0 1"/></filter>` +
       `<linearGradient id="uk-bokashi" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P.deep}" stop-opacity=".55"/><stop offset="1" stop-color="${P.deep}" stop-opacity="0"/></linearGradient>`,

@@ -20,8 +20,9 @@
  *   banner with notched ends, and the caption on a cream wool panel.
  */
 import type { HeroPainter } from '../hero3d'
-import type { Model } from '../clawd3d'
+import { type Model, outlinedFaces } from '../clawd3d'
 import { isGreen, isWarm, lum, meanOf, num as n, poly } from '../art/ink'
+import { MIST_TILE, mistBanks, tiled } from '../art/mist'
 import { painter } from '../art/painter'
 import type { Family } from '../art/roles'
 import { cells } from '../grade'
@@ -90,16 +91,23 @@ const scenery = () =>
       faint: 'hide',
       redraw: {
         lens: () => '',
+        // No reflections: the street and the floor stay plain.
+        water: () => '',
         glow: () => '',
         beam: () => '',
         'space.milkyway': (svg, c) => c.repaint(svg.replace(/<ellipse[^>]*\/>/, '')),
         'forest.sun': (_s, c) => (c.meta.part === 'halo' ? '' : `<circle cx="${n(c.meta.cx ?? 0)}" cy="${n(c.meta.cy ?? 0)}" r="${n((c.meta.r ?? 7) * 1.5)}" fill="${W.weld[3]}" stroke="${DARK}" stroke-width="1"/>`),
         'desert.sun': (_s, c) => (c.meta.part === 'halo' ? '' : `<circle cx="${n(c.meta.cx ?? 0)}" cy="${n(c.meta.cy ?? 0)}" r="${n((c.meta.r ?? 11) * 1.2)}" fill="${W.weld[3]}" stroke="${DARK}" stroke-width="1"/>`),
         'night.moon': (_s, c) => `<circle cx="${n(c.meta.cx ?? 0)}" cy="${n(c.meta.cy ?? 0)}" r="${n((c.meta.r ?? 9) * 1.25)}" fill="${W.cream[2]}" stroke="${DARK}" stroke-width="1"/>`,
+        // Mist as banks of undyed wool: cream, a paler pass along their tops, outlined in dark thread.
         air: (svg, c) => {
-          const y = c.meta.y ?? 80
-          const h = c.meta.h ?? 12
-          return `<g><rect x="-20" y="${n(y + h * 0.35)}" width="${(c.meta.sw ?? 640) + 40}" height="${n(Math.max(PICK, h * 0.2))}" fill="${W.cream[0]}"/>${c.motion(svg)}</g>`
+          const banks = mistBanks({ w: Math.min(MIST_TILE, c.meta.sw ?? 640), y: c.meta.y ?? 80, h: c.meta.h ?? 12, seed: 4, rows: (c.meta.h ?? 12) < 12 || c.meta.veil ? 1 : 2, lean: c.meta.lean === true })
+          const art =
+            `<path fill="${W.cream[1]}" stroke="${DARK}" stroke-width=".9" stroke-linejoin="round" d="${banks.map(b => b.d).join('')}"/>` +
+            `<path fill="none" stroke="${W.cream[2]}" stroke-width="1.4" d="${banks.map(b => b.echo).join('')}"/>` +
+            `<path fill="none" stroke="${W.cream[0]}" stroke-width="1.2" d="${banks.map(b => b.under).join('')}"/>`
+          // Drawn for one tile and repeated, the banks drifting as the mist they replace did.
+          return `<g>${tiled(`tp-mist-${Math.round(c.meta.y ?? 80)}-${Math.round(c.meta.h ?? 12)}`, art, c.meta.sw ?? 640)}${c.motion(svg)}</g>`
         },
       },
     },
@@ -110,7 +118,7 @@ const scenery = () =>
 const hero = (): HeroPainter => (m: Model, cx: number, floor: number) => {
   const hulls = m.parts.map(pt => poly(pt.hull, cx, floor)).join('')
   let faces = ''
-  for (const f of m.faces) {
+  for (const f of outlinedFaces(m)) {
     const k = f.part === 'leg' ? 1.5 : 1.5 + f.light * 4
     faces += `<path fill="${WOOL[Math.min(6, Math.round(k))]}" d="${poly(f.pts, cx, floor)}"/>`
   }
@@ -164,11 +172,16 @@ export const TAPESTRY: Look = {
   },
   texture: (sw, h) => `<rect width="${sw}" height="${h}" filter="url(#tp-band)" opacity=".25"/><rect width="${sw}" height="${h}" fill="url(#tp-weave)"/>`,
   frame: (sw, h) => {
-    // A woven border: a band of small lozenges in the tapestry's dyes.
+    // A woven border: a band of small lozenges in the tapestry's dyes, one repeat of four woven once and tiled.
     const colors = ['#9a2f24', '#e0b050', '#2f4a6a', '#e0b050']
-    const band = (y: number) =>
-      Array.from({ length: Math.ceil(sw / 6) }, (_, i) => `<path d="M${i * 6} ${y + 2.5}l3 -2.5l3 2.5l-3 2.5z" fill="${colors[i % 4]}"/>`).join('')
-    return `<rect width="${sw}" height="5" fill="${W.green[0]}"/><rect y="${h - 5}" width="${sw}" height="5" fill="${W.green[0]}"/>` + band(0) + band(h - 5) + `<rect x="0" y="0" width="${sw}" height="${h}" fill="none" stroke="${W.green[0]}" stroke-width="3"/>`
+    const repeat =
+      `<pattern id="tp-border" width="24" height="5" patternUnits="userSpaceOnUse"><rect width="24" height="5" fill="${W.green[0]}"/>` +
+      colors.map((c, i) => `<path d="M${i * 6} 2.5l3 -2.5l3 2.5l-3 2.5z" fill="${c}"/>`).join('') +
+      `</pattern>`
+    return (
+      `<defs>${repeat}</defs><rect width="${sw}" height="5" fill="url(#tp-border)"/><g transform="translate(0 ${h - 5})"><rect width="${sw}" height="5" fill="url(#tp-border)"/></g>` +
+      `<rect x="0" y="0" width="${sw}" height="${h}" fill="none" stroke="${W.green[0]}" stroke-width="3"/>`
+    )
   },
   tag: (text, inset) => {
     const x = inset + 9
