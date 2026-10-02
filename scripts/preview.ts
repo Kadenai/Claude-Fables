@@ -22,10 +22,12 @@ const tiles = looks.flatMap(look =>
   scenes.map((raw, i) => {
     const scene = parseScene(raw)
     if (!scene) return `<p>scene ${i}: rejected by parseScene</p>`
-    const svg = sceneToSvg(scene, { look })
-    return `<figure><figcaption>${i} · ${look} · ${scene.backdrop} · ${scene.hero.action} · ${svg.length} chars</figcaption>${svg}</figure>`
+    const svg = sceneToSvg(scene, { look, figure: '3d' })
+    // Each scene is its own image: in the band only one is ever on screen, and its ids are its own.
+    const src = `data:image/svg+xml,${encodeURIComponent(svg)}`
+    return `<figure><figcaption>${i} · ${look} · ${scene.backdrop} · ${scene.hero.action} · ${svg.length} chars</figcaption><img src="${src}" width="960"></figure>`
   }),
 )
 console.log(`<!doctype html><meta charset="utf-8"><title>Claude Fables preview</title>
-<style>body{background:#1a1a19;color:#9a978e;font:12px ui-monospace,monospace;margin:16px}figure{margin:0 0 18px}svg{max-width:100%;height:auto;display:block;margin-top:4px}</style>
+<style>body{background:#1a1a19;color:#9a978e;font:12px ui-monospace,monospace;margin:16px}figure{margin:0 0 18px}img{max-width:100%;height:auto;display:block;margin-top:4px}</style>
 ${tiles.join('\n')}`)

@@ -4,7 +4,6 @@ export type FablesBackdrop =
   | 'city'
   | 'desert'
   | 'volcano'
-  | 'rails'
   | 'lab'
   | 'night'
 
@@ -48,10 +47,6 @@ declare module 'claude-code' {
     fables: {
       scene: FablesScene | null
       enabled: boolean
-      /** The look the band draws in: a name from hooks/looks.ts. */
-      look: string
-      /** How Claude is drawn: as each look says (auto), always the pixel sprite, or always the 3D model. */
-      figure: 'auto' | 'pixel' | '3d'
     }
   }
 }

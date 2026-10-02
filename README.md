@@ -33,11 +33,11 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 | `hooks/scene.ts` | The scene format and its validator |
 | `hooks/sprites.ts` | The pixel-art library: Claude in two walk frames, plus 30+ props |
 | `hooks/svg.ts` | Scene → animated SVG: backdrops, particles, props, hero, caption |
-| `hooks/looks.ts` | The graphic styles: color remaps, pixel treatments, textures and frames |
+| `hooks/looks.ts` | The graphic styles (paused): color remaps, pixel treatments, textures and frames |
 | `hooks/clawd3d.ts` | The 3D Claude: the box model, its motions and its projection (ported from the gallery) |
 | `hooks/hero3d.ts` | Bakes the posed 3D model into SVG frames that SMIL plays in turn |
-| `hooks/scenery.ts` | The eight authored scenes drawn with the 3D Claude |
-| `hooks/voxel.ts` | Sprite stacking: voxel models as stacked SVG slices, for the story props |
+| `hooks/scenery.ts` | The seven authored scenes: light maps, materials, reflections |
+| `hooks/voxel.ts` | Sprite stacking: voxel models as stacked SVG slices (unused while props live in thoughts) |
 | `types/index.d.ts` | The scene types and the mod's `$.state` contract |
 
 ## Install (Claude Code desktop)
@@ -61,67 +61,45 @@ To try it from the terminal for one session instead, run `claude --plugin-dir ~/
 ## Use
 
 - `/fables`: toggle the mod on or off. `/fables on` and `/fables off` also work. The setting is remembered across sessions.
-- `/fables figure auto|pixel|3d`: draw Claude as each style chooses, or always as the pixel sprite or the 3D model.
-- `/fables style`: list the graphic styles. `/fables style <name>` picks one, and `/fables style shuffle` draws each turn in a different style. The choice is remembered across sessions.
 - **Scene model:** Sonnet by default. You can switch to `haiku` (cheaper, faster) or `opus` in the config menu, or under `pluginConfigs.fables.model` in settings.
 
 Every scene is one small Sonnet request, so this costs a few requests per minute while Claude is working.
 
-## Styles
+## The scenes
 
-Eighteen graphic styles, after looks from the [Claude Mascot Style Gallery](https://github.com/henrik-thevibe/Claude-Mascot-Style-Gallery). A style changes how a scene is painted, never what happens in it. It remaps every color, chooses how one art pixel is drawn (a solid block, a mosaic tile, a pane of leaded glass, a cross stitch, a printed character, a drafted square) and adds its own textures and frames. The narrator hears which style it is writing for, so the caption's voice can suit it.
+Claude is drawn as the gallery's 3D model: the same box body, arms, legs and pill eyes, lit and depth-sorted. The band's frame runs no script, so the model can't be drawn live. `hooks/clawd3d.ts` poses it 6 to 12 times per motion (walk, run, swim, fly, dig, inspect, celebrate, think, idle), `hooks/hero3d.ts` bakes each pose into flat SVG polygons, and the scene flips through them with SMIL. Walking and running end in an idle loop on arrival. The model can't follow the cursor or be dragged; those need the live engine.
 
-| Name | Style | Claude | What it looks like |
-| --- | --- | --- | --- |
-| `pixel` | Pixel Art | pixel | the original: solid 16-bit pixels (the default) |
-| `handheld` | Handheld | pixel | four shades of green on a dotted LCD |
-| `teletext` | Teletext Page | pixel | eight broadcast colors, blocky cells, scanlines |
-| `mosaic` | Mosaic | pixel | tesserae and grout with a meander border |
-| `sampler` | Sampler | pixel | cross stitches on linen |
-| `printer` | Line Printer | pixel | ASCII characters on greenbar paper |
-| `blueprint` | Blueprint | 3D | white drafting lines on a blue grid, with a title block |
-| `neon` | Neon | 3D | glowing tubes on a brick wall that flickers now and then |
-| `silhouette` | Silhouette | 3D | black cut paper on cream, in a gilt frame |
-| `ukiyoe` | Ukiyo-e | 3D | indigo and vermilion woodblock print on grainy paper |
-| `tomb` | Tomb Painting | 3D | earth pigments with a painted frieze |
-| `glass` | Stained Glass | 3D | jewel-toned panes with leading |
-| `comic` | Golden Age Comic | 3D | primary colors, ink outlines and halftone dots |
-| `bauhaus` | Bauhaus | 3D | primary red, blue and yellow shapes on cream |
-| `midcentury` | Mid-Century Modern | 3D | teal sky, half-lit sun, mustard ground |
-| `lowpoly` | Low Poly | 3D | a late-90s 3D platformer with a gradient sky and a HUD |
-| `deco` | Art Deco | 3D | gold sunbeams over a navy skyline, in a double gold frame |
-| `pin` | Enamel Pin | 3D | gold-rimmed enamel on pink, with sparkles |
-
-### The 3D Claude
-
-Most styles draw Claude as the gallery's 3D model rather than the pixel sprite: the same box body, arms, legs and pill eyes, lit and depth-sorted. The band's frame runs no script, so the model can't be drawn live. `hooks/clawd3d.ts` poses it 6 to 12 times per motion (walk, run, swim, fly, dig, inspect, celebrate, think, idle), `hooks/hero3d.ts` bakes each pose into flat SVG polygons, and the scene flips through them with SMIL. Walking and running end in an idle loop on arrival. The model can't follow the cursor or be dragged; those need the live engine.
-
-The scenery changes to match (`hooks/scenery.ts`). Each of the eight backdrops is an authored scene with one brief, one light source and a small palette:
+Each of the seven backdrops in `hooks/scenery.ts` is an authored scene with one brief, one light source and a small palette:
 
 | Backdrop | The scene |
 | --- | --- |
-| forest | Dawn in an old forest: a low sun behind two rows of firs, mist between them, light falling through in shafts, two great trunks framing the edges |
-| space | Earthrise over a lunar outpost: a blue world over the grey horizon, the Milky Way, a base keeping one light blinking |
-| city | Blue hour: three ranks of buildings in haze, a spire with a slow red light, an elevated train carrying its lit carriages home |
-| desert | Canyon sunset: mesas, buttes and spires fading into violet, rimmed by the low sun, a saguaro at the edge |
-| volcano | A night eruption: an ash plume lit from beneath, lava down the cone, rising embers, cracks still glowing in the cooled field |
-| rails | Golden hour on a mountain line: alpenglow on the peaks, mist in the valley, firs below, poles going by |
-| lab | Working late: rain on a tall window over the night city, an architect's lamp pooling light on the bench, two monitors, a server rack, the night's reasoning on a whiteboard |
+| forest | Dawn in an old forest: a low sun behind two rows of firs on brown trunks, mist between them, light falling through in shafts and pooling in a clearing, two great trunks framing the edges |
+| space | Earthrise over a lunar outpost: a low sun rakes the regolith, so every swell has a lit crest, every crater a black bowl and a bright far wall, every rock a long shadow |
+| city | Blue hour after rain: towers with lit west edges and dark east faces, offices lit a floor at a time, a spire, an elevated train, and the whole skyline mirrored in the wet street |
+| desert | Mesa sunset: the sun sets behind the formations, so they face us in violet shade with their sunward sides burning, and their shadows fan toward us across the sand |
+| volcano | A night eruption: the crater lights its own ash column from beneath, lava runs down a gullied cone, and a stream crosses a black crust crazed with glowing cracks |
+| lab | Working late: an architect's lamp warms the board-formed concrete and the bench, dust turns in its cone, rain beads on the window over a city opened into bokeh, and the polished floor mirrors the room |
 | night | A sleeping village: hills under a high moon, cottages with one lit window and a thread of smoke, a great oak framing the view, fireflies |
 
-Depth comes from atmospheric perspective: silhouettes further back are lighter and nearer the sky's color. Focal points sit off the middle, so the middle of the stage, where Claude and the caption are, stays calm. Silhouettes come from smooth noise rather than repeated tiles, so there is no seam at any width. Everything is clipped to the stage, and motion is slow and belongs to the story. Styles with narrow palettes map scenery onto tonal ramps of their own colors, so the depth survives every style.
+### How they are lit
 
-Surfaces are rendered with SVG filters, which add detail for almost no size. Seeded noise becomes material grain clipped to each shape: needles, bark, grass, sand, plaster, paving, gravel, regolith. Noise read as a height field and lit from the scene's light source gives rock its relief, so mesas, the volcano's cone and the mountain faces read as carved. Far layers sit slightly out of focus, lights bloom, backlit crests carry a rim of light, and a lens pass adds fine grain and a vignette over the whole frame, Claude included.
+Every surface is painted twice. First as light: a warm key where the light source reaches, cool shade facing away, deep tones where surfaces meet. Then that light map is multiplied by a material, built in an SVG filter from seeded noise cut into a small palette of related colors: needles, bark, grass, basalt, sandstone, sand, regolith, concrete, wood, asphalt. Light that has to brighten a dark material (shafts, lava glow, lamp pools) is added on top with a screen blend instead. Glows bloom, far layers sit slightly out of focus, rims of light appear only where the light can actually reach, and a lens pass adds fine grain and a vignette over the whole frame, Claude included.
 
-Story props are sprite-stacked (`hooks/voxel.ts`): the pixel art is extruded three voxels deep and drawn as a stack of slices, darkened walls under a lit top, turned a little to show its side. A prop that spins swings round and back instead. Props are scaled so a 16-pixel prop stands about as tall as Claude, and the train is drawn at Claude's height. With the pixel Claude, the stage stays flat pixel art.
+Wet and polished floors reflect: the city's skyline and the lab's room are drawn once, then placed again upside down, blurred and broken by ripples, strongest in the puddles.
 
-The speech bubble picks the spot beside or above Claude that covers the least of Claude, the props, their labels, the chapter tag and the sun or moon. Prop labels take the style's caption colors, so they stay readable in every style.
+Depth comes from atmospheric perspective: further layers are lighter and nearer the sky's color. Focal points sit off the middle, so the middle of the stage, where Claude and the caption are, stays calm. Silhouettes come from smooth noise rather than repeated tiles, so there is no seam at any width. Everything is clipped to the stage, and motion is slow and belongs to the story.
 
-`/fables figure 3d` or `/fables figure pixel` draws Claude the same way in every style. `/fables figure auto`, the default, lets each style choose.
+The band's frame takes at most 131,072 characters, so repeated things are drawn once and placed many times: the firs, the grass clumps and the furthest tree line are templates. A scene that would still run over is redrawn leaner, then without particles; only after that does a thought go.
+
+### Thoughts
+
+Props aren't scattered on the ground. They are what Claude is thinking about: up to three of them appear in a thought bubble above Claude once it arrives, each icon with its label. The speech bubble picks the spot beside or above Claude that covers the least of Claude, the thought, the chapter tag and the scene's focal points, wrapping its caption narrower when a band is too tight.
 
 The model and its projection are ported from the gallery's engine by [ChetasLua](https://github.com/ChetasLua), under the MIT License.
 
-The styles live in `hooks/looks.ts`. Adding one means adding one entry there.
+## Styles (paused)
+
+The eighteen graphic styles after the [Claude Mascot Style Gallery](https://github.com/henrik-thevibe/Claude-Mascot-Style-Gallery) (blueprint, neon, ukiyo-e, golden age comic, stained glass and the rest) are switched off for now, so that every scene can be made as good as it can be in one look. `/fables style` says so. The code stays in `hooks/looks.ts`, and `sceneToSvg` still accepts a `look`, so they can come back.
 
 ## Develop
 
@@ -129,7 +107,6 @@ The styles live in `hooks/looks.ts`. Adding one means adding one entry there.
 claude plugin validate .              # manifest, hooks and state contract
 claude plugin test .                  # unit tests plus engine tests (stubbed Sonnet)
 bun scripts/preview.ts > gallery.html # render sample scenes to a page in the browser
-bun scripts/preview.ts --look all > gallery.html # every sample in every style
 ```
 
 `bun scripts/preview.ts my-scenes.json` renders your own scenes, which is handy for tuning sprites or trying out what Sonnet sent back.

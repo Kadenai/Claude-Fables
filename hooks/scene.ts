@@ -16,7 +16,6 @@ export const BACKDROPS: readonly FablesBackdrop[] = [
   'city',
   'desert',
   'volcano',
-  'rails',
   'lab',
   'night',
 ]

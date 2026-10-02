@@ -222,17 +222,6 @@ function backdrop(scene: FablesScene, rand: () => number, sw: number): Stage {
       }
       break
     }
-    case 'rails': {
-      sky = '#23232a'
-      ground = '#2c2b2f'
-      const ties = Array.from({ length: sw / (U * 4) + 2 }, (_, i) => `M${i * U * 4} 0h${U * 2}v${U}h-${U * 2}z`).join('')
-      front.push(
-        `<rect x="0" y="${GROUND_Y}" width="${sw}" height="2" fill="#8a8780"/>`,
-        `<g><path fill="#5a3520" d="${ties}" transform="translate(0 ${GROUND_Y + 3})"/>` +
-          `<animateTransform attributeName="transform" type="translate" values="0 0;-${U * 4} 0" dur=".5s" repeatCount="indefinite"/></g>`,
-      )
-      break
-    }
     case 'lab': {
       sky = '#202628'
       ground = '#3b3e47'
@@ -424,7 +413,8 @@ const HERO_W = 13 * U
 const HERO_H = 9 * U
 const heroColor = (k: string) => PALETTE[k]
 
-type HeroPlan = { svg: string; endX: number; endY: number }
+/** The hero's drawing, where it ends up, and when it gets there (seconds). */
+type HeroPlan = { svg: string; endX: number; endY: number; arrive: number }
 
 /** How the hero is drawn: the pixel sprite in a cell style, or the 3D model painted one way. */
 export type Figure = { kind: 'pixel'; cell: Cell } | { kind: '3d'; paint: FacePaint }
@@ -520,7 +510,83 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure): He
   const svg =
     `<g transform="translate(${at} ${baseY})">${travel}` +
     `<g>${inner}<g transform="${flip.trim() || 'translate(0 0)'}">${frames}</g>${extras}</g></g>`
-  return { svg, endX: toX, endY: baseY }
+  return { svg, endX: toX, endY: baseY, arrive: isMoving ? moveDur : 0 }
+}
+
+// ---------------------------------------------------------------- thought
+
+/** How many of the scene's props Claude thinks about at once. */
+const THOUGHTS = 3
+
+/**
+ * What Claude is thinking about: up to THOUGHTS of the scene's props as small
+ * crisp icons with their labels, in a cloud above its head joined to it by a
+ * trail of bubbles. It appears once Claude has arrived, and bobs gently.
+ */
+function thought(props: readonly FablesProp[], plan: HeroPlan, sw: number): { svg: string; rect?: Rect } {
+  const items = props.slice(0, THOUGHTS)
+  if (items.length === 0) return { svg: '' }
+  const CHAR = 3.15
+  const slots = items.map(p => {
+    const art = artFor(p)
+    const rows = art.rows.length
+    const cols = widthOf(art.rows)
+    const unit = Math.min(1.7, 15 / rows, 24 / cols)
+    const label = (p.label ?? '').slice(0, 14)
+    return { art, unit, iw: cols * unit, ih: rows * unit, label, w: Math.max(cols * unit, label.length * CHAR) + 4 }
+  })
+  const pad = 6
+  const gap = 5
+  const hasLabel = slots.some(sl => sl.label)
+  const w = slots.reduce((t, sl) => t + sl.w, 0) + gap * (slots.length - 1) + pad * 2
+  const h = 16 + (hasLabel ? 8 : 0) + pad * 2
+  const headX = plan.endX + HERO_W / 2
+  const headY = plan.endY + HERO_H - MODEL_STAGE_H
+  let x = Math.min(sw - w - 3, Math.max(3, headX - w / 2 + 10))
+  let y = headY - 14 - h
+  let trailFrom: [number, number] = [headX + 6, headY - 3]
+  if (y < 3) {
+    // No room above: the cloud sits beside Claude, on whichever side has room.
+    y = Math.max(3, headY - h / 2)
+    x = headX + HERO_W / 2 + 14 + w <= sw - 3 ? headX + HERO_W / 2 + 14 : Math.max(3, headX - HERO_W / 2 - 14 - w)
+    trailFrom = [x < headX ? headX - HERO_W / 2 : headX + HERO_W / 2, headY + 6]
+  }
+  // The cloud: a rounded body with scallops along its top and bottom. The outline comes
+  // from drawing every part thick in ink first, then every part again in paper on top.
+  const parts: string[] = [`<rect x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}" rx="${n(h * 0.42)}"/>`]
+  const bumps = Math.max(2, Math.round(w / 12))
+  for (let i = 0; i < bumps; i++) {
+    const bx = x + h * 0.4 + ((w - h * 0.8) * (i + 0.5)) / bumps
+    parts.push(`<circle cx="${n(bx)}" cy="${n(y + 1.5)}" r="${n(4.6 + (i % 2) * 1.2)}"/>`, `<circle cx="${n(bx + 3)}" cy="${n(y + h - 1.5)}" r="${n(4.2 + ((i + 1) % 2) * 1.1)}"/>`)
+  }
+  const tx = x + w / 2
+  const ty = y + h
+  const trail = [0.62, 0.3].map((k, i) => {
+    const px = trailFrom[0] + (tx - trailFrom[0]) * k
+    const py = trailFrom[1] + (ty + 3 - trailFrom[1]) * k
+    return `<circle cx="${n(px)}" cy="${n(py)}" r="${n(2.6 - i * 0.9)}"/>`
+  })
+  const shape = parts.join('') + trail.join('')
+  let cursor = x + pad
+  const icons = slots
+    .map(sl => {
+      const ix = cursor + (sl.w - sl.iw) / 2
+      const iy = y + pad + (16 - sl.ih) / 2
+      const icon = `<g transform="translate(${n(ix)} ${n(iy)}) scale(${n(sl.unit)})">${pixelPaths(sl.art.rows, sl.art.colorOf)}</g>`
+      const text = sl.label
+        ? `<text x="${n(cursor + sl.w / 2)}" y="${n(y + pad + 22)}" text-anchor="middle" font-family="${FONT}" font-size="5.2" fill="#4a3a30">${escapeXml(sl.label)}</text>`
+        : ''
+      cursor += sl.w + gap
+      return icon + text
+    })
+    .join('')
+  const appear = n(plan.arrive + 0.2)
+  const svg =
+    `<g opacity="0"><g transform="translate(1.2 1.8)" fill="black" opacity=".22">${shape}</g>` +
+    `<g fill="#2b2420" stroke="#2b2420" stroke-width="2.2">${shape}</g><g fill="#f6f1e7">${shape}</g>${icons}` +
+    `<animate attributeName="opacity" values="0;1" dur=".35s" begin="${appear}s" fill="freeze"/>` +
+    `<animateTransform attributeName="transform" type="translate" values="0 0;0 -1.2;0 0" dur="3.4s" begin="${appear}s" repeatCount="indefinite"/></g>`
+  return { svg, rect: { x: x - 4, y: y - 6, w: w + 8, h: h + 12 } }
 }
 
 // ---------------------------------------------------------------- caption
@@ -569,23 +635,27 @@ function propRects(prop: FablesProp, floor: number, sw: number, unit: number): R
  */
 function caption(text: string, heroX: number, heroY: number, idPrefix: string, sw: number, look: Look, avoid: readonly Rect[]): string {
   const { fill, stroke, ink, radius } = look.caption
-  const lines = wrap(text, 34).slice(0, 3)
-  const w = Math.ceil(Math.max(...lines.map(l => l.length)) * look.charW + 14)
-  const h = lines.length * 11 + 8
   const heroBox: Rect = { x: heroX - 4, y: heroY - 8, w: HERO_W + 8, h: HERO_H + 8 }
-  const low = Math.max(4, Math.min(heroY - 4, GROUND_Y - h - 4) - (heroY > 40 ? 16 : 0))
-  const xs = [heroX + HERO_W + 8, heroX - w - 8, heroX + HERO_W / 2 - w / 2, heroX + HERO_W + 40, heroX - w - 40]
-  const ys = [low, 4, Math.round((low + 4) / 2)]
-  let best = { x: 2, y: 4, score: Infinity }
-  for (const [yi, y0] of ys.entries()) {
-    for (const [xi, x0] of xs.entries()) {
-      const x = Math.min(sw - w - 2, Math.max(2, x0))
-      const y = Math.min(GROUND_Y - h - 4, Math.max(4, y0))
-      const r = { x, y, w, h }
-      const score = overlap(r, heroBox) * 4 + avoid.reduce((t, a) => t + overlap(r, a) * 3, 0) + (xi + yi * 2) * 6
-      if (score < best.score) best = { x, y, score }
+  // A narrower wrap, taller, is tried when the wide one finds no clear place.
+  let best = { x: 2, y: 4, score: Infinity, lines: [] as string[], w: 0, h: 0 }
+  for (const [wi, width] of [34, 26, 20].entries()) {
+    const lines = wrap(text, width).slice(0, wi === 0 ? 3 : 4)
+    const w = Math.ceil(Math.max(...lines.map(l => l.length)) * look.charW + 14)
+    const h = lines.length * 11 + 8
+    const low = Math.max(4, Math.min(heroY - 4, GROUND_Y - h - 4) - (heroY > 40 ? 16 : 0))
+    const xs = [heroX + HERO_W + 8, heroX - w - 8, heroX + HERO_W / 2 - w / 2, heroX + HERO_W + 40, heroX - w - 40, sw - w - 2]
+    const ys = [low, 4, Math.round((low + 4) / 2)]
+    for (const [yi, y0] of ys.entries()) {
+      for (const [xi, x0] of xs.entries()) {
+        const x = Math.min(sw - w - 2, Math.max(2, x0))
+        const y = Math.min(GROUND_Y - h - 4, Math.max(4, y0))
+        const r = { x, y, w, h }
+        const score = overlap(r, heroBox) * 4 + avoid.reduce((t, a) => t + overlap(r, a) * 3, 0) + (xi + yi * 2) * 6 + wi * 40
+        if (score < best.score) best = { x, y, score, lines, w, h }
+      }
     }
   }
+  const { lines, w, h } = best
   const { x, y } = best
   let delay = 0.2
   const rows = lines
@@ -651,17 +721,18 @@ export function sceneToSvg(
   const rich = figure.kind === '3d'
   const stageAt = (lean: boolean) => (rich ? richBackdrop(scene, rng(`${scene.backdrop}|${scene.caption}|stage`), sw, GROUND_Y, W, lean) : flatStage(backdrop(scene, rand, sw)))
   let stage = stageAt(false)
-  const groundTop = stage.groundTop
   const dust = particles(scene, rand, sw)
-  const props = scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell, rich, look))
+  // On the rich stage the props are what Claude is thinking about, not things lying about the scene.
+  const props = rich ? [] : scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell, rich, look))
   const plan = hero(scene, stage.floor, sw, figure)
+  const thinks = (count: number) => (rich ? thought(scene.props.slice(0, count), plan, sw) : { svg: '' })
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
   const sky = tint('sky', stage.sky)
   const ground = tint('ground', stage.ground)
   // What the speech bubble keeps clear of: the props still drawn, their labels, the chapter tag.
   const avoid = (propCount: number): Rect[] => [
-    ...scene.props.slice(0, propCount).flatMap(p => propRects(p, stage.floor, sw, rich ? unitFor(p) : U)),
+    ...(rich ? [thinks(propCount).rect].filter((r): r is Rect => !!r) : scene.props.slice(0, propCount).flatMap(p => propRects(p, stage.floor, sw, U))),
     ...(scene.title ? [{ x: 0, y: 0, w: scene.title.length * look.charW + 34 + (look.inset ?? 0), h: 16 + (look.inset ?? 0) }] : []),
     ...stage.keep,
   ]
@@ -677,23 +748,31 @@ export function sceneToSvg(
     `<rect x="${-sw * 4}" y="${-H * 4}" width="${sw * 9}" height="${H * 4 + GROUND_Y}" fill="${sky}"/>` +
     (look.under?.(sw, H, GROUND_Y) ?? '') +
     paint('back', stage.back) +
-    `<rect x="${-sw * 4}" y="${groundTop}" width="${sw * 9}" height="${H * 4}" fill="${ground}"/>` +
+    `<rect x="${-sw * 4}" y="${stage.groundTop}" width="${sw * 9}" height="${H * 4}" fill="${ground}"/>` +
     // Ground-level scenery goes down before anything that stands on it.
     paint('back', stage.near) +
     (look.foreFilter ? `<g filter="url(#${look.foreFilter})">${fore(withDust, propCount)}</g>` : fore(withDust, propCount)) +
     stage.lens +
+    thinks(propCount).svg +
     (look.over?.(sw, H, GROUND_Y) ?? '') +
     (scene.title ? title(scene.title, look.titleColor ?? accent, look) : '') +
     caption(scene.caption, plan.endX, plan.endY, idPrefix, sw, look, avoid(propCount)) +
     `</svg>`
 
-  let svg = build(true, props.length)
+  const propsShown = rich ? Math.min(THOUGHTS, scene.props.length) : props.length
+  let svg = build(true, propsShown)
   // Over the limit, the scenery thins out first, then the particles, and only then the props.
   if (svg.length > BUDGET && rich) {
     stage = stageAt(true)
-    svg = build(true, props.length)
+    svg = build(true, propsShown)
   }
-  if (svg.length > BUDGET) svg = build(false, props.length)
-  for (let count = props.length - 1; svg.length > BUDGET && count >= 0; count--) svg = build(false, count)
+  if (svg.length > BUDGET) svg = build(false, propsShown)
+  // Still over (a look whose colors spell long), the rich stage gives way to the flat one
+  // before any prop goes; the flat stage always fits.
+  if (svg.length > BUDGET && rich) {
+    stage = flatStage(backdrop(scene, rand, sw))
+    svg = build(false, propsShown)
+  }
+  for (let count = propsShown - 1; svg.length > BUDGET && count >= 0; count--) svg = build(false, count)
   return svg
 }

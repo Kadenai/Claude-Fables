@@ -18,7 +18,7 @@ Keep continuity with the story so far, but change scenery when the work changes.
 
 Reply with ONE JSON object and nothing else, in this shape:
 {
-  "backdrop": one of "forest" | "space" | "city" | "desert" | "volcano" | "rails" | "lab" | "night",
+  "backdrop": one of "forest" | "space" | "city" | "desert" | "volcano" | "lab" | "night",
   "palette": { "sky"?: "#rrggbb", "ground"?: "#rrggbb", "accent"?: "#rrggbb" },   // optional
   "hero": { "action": "walk" | "run" | "swim" | "fly" | "dig" | "inspect" | "celebrate" | "think", "from": 0-100, "to": 0-100 },
   "props": [ up to ${MAX_PROPS} of {

@@ -5,7 +5,7 @@ import { extractJson, parseHex, parseScene } from '../hooks/scene'
 import { H, MAX_SVG, MAX_W, MIN_W, sceneToSvg, stageWidth } from '../hooks/svg'
 
 const GOOD = {
-  backdrop: 'rails',
+  backdrop: 'lab',
   hero: { action: 'run', from: 70, to: 20 },
   props: [{ sprite: 'train', x: 70, y: 'ground', motion: 'scroll', label: '#zzzzzz', color: '#e05252' }],
   caption: 'Pulled over: a color regex that accepts #zzzzzz.',
@@ -14,7 +14,7 @@ const GOOD = {
 describe('parseScene', () => {
   test('keeps a good scene', () => {
     const scene = parseScene(GOOD)
-    expect(scene?.backdrop).toBe('rails')
+    expect(scene?.backdrop).toBe('lab')
     expect(scene?.hero).toEqual({ action: 'run', from: 70, to: 20 })
     expect(scene?.props[0]?.label).toBe('#zzzzzz')
   })
@@ -107,7 +107,7 @@ describe('sceneToSvg', () => {
 
   test('the richest possible scene fits the Svg element', () => {
     const big = { pixels: Array.from({ length: 16 }, (_, y) => Array.from({ length: 16 }, (_, x) => 'abcdefgh'[(x * 7 + y * 3) % 8]).join('')), colors: Object.fromEntries([...'abcdefgh'].map((k, i) => [k, `#${i}${i}${i}`])) }
-    for (const backdrop of ['forest', 'space', 'city', 'desert', 'volcano', 'rails', 'lab', 'night']) {
+    for (const backdrop of ['forest', 'space', 'city', 'desert', 'volcano', 'lab', 'night']) {
       const scene = parseScene({
         ...GOOD,
         backdrop,

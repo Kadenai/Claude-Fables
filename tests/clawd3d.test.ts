@@ -81,32 +81,40 @@ describe('layering', () => {
   test('ground-level scenery is drawn before the props and Claude, in both kinds of stage', () => {
     const scene = parseScene({ backdrop: 'forest', hero: { action: 'think', from: 30, to: 30 }, props: [{ sprite: 'bug', x: 60 }], caption: 'Grass stays behind me.' })
     if (!scene) throw new Error('expected a scene')
-    for (const figure of ['pixel', '3d'] as const) {
-      const svg = sceneToSvg(scene, { figure })
-      const grass = svg.indexOf(figure === 'pixel' ? 'fill="#5e9c4a"' : 'fill="url(#sc-floor)"')
-      const prop = svg.indexOf(figure === 'pixel' ? 'scale(4)' : 'href="#fp0"')
-      expect(grass).toBeGreaterThan(-1)
-      expect(grass).toBeLessThan(prop)
-    }
+    const flat = sceneToSvg(scene, { figure: 'pixel' })
+    expect(flat.indexOf('fill="#5e9c4a"')).toBeGreaterThan(-1)
+    expect(flat.indexOf('fill="#5e9c4a"')).toBeLessThan(flat.indexOf('scale(4)'))
+    const rich = sceneToSvg(scene, { figure: '3d' })
+    const path = rich.indexOf('url(#sc-pathlight)')
+    const claude = rich.indexOf('visibility')
+    expect(path).toBeGreaterThan(-1)
+    expect(path).toBeLessThan(claude)
+    // The thought bubble comes last of all, over Claude and the lens.
+    expect(rich.indexOf('<g fill="#f6f1e7">')).toBeGreaterThan(claude)
   })
 
-  test('3D stages draw props as sprite stacks: a slice per row of the art, walls darkened', () => {
-    const scene = parseScene({ backdrop: 'city', hero: { action: 'walk', from: 0, to: 20 }, props: [{ sprite: 'trophy', x: 70 }], caption: 'Solid gold.' })
+  test('3D stages put the props in a thought bubble instead of on the ground', () => {
+    const scene = parseScene({ backdrop: 'city', hero: { action: 'walk', from: 0, to: 20 }, props: [{ sprite: 'trophy', x: 70, label: '17 tests' }], caption: 'Solid gold.' })
     if (!scene) throw new Error('expected a scene')
-    const svg = sceneToSvg(scene, { figure: '3d' })
-    expect(svg).toContain('<g id="fp0-0"')
-    expect(svg).toContain('href="#fp0-0" y="0" filter="url(#sc-deep)"')
-    expect(sceneToSvg(scene, { figure: 'pixel' })).not.toContain('sc-deep')
+    const rich = sceneToSvg(scene, { figure: '3d' })
+    expect(rich).toContain('<g fill="#f6f1e7">')
+    expect(rich).toContain('>17 tests</text>')
+    expect(rich).not.toContain('href="#fp0"')
+    const flat = sceneToSvg(scene, { figure: 'pixel' })
+    expect(flat).not.toContain('<g fill="#f6f1e7">')
+    expect(flat).toContain('17 tests')
   })
 
-  test('a scene too rich for the limit thins its scenery before it drops a prop', () => {
+  test('a scene too rich for the limit thins its scenery before it drops a thought', () => {
     const sprites = ['server', 'trophy', 'rocket', 'file', 'bug', 'train', 'planet', 'beaker']
-    for (const backdrop of ['city', 'forest', 'night', 'rails']) {
+    for (const backdrop of ['city', 'forest', 'night', 'lab', 'volcano']) {
       const scene = parseScene({ backdrop, hero: { action: 'walk', from: 0, to: 40 }, props: sprites.map((sprite, i) => ({ sprite, x: 4 + i * 13, label: sprite })), caption: 'Crowded.' })
       if (!scene) throw new Error('expected a scene')
       const svg = sceneToSvg(scene, { figure: '3d', width: 2400, height: 192 })
       expect(svg.length).toBeLessThan(MAX_SVG)
-      for (let i = 0; i < sprites.length; i++) expect(svg).toContain(`href="#fp${i}"`)
+      // The bubble holds the first three, all kept.
+      for (const label of sprites.slice(0, 3)) expect(svg).toContain(`>${label}</text>`)
+      expect(svg).not.toContain('>file</text>')
     }
   })
 })
@@ -115,34 +123,34 @@ describe('composition', () => {
   const rectOf = (m: RegExpMatchArray | null) => (m ? { x: +m[1]!, y: +m[2]!, w: +m[3]!, h: +m[4]! } : undefined)
   const hit = (a: { x: number; y: number; w: number; h: number }, b: typeof a) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 
-  test('the speech bubble keeps clear of a prop label beside Claude', () => {
+  test('the speech bubble keeps clear of the thought bubble', () => {
     const scene = parseScene({
       backdrop: 'forest',
       hero: { action: 'walk', from: 5, to: 30 },
-      props: [{ sprite: 'bug', x: 60, y: 'ground', label: 'parseHex' }],
+      props: [{ sprite: 'bug', x: 60, y: 'ground', label: 'parseHex' }, { sprite: 'file', x: 80, label: 'README.md' }],
       caption: 'A long enough caption to need a wide bubble here.',
     })
     if (!scene) throw new Error('expected a scene')
-    for (const look of ['pixel', 'comic', 'blueprint']) {
-      const svg = sceneToSvg(scene, { look })
+    for (const width of [480, 960, 2400]) {
+      const svg = sceneToSvg(scene, { width, height: 192, figure: '3d' })
       const bubble = rectOf(svg.match(/<g><rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" rx=/))
-      const tag = rectOf(svg.match(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="(11)" fill="/))
-      if (!bubble || !tag) throw new Error('expected a bubble and a label')
-      expect(hit(bubble, tag)).toBe(false)
+      const thought = rectOf(svg.match(/<g fill="#f6f1e7"><rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/))
+      if (!bubble || !thought) throw new Error('expected a speech bubble and a thought')
+      expect(hit(bubble, thought)).toBe(false)
     }
   })
 
   test('labels stay readable in a look that paints the foreground one color', () => {
     const scene = parseScene({ backdrop: 'lab', hero: { action: 'think', from: 20, to: 20 }, props: [{ sprite: 'server', x: 80, label: 'db.ts' }], caption: 'Hmm.' })
     if (!scene) throw new Error('expected a scene')
-    const svg = sceneToSvg(scene, { look: 'blueprint' })
-    const m = svg.match(/height="11" fill="(rgb\([^)]*\))"[^>]*\/><text[^>]*fill="(rgb\([^)]*\))">db\.ts/)
-    expect(m).not.toBeNull()
-    expect(m?.[1]).not.toBe(m?.[2])
+    // The thought bubble is drawn past the look's remap: its paper and ink stay its own.
+    const svg = sceneToSvg(scene, { look: 'blueprint', figure: '3d' })
+    expect(svg).toContain('<g fill="#f6f1e7">')
+    expect(svg).toMatch(/fill="#4a3a30">db\.ts<\/text>/)
   })
 
   test('every rich backdrop clips its scenery to the stage', () => {
-    for (const backdrop of ['forest', 'space', 'city', 'desert', 'volcano', 'rails', 'lab', 'night']) {
+    for (const backdrop of ['forest', 'space', 'city', 'desert', 'volcano', 'lab', 'night']) {
       const scene = parseScene({ backdrop, hero: { action: 'walk', from: 0, to: 40 }, caption: 'x' })
       if (!scene) throw new Error('expected a scene')
       const svg = sceneToSvg(scene, { figure: '3d', width: 1800, height: 192 })
