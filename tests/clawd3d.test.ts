@@ -131,6 +131,27 @@ describe('composition', () => {
     expect(at({ tone: 'nonsense' })).toBe('work')
   })
 
+  test('the caption sets kinds of words apart and walks with Claude', () => {
+    const scene = parseScene({
+      backdrop: 'lab',
+      hero: { action: 'walk', from: 10, to: 40 },
+      caption: '`npm test` failed: 41 passed in dates.ts, see daysInMonth() o_O',
+      tone: 'trouble',
+    })
+    if (!scene) throw new Error('expected a scene')
+    const svg = sceneToSvg(scene, { figure: '3d' })
+    const speech = svg.slice(svg.indexOf('data-part="speech"'))
+    expect(speech).toContain('<tspan fill="#b3261e" font-weight="700">✗</tspan>')
+    expect(speech).toContain('<tspan fill="#186a5a">npm</tspan> <tspan fill="#186a5a">test</tspan>')
+    expect(speech).toContain('<tspan fill="#b3261e" font-weight="700">failed</tspan>:')
+    expect(speech).toContain('<tspan fill="#2b5f9e">dates.ts</tspan>,')
+    expect(speech).toContain('<tspan fill="#7b3fa0">daysInMonth()</tspan>')
+    expect(speech).toContain('<tspan fill="#c4613f">o_O</tspan>')
+    expect(speech).not.toContain('`')
+    // It starts beside where Claude starts, and slides along as Claude walks.
+    expect(speech).toMatch(/^data-part="speech" data-tone="trouble" transform="translate\(-[\d.]+ 0\)"><animateTransform attributeName="transform" type="translate"/)
+  })
+
   test('every rich backdrop clips its scenery to the stage', () => {
     for (const backdrop of ['forest', 'space', 'city', 'desert', 'volcano', 'lab', 'night']) {
       const scene = parseScene({ backdrop, hero: { action: 'walk', from: 0, to: 40 }, caption: 'x' })

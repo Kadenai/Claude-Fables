@@ -92,7 +92,21 @@ The band's frame takes at most 131,072 characters, so repeated things are drawn 
 
 ### Captions
 
-The story is told in words. Props aren't drawn on the scene, so nothing competes with Claude and the caption, and a slight blur over the scenery keeps both reading first against any backdrop. The caption is cut from cartoon paper with a tail pointing back at Claude, and its paper says how the work is going: cream while Claude works, rose with red ink when something has just failed, and gold with a small star for a milestone, such as tests passing or the task done. The narrator picks the tone; a celebration is a milestone unless it says otherwise. The bubble takes the spot beside or above Claude that covers the least of Claude, the chapter tag and the scene's focal points, wrapping narrower when a band is tight.
+The story is told in words. Props aren't drawn on the scene, so nothing competes with Claude and the caption, and a slight blur over the scenery keeps both reading first against any backdrop.
+
+The caption is one standard bubble of cartoon paper with a tail pointing at Claude. It stays with Claude: it takes the spot just beside or just above Claude that covers the least of it, the chapter tag and the scene's focal points, and while Claude walks it walks along. Inside it, kinds of words are set apart, so a caption reads like a terminal:
+
+| Kind | Example | Looks like |
+| --- | --- | --- |
+| code and commands (in backticks, or a known command) | `npm test` | teal |
+| files and paths | dates.ts, src/auth | blue |
+| functions | daysInMonth() | purple |
+| numbers and timings | 312, 2.41s, 42/42 | orange, bold |
+| failures | failed, TypeError, N+1 | red, bold |
+| successes | passed, clean, green | green, bold |
+| ASCII faces and symbols | ^_^ >_< \o/ -> [OK] | warm accent |
+
+The narrator also picks a tone for the moment. Trouble leads the caption with a red ✗ and a milestone with a green ✓; a celebration is a milestone unless it says otherwise. The narrator is asked to write like a developer, with backticks around code and the odd ASCII face.
 
 The model and its projection are ported from the gallery's engine by [ChetasLua](https://github.com/ChetasLua), under the MIT License.
 

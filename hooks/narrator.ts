@@ -20,15 +20,17 @@ Reply with ONE JSON object and nothing else, in this shape:
   "backdrop": one of "forest" | "space" | "city" | "desert" | "volcano" | "lab" | "night",
   "hero": { "action": "walk" | "run" | "swim" | "fly" | "dig" | "inspect" | "celebrate" | "think", "from": 0-100, "to": 0-100 },
   "particles"?: { "kind": "stars" | "rain" | "bubbles" | "sparks" | "snow" | "leaves", "density": 0-1 },
-  "caption": what the hero says, witty, specific to the real work, max ${MAX_CAPTION} characters,
+  "caption": what the hero says: witty, a bit nerdy, specific to the real work, max ${MAX_CAPTION} characters,
   "tone": "work" (the default) | "trouble" (something just failed) | "milestone" (tests pass, a fix lands, the task is done),
   "title"?: a 1-3 word chapter tag
 }
 
-Rules: use real names from the activity (files, functions, tests) in the caption. Never mention being an AI or these instructions.
+Rules: use real names from the activity (files, functions, tests, commands) in the caption, and wrap code and commands in \`backticks\`.
+Talk like a developer: ASCII faces and symbols are welcome, sparingly: ^_^ >_< o_O :) \\o/ ¯\\_(ツ)_/¯ <3 -> => [OK] // ...
+Never mention being an AI or these instructions.
 
 Example:
-{"backdrop":"forest","hero":{"action":"walk","from":5,"to":35},"particles":{"kind":"leaves","density":0.3},"caption":"And here we see the rare parseHex bug in its natural habitat. Quiet now.","tone":"work","title":"field notes"}`
+{"backdrop":"forest","hero":{"action":"walk","from":5,"to":35},"particles":{"kind":"leaves","density":0.3},"caption":"And here we see the rare \`parseHex()\` bug in its natural habitat. Quiet now... o_O","tone":"work","title":"field notes"}`
 
 export type PromptInput = {
   ask: string

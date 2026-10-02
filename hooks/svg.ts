@@ -372,7 +372,7 @@ const HERO_H = 9 * U
 const heroColor = (k: string) => PALETTE[k]
 
 /** The hero's drawing, where it ends up, and when it gets there (seconds). */
-type HeroPlan = { svg: string; endX: number; endY: number; arrive: number }
+type HeroPlan = { svg: string; startX: number; endX: number; endY: number; arrive: number }
 
 /** How the hero is drawn: the pixel sprite in a cell style, or the 3D model painted one way. */
 export type Figure = { kind: 'pixel'; cell: Cell } | { kind: '3d'; paint: FacePaint }
@@ -438,7 +438,8 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure): He
   }
 
   let extras = ''
-  if (action === 'think') {
+  // The pixel sprite thinks in dots; the 3D Claude's caption already sits where they would.
+  if (action === 'think' && figure.kind === 'pixel') {
     extras = [0, 1, 2]
       .map(
         i =>
@@ -468,7 +469,7 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure): He
   const svg =
     `<g transform="translate(${at} ${baseY})">${travel}` +
     `<g>${inner}<g transform="${flip.trim() || 'translate(0 0)'}">${frames}</g>${extras}</g></g>`
-  return { svg, endX: toX, endY: baseY, arrive: isMoving ? moveDur : 0 }
+  return { svg, startX: isMoving ? fromX : toX, endX: toX, endY: baseY, arrive: isMoving ? moveDur : 0 }
 }
 
 // ---------------------------------------------------------------- caption
@@ -477,32 +478,100 @@ type P = [number, number]
 
 /** The cartoon paper the caption is cut from: a soft drop shadow, an ink outline, then the paper. */
 export type Tone = 'work' | 'trouble' | 'milestone'
-const TONES: Record<Tone, { paper: string; ink: string; text: string }> = {
-  work: { paper: '#f6f1e7', ink: '#2b2420', text: '#2b2420' },
-  trouble: { paper: '#fbe3dc', ink: '#5a1d16', text: '#5a1d16' },
-  milestone: { paper: '#ffe7a8', ink: '#3d2a0c', text: '#3d2a0c' },
-}
-const paper = (shape: string, tone: Tone) =>
+const CARD = '#f6f1e7'
+const CARD_INK = '#2b2420'
+const paper = (shape: string) =>
   `<g transform="translate(1.2 1.8)" fill="black" opacity=".22">${shape}</g>` +
-  `<g fill="${TONES[tone].ink}" stroke="${TONES[tone].ink}" stroke-width="2.2" stroke-linejoin="round">${shape}</g><g fill="${TONES[tone].paper}">${shape}</g>`
+  `<g fill="${CARD_INK}" stroke="${CARD_INK}" stroke-width="2.2" stroke-linejoin="round">${shape}</g><g fill="${CARD}">${shape}</g>`
 
+/** What a word of the caption is, so it can be set apart: the bubble stays the same, the words change. */
+type Kind = 'plain' | 'code' | 'path' | 'fn' | 'num' | 'bad' | 'good' | 'face'
+const KIND: Record<Exclude<Kind, 'plain'>, string> = {
+  code: 'fill="#186a5a"',
+  path: 'fill="#2b5f9e"',
+  fn: 'fill="#7b3fa0"',
+  num: 'fill="#b5541a" font-weight="700"',
+  bad: 'fill="#b3261e" font-weight="700"',
+  good: 'fill="#2e7d32" font-weight="700"',
+  face: 'fill="#c4613f"',
+}
+const FACE = /^(\^_\^|\^\^;?|>_<|>\.<|o_O|O_o|o\.O|:-?[)(DPpO3|/]|;-?\)|[xX]D|T_T|-_-|\._\.|\\o\/|<3|¯\\_\(ツ\)_\/¯|\(•_•\)|\(⌐■_■\)|->|=>|<-|~>|>>>|\.\.\.|\[(OK|ok|WIP|TODO|DONE)\]|\/\/|#!|\$|&&|\|\|)$/
+const BAD = /^(✗|FAIL(ED)?|failed|failing|fails|broke|broken|crash(ed|es)?|red|\w*Error|\w*Exception|N\+1|panic|segfault|404|500)$/
+const GOOD = /^(✓|PASS(ED)?|passed|passes|passing|green|clean|fixed|ships?|shipped|done|OK|merged|liftoff|LGTM)$/i
+const NUM = /^[~+\-]?\d[\d.,]*(%|x|×|s|ms|kb|mb|gb|k)?$|^\d+\/\d+$/i
+const FN = /^[\w.$#]+\(\)$/
+const PATH = /^[\w@~./-]*\w\.(tsx?|jsx?|mjs|cjs|py|rb|go|rs|java|kt|swift|json|ya?ml|toml|css|scss|html|md|sql|sh|lock|env|test\.ts)$|^~?\.?\/?[\w@.-]+\/[\w@./-]*$/
+const CMD = /^(npm|npx|pnpm|yarn|bun|git|pytest|tsc|eslint|cargo|go|make|pip|docker|curl|gh)$|^--?\w/
 
-/** Greedy word wrap; a word longer than the line is cut. */
-export function wrap(text: string, width: number): string[] {
-  const lines: string[] = []
-  let line = ''
-  for (const word of text.split(' ')) {
-    const piece = word.length > width ? word.slice(0, width) : word
-    if (line === '') line = piece
-    else if (line.length + 1 + piece.length <= width) line += ` ${piece}`
-    else {
-      lines.push(line)
-      line = piece
+type Word = { lead: string; core: string; tail: string; kind: Kind }
+
+/** The caption as words with their kinds. `backticks` mark code, and are not shown. */
+function words(text: string, tone: Tone | undefined): Word[] {
+  const out: Word[] = []
+  // The tone leads the caption as a mark, unless the narrator already wrote one.
+  const mark = tone === 'trouble' ? '✗' : tone === 'milestone' ? '✓' : ''
+  if (mark && !text.trimStart().startsWith(mark)) out.push({ lead: '', core: mark, tail: '', kind: tone === 'trouble' ? 'bad' : 'good' })
+  let inCode = false
+  for (const raw of text.split(' ').filter(Boolean)) {
+    const opens = raw.startsWith('`')
+    const ticks = (raw.match(/`/g) ?? []).length
+    const code = inCode || opens
+    if (ticks % 2 === 1) inCode = !inCode
+    const bare = raw.replace(/`/g, '')
+    if (!bare) continue
+    if (FACE.test(bare)) {
+      out.push({ lead: '', core: bare, tail: '', kind: code ? 'code' : 'face' })
+      continue
     }
+    // A call keeps its own brackets; only what follows them is punctuation.
+    const call = /^(.*\(\))([.,;:!?]*)$/.exec(bare)
+    const m = call && FN.test(call[1] ?? '') ? ['', '', call[1], call[2]] : /^([("'[]*)(.*?)([.,;:!?)"'\]]*)$/.exec(bare)
+    const [lead, core, tail] = m ? [m[1] ?? '', m[2] ?? '', m[3] ?? ''] : ['', bare, '']
+    const kind: Kind = !core
+      ? 'plain'
+      : code || CMD.test(core)
+        ? 'code'
+        : BAD.test(core)
+          ? 'bad'
+          : GOOD.test(core)
+            ? 'good'
+            : FN.test(core)
+              ? 'fn'
+              : PATH.test(core)
+                ? 'path'
+                : NUM.test(core)
+                  ? 'num'
+                  : 'plain'
+    out.push({ lead, core, tail, kind })
   }
-  if (line) lines.push(line)
+  return out
+}
+/** Columns a string takes in a monospace font: East Asian wide characters take two. */
+const WIDE = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/g
+const cols = (t: string) => t.length + (t.match(WIDE)?.length ?? 0)
+const wordLen = (w: Word) => cols(w.lead) + cols(w.core) + cols(w.tail)
+
+/** Greedy wrap of words into lines of at most `width` characters; a word longer than the line is cut. */
+function wrapWords(list: readonly Word[], width: number): Word[][] {
+  const lines: Word[][] = []
+  let line: Word[] = []
+  let len = 0
+  for (const w0 of list) {
+    const w = wordLen(w0) > width ? { ...w0, core: w0.core.slice(0, Math.max(1, width - w0.lead.length - w0.tail.length)) } : w0
+    if (line.length && len + 1 + wordLen(w) > width) {
+      lines.push(line)
+      line = []
+      len = 0
+    }
+    len += (line.length ? 1 : 0) + wordLen(w)
+    line.push(w)
+  }
+  if (line.length) lines.push(line)
   return lines
 }
+const lineLen = (line: readonly Word[]) => line.reduce((t, w) => t + wordLen(w), 0) + line.length - 1
+const lineSvg = (line: readonly Word[]) =>
+  line.map(w => escapeXml(w.lead) + (w.kind === 'plain' ? escapeXml(w.core) : `<tspan ${KIND[w.kind]}>${escapeXml(w.core)}</tspan>`) + escapeXml(w.tail)).join(' ')
 
 const overlap = (a: Rect, b: Rect) =>
   Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))
@@ -525,54 +594,73 @@ function propRects(prop: FablesProp, floor: number, sw: number, unit: number): R
 }
 
 /**
- * The speech bubble. Of the places beside and above Claude, it takes the one
- * that covers the least of Claude, the props, their labels and the chapter
- * tag, the nearest to Claude among equals.
+ * The speech bubble. It stays with Claude: of the places just beside and just
+ * above Claude it takes the one that covers the least of Claude, the props,
+ * the chapter tag and the scene's focal points, and while Claude walks it
+ * travels along. On the rich stage it is cut from cartoon paper with a tail
+ * pointing back at Claude, and kinds of words (files, functions, commands,
+ * numbers, failures, successes, ASCII faces) are set apart in the text.
  */
-function caption(text: string, heroX: number, heroY: number, idPrefix: string, sw: number, look: Look, avoid: readonly Rect[], tone?: Tone): string {
+function caption(
+  text: string,
+  hero: { startX: number; x: number; y: number; arrive: number },
+  idPrefix: string,
+  sw: number,
+  look: Look,
+  avoid: readonly Rect[],
+  tone?: Tone,
+): string {
   const { fill, stroke, radius } = look.caption
-  const ink = tone ? TONES[tone].text : look.caption.ink
+  const onPaper = tone !== undefined
+  const ink = onPaper ? CARD_INK : look.caption.ink
+  const heroX = hero.x
+  const heroY = hero.y
   const heroBox: Rect = { x: heroX - 4, y: heroY - 8, w: HERO_W + 8, h: HERO_H + 8 }
+  const top = heroY + HERO_H - MODEL_STAGE_H
+  const list = onPaper ? words(text, tone) : text.split(' ').filter(Boolean).map((core): Word => ({ lead: '', core, tail: '', kind: 'plain' }))
   // A narrower wrap, taller, is tried when the wide one finds no clear place.
-  let best = { x: 2, y: 4, score: Infinity, lines: [] as string[], w: 0, h: 0 }
+  let best = { x: 2, y: 4, score: Infinity, lines: [] as Word[][], w: 0, h: 0 }
   for (const [wi, width] of [34, 26, 20].entries()) {
-    const lines = wrap(text, width).slice(0, wi === 0 ? 3 : 4)
-    const w = Math.ceil(Math.max(...lines.map(l => l.length)) * look.charW + 14)
+    const lines = wrapWords(list, width).slice(0, wi === 0 ? 3 : 4)
+    const w = Math.ceil(Math.max(...lines.map(lineLen)) * look.charW + 14)
     const h = lines.length * 11 + 8
-    const low = Math.max(4, Math.min(heroY - 4, GROUND_Y - h - 4) - (heroY > 40 ? 16 : 0))
-    const xs = [heroX + HERO_W + 8, heroX - w - 8, heroX + HERO_W / 2 - w / 2, heroX + HERO_W + 40, heroX - w - 40, sw - w - 2]
-    const ys = [low, 4, Math.round((low + 4) / 2)]
-    for (const [yi, y0] of ys.entries()) {
-      for (const [xi, x0] of xs.entries()) {
-        const x = Math.min(sw - w - 2, Math.max(2, x0))
-        const y = Math.min(GROUND_Y - h - 4, Math.max(4, y0))
-        const r = { x, y, w, h }
-        const score = overlap(r, heroBox) * 4 + avoid.reduce((t, a) => t + overlap(r, a) * 3, 0) + (xi + yi * 2) * 6 + wi * 40
-        if (score < best.score) best = { x, y, score, lines, w, h }
-      }
+    const beside = Math.min(GROUND_Y - h - 4, Math.max(4, top - 4))
+    const above = top - h - 8
+    const spots: P[] = [
+      [heroX + HERO_W + 8, beside],
+      [heroX - w - 8, beside],
+      [heroX + HERO_W / 2 - w / 2, above],
+      [heroX + HERO_W - 10, above],
+      [heroX - w + 10, above],
+    ]
+    for (const [si, [x0, y0]] of spots.entries()) {
+      const x = Math.min(sw - w - 2, Math.max(2, x0))
+      const y = Math.min(GROUND_Y - h - 4, Math.max(4, y0))
+      const r = { x, y, w, h }
+      const score = overlap(r, heroBox) * 4 + avoid.reduce((t, a) => t + overlap(r, a) * 3, 0) + si * 6 + wi * 40
+      if (score < best.score) best = { x, y, score, lines, w, h }
     }
   }
-  const { lines, w, h } = best
-  const { x, y } = best
+  const { lines, w, h, x, y } = best
   let delay = 0.2
   const rows = lines
     .map((line, i) => {
-      const dur = Math.max(0.2, line.length * 0.03)
+      const dur = Math.max(0.2, lineLen(line) * 0.03)
       const id = `${idPrefix}${i}`
       const reveal =
         `<clipPath id="${id}"><rect x="${n(x)}" y="${n(y + 1 + i * 11)}" width="0" height="14">` +
         `<animate attributeName="width" from="0" to="${w}" dur="${n(dur)}s" begin="${n(delay)}s" fill="freeze"/></rect></clipPath>`
       delay += dur
-      return (
-        reveal +
-        `<text clip-path="url(#${id})" x="${n(x + 7)}" y="${n(y + 12 + i * 11)}" font-family="${look.font}" font-size="9.5" fill="${ink}">${escapeXml(line)}</text>`
-      )
+      return reveal + `<text clip-path="url(#${id})" x="${n(x + 7)}" y="${n(y + 12 + i * 11)}" font-family="${look.font}" font-size="9.5" fill="${ink}">${lineSvg(line)}</text>`
     })
     .join('')
-  if (tone) {
-    // Cut from cartoon paper, with a tail pointing back at Claude; its color says how the work is going.
+  // While Claude walks, the bubble walks with it, held inside the stage.
+  const dx = Math.min(sw - w - 2, Math.max(2, x + hero.startX - heroX)) - x
+  const follow = dx && hero.arrive ? ` transform="translate(${n(dx)} 0)"><animateTransform attributeName="transform" type="translate" values="${n(dx)} 0;0 0" dur="${n(hero.arrive)}s" fill="freeze"/` : ''
+  const fade = `<animate attributeName="opacity" values="0;1" dur=".2s" fill="freeze"/>`
+  if (onPaper) {
     const hx = heroX + HERO_W / 2
-    const hy = heroY + HERO_H - MODEL_STAGE_H + 10
+    const hy = top + 10
     let base: [P, P]
     if (x >= hx) base = [[x + 2, y + h - 13], [x + 2, y + h - 5]]
     else if (x + w <= hx) base = [[x + w - 2, y + h - 13], [x + w - 2, y + h - 5]]
@@ -588,14 +676,9 @@ function caption(text: string, heroX: number, heroY: number, idPrefix: string, s
     const shape =
       `<rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="6"/>` +
       `<path d="M${n(base[0][0])} ${n(base[0][1])}L${n(tip[0])} ${n(tip[1])}L${n(base[1][0])} ${n(base[1][1])}z"/>`
-    // A milestone carries a small star on its corner.
-    const star = tone === 'milestone' ? `<path transform="translate(${n(x + w - 3)} ${n(y + 3)})" fill="#f0a020" stroke="${TONES.milestone.ink}" stroke-width=".9" stroke-linejoin="round" d="M0 -5.5L1.6 -1.7L5.5 -1.5L2.5 1.1L3.4 5L0 2.9L-3.4 5L-2.5 1.1L-5.5 -1.5L-1.6 -1.7z"/>` : ''
-    return `<g data-part="speech" data-tone="${tone}">${paper(shape, tone)}${rows}${star}<animate attributeName="opacity" values="0;1" dur=".2s" fill="freeze"/></g>`
+    return `<g data-part="speech" data-tone="${tone}"${follow || ''}>${paper(shape)}${rows}${fade}</g>`
   }
-  return (
-    `<g data-part="speech"><rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>${rows}` +
-    `<animate attributeName="opacity" values="0;1" dur=".2s" fill="freeze"/></g>`
-  )
+  return `<g data-part="speech"${follow || ''}><rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>${rows}${fade}</g>`
 }
 
 function title(text: string, color: string, look: Look): string {
@@ -674,7 +757,7 @@ export function sceneToSvg(
     stage.lens +
     (look.over?.(sw, H, GROUND_Y) ?? '') +
     (scene.title ? title(scene.title, look.titleColor ?? (rich ? '#efe6d2' : accent), look) : '') +
-    caption(scene.caption, plan.endX, plan.endY, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined) +
+    caption(scene.caption, { startX: plan.startX, x: plan.endX, y: plan.endY, arrive: plan.arrive }, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined) +
     `</svg>`
 
   const propsShown = props.length
