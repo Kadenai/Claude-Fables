@@ -720,6 +720,9 @@ export function stageWidth(width: number, height: number): number {
   return Math.round(Math.min(MAX_W, Math.max(MIN_W, fit)))
 }
 
+/** The pixel-art Claude's eye and outline colors. */
+const SPRITE_EYE = '#1f1412'
+const SPRITE_OUTLINE = '#3a1e14'
 /** How many stage units one pixel of the pixelized stage takes. */
 const PIXEL = 2
 /**
@@ -730,27 +733,44 @@ const PIXEL = 2
  */
 const PIXELIZE = (sw: number, claude: Rect) => {
   const dot = 0.4
-  // The grid is seeded with one dot inside the filter's region, on a whole pixel from the stage's corner.
-  const sample = (from: string, at: Rect) => {
+  const r = n((PIXEL - dot) / 2)
+  // The grid: one dot tiled every PIXEL, seeded inside the filter's region on a whole pixel
+  // from the stage's corner, so every filter here samples the same squares.
+  const grid = (at: Rect) => {
     const gx = Math.ceil(at.x / PIXEL) * PIXEL
     const gy = Math.ceil(at.y / PIXEL) * PIXEL
     return (
       `<feFlood x="${n(gx + (PIXEL - dot) / 2)}" y="${n(gy + (PIXEL - dot) / 2)}" width="${dot}" height="${dot}" flood-color="black"/>` +
-      `<feComposite x="${n(gx)}" y="${n(gy)}" width="${PIXEL}" height="${PIXEL}"/><feTile result="grid"/>` +
-      `<feComposite in="${from}" in2="grid" operator="in"/>` +
-      `<feMorphology operator="dilate" radius="${n((PIXEL - dot) / 2)}"/>`
+      `<feComposite x="${n(gx)}" y="${n(gy)}" width="${PIXEL}" height="${PIXEL}"/><feTile result="grid"/>`
     )
   }
-  const region = (r: Rect) => `filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="${n(r.x)}" y="${n(r.y)}" width="${n(r.w)}" height="${n(r.h)}"`
+  // A sample at the middle of each square, spread over the square.
+  const sample = (from: string, result: string) =>
+    `<feComposite in="${from}" in2="grid" operator="in"/><feMorphology operator="dilate" radius="${r}" result="${result}"/>`
+  const region = (at: Rect) => `filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="${n(at.x)}" y="${n(at.y)}" width="${n(at.w)}" height="${n(at.h)}"`
+  const stage = { x: 0, y: 0, w: sw, h: H }
   return (
-    // Claude first, on the same grid: softened a touch so features finer than a pixel, its
-    // eyes, come through as whole pixels. Being one small flat color, it loses nothing to it.
+    // Claude, on the same grid, as a sprite: its solid body sampled crisp; its dark features
+    // (eyes, finer than a pixel) found by their darkness, thickened just enough to land on
+    // whole pixels and set solid; a one-pixel dark outline round the body. The translucent
+    // ground shadow is sampled too, under it all, but kept out of the outline and the eyes.
     `<filter id="sc-pixelize-claude" ${region(claude)} color-interpolation-filters="sRGB">` +
-    `<feGaussianBlur in="SourceGraphic" stdDeviation="${n(PIXEL * 0.3)}"/>` +
-    // Its outline stays hard: a pixel is Claude or it is not.
-    `<feComponentTransfer result="soft"><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>${sample('soft', claude)}</filter>` +
+    grid(claude) +
+    `<feComponentTransfer in="SourceGraphic" result="solid"><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>` +
+    sample('SourceGraphic', 'all') +
+    sample('solid', 'sampled') +
+    `<feComponentTransfer in="sampled" result="body"><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>` +
+    `<feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -9 -17.7 -3.3 0 3.6"/>` +
+    `<feComposite in2="solid" operator="in"/><feMorphology operator="dilate" radius=".7" result="dark"/>` +
+    sample('dark', 'darkpx') +
+    `<feComponentTransfer in="darkpx"><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>` +
+    `<feComposite in2="body" operator="in" result="eyemask"/>` +
+    `<feFlood flood-color="${SPRITE_EYE}"/><feComposite in2="eyemask" operator="in" result="eyes"/>` +
+    `<feMorphology in="body" operator="dilate" radius="${PIXEL}"/><feComposite in2="body" operator="out" result="ring"/>` +
+    `<feFlood flood-color="${SPRITE_OUTLINE}"/><feComposite in2="ring" operator="in" result="outline"/>` +
+    `<feMerge><feMergeNode in="all"/><feMergeNode in="outline"/><feMergeNode in="body"/><feMergeNode in="eyes"/></feMerge></filter>` +
     // The rest sampled crisp, at the middle of each square, so colors stay as rich as drawn.
-    `<filter id="sc-pixelize" ${region({ x: 0, y: 0, w: sw, h: H })} color-interpolation-filters="sRGB">${sample('SourceGraphic', { x: 0, y: 0, w: sw, h: H })}</filter>`
+    `<filter id="sc-pixelize" ${region(stage)} color-interpolation-filters="sRGB">${grid(stage)}${sample('SourceGraphic', 'px')}</filter>`
   )
 }
 
