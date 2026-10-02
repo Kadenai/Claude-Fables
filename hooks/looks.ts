@@ -16,6 +16,7 @@ import type { Painter } from './art/roles'
 import { BLUEPRINT } from './styles/blueprint'
 import { ENGRAVING } from './styles/engraving'
 import { GOLDEN } from './styles/golden'
+import { KAMON } from './styles/kamon'
 import { UKIYOE } from './styles/ukiyoe'
 import type { HeroPainter } from './hero3d'
 import { BAYER4, cells, edges, gray, hueMask, ink, lift, lumMask, posterize, ramp, screen, screened, screenGray, through } from './grade'
@@ -444,46 +445,7 @@ export const LOOKS: Record<string, Look> = {
 
   ukiyoe: UKIYOE,
 
-  kamon: style({
-    name: 'kamon',
-    label: 'Kamon',
-    voice: 'a terse family crest motto',
-    paper: oneInk('#efe6d2', '#161412', '#a8322a'),
-    edge: '#161412',
-    inset: 5,
-    titleColor: '#efe6d2',
-    // A crest in two tones: cream on black lacquer, nothing between. Claude, and every warm
-    // light, is cut in cream and ringed in black.
-    grade: () =>
-      gray('SourceGraphic', 'g') +
-      lift('g', 0.75, 'gl') +
-      ramp('gl', ['#161412', '#161412', '#161412', '#efe6d2', '#efe6d2'], 'two', true) +
-      hueMask('SourceGraphic', 'warm', 'warm') +
-      `<feFlood flood-color="#efe6d2" result="cream"/>` +
-      through('cream', 'warm', 'two', 'cut') +
-      edges('SourceGraphic', 'line', { reach: 1, threshold: 0.1 }) +
-      `<feComposite in="line" in2="warm" operator="out" result="rim"/>` +
-      ink('#efe6d2', 'rim', 'cut', 'lined') +
-      // Round the cream cut-outs a lacquer line, so Claude still reads against a pale sky.
-      `<feOffset in="warm" dx="1" dy="1" result="wo"/>` +
-      `<feComposite in="wo" in2="warm" operator="xor" result="ring"/>` +
-      `<feMorphology in="ring" operator="dilate" radius=".4" result="ring2"/>` +
-      ink('#161412', 'ring2', 'lined', 'crest'),
-    texture: (sw, h) =>
-      `<defs><linearGradient id="lk-lacquer" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".07"/><stop offset=".5" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#ffffff" stop-opacity=".04"/></linearGradient></defs>` +
-      cover(sw, h, 'url(#lk-lacquer)'),
-    frame: (sw, h) => frame(sw, h, '#efe6d2', 1.2, 3) + frame(sw, h, '#efe6d2', 0.5, 5.5),
-    tag: (text, inset) => {
-      // The name beside a small vermilion seal.
-      const x = inset + 6
-      const y = inset + 5
-      return {
-        svg: `<rect x="${x}" y="${y}" width="9" height="9" fill="#a8322a"/><circle cx="${x + 4.5}" cy="${y + 4.5}" r="2.6" fill="none" stroke="#efe6d2" stroke-width=".8"/>` + tagText(text, x + 13, y + 7.5, { font: PIXEL_FONT, size: 8, fill: '#efe6d2', spacing: 0.4 }),
-        w: x + 13 + text.length * 6 + 6,
-        h: y + 13,
-      }
-    },
-  }),
+  kamon: KAMON,
 }
 
 export const LOOK_NAMES = Object.keys(LOOKS)

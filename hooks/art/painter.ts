@@ -34,6 +34,8 @@ export type Rules = {
   faint?: 'unlined' | 'hide'
   /** A gradient or pattern fill in the style's terms; absent, the gradient is carried over in the style's inks. */
   url?: (id: string, family: Family, attr: PaintAttr, gradient?: Gradient) => string | undefined
+  /** A last pass over each repainted element, before its line is given. */
+  post?: (svg: string, family: Family, depth: number) => string
   /** Roles or whole families drawn the style's own way. */
   redraw?: Partial<Record<Role | Family, (svg: string, c: Ctx) => string>>
   /** Ink for the shapes of the lit painting's templates (firs, clumps, ferns), drawn once in definitions. */
@@ -68,6 +70,7 @@ export function painter(rules: Rules, suffix: string): Painter {
       url: (id, attr) => (attr === 'stop-color' ? undefined : (rules.url?.(id, family, attr, known.get(id)) ?? remapGradient(id, family, depth))),
     })
     if (rules.opacity) out = opacities(out, v => rules.opacity?.(family, v) ?? v)
+    if (rules.post) out = rules.post(out, family, depth)
     const line = rules.line?.(family, depth) ?? ''
     if (line) {
       // Faint washes take no line: a rim of light or a glaze is not a shape of its own.
