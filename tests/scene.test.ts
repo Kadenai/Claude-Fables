@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'claude-code/testing'
 
+import { summarizeTool } from '../hooks/activity'
 import { buildPrompt, sceneFromReply } from '../hooks/narrator'
 import { extractJson, parseHex, parseScene } from '../hooks/scene'
 import { H, MAX_SVG, MAX_W, MIN_W, sceneToSvg, stageWidth } from '../hooks/svg'
+import { SCENARIOS } from '../scripts/scenarios'
 
 const GOOD = {
   backdrop: 'lab',
@@ -141,5 +143,23 @@ describe('sceneToSvg', () => {
     expect(stageWidth(100, 192)).toBe(MIN_W)
     expect(stageWidth(99999, 192)).toBe(MAX_W)
     expect(stageWidth(0, 0)).toBe(640)
+  })
+})
+
+describe('viewer scenarios', () => {
+  test('every scripted scene passes the validator whole, in time order', () => {
+    for (const s of SCENARIOS) {
+      for (const scene of [...s.beats.map(b => b.scene), s.closing]) {
+        const parsed = parseScene(scene)
+        expect(parsed).not.toBeNull()
+        // Nothing was cut: the caption and every prop came through as written.
+        expect(parsed?.caption).toBe((scene as { caption: string }).caption)
+        expect(parsed?.props.length).toBe((scene as { props: unknown[] }).props.length)
+      }
+      const times = [...s.steps.map(st => st.at), s.end]
+      expect(times).toEqual([...times].sort((a, b) => a - b))
+      expect(s.beats.every(b => b.at < s.end)).toBe(true)
+      for (const st of s.steps) if ('tool' in st) expect(summarizeTool(st.tool, st.input).length).toBeGreaterThan(4)
+    }
   })
 })

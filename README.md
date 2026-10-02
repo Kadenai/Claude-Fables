@@ -109,6 +109,6 @@ claude plugin test .                  # unit tests plus engine tests (stubbed So
 bun scripts/preview.ts > gallery.html # render sample scenes to a page in the browser
 ```
 
-`bun scripts/preview.ts my-scenes.json` renders your own scenes, which is handy for tuning sprites or trying out what Sonnet sent back.
+`scripts/scenarios.ts` holds five whole sessions (prompt, tool calls, Claude's words, and the scenes for each moment) that the viewer plays back on the mod's own narration loop; a test keeps every scripted scene valid. `bun scripts/preview.ts my-scenes.json` renders your own scenes, which is handy for tuning sprites or trying out what Sonnet sent back.
 
 The mod API is early access and may change between Claude Code releases. This mod was built against Claude Code 2.1.287. If something stops drawing, run `claude --debug`: the log line will name what the engine refused.
