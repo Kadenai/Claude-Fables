@@ -65,7 +65,8 @@ describe('looks', () => {
           const svg = sceneToSvg(scene, { look, figure: '3d' })
           const lit = [...svg.matchAll(/filter="url\(#(sc-[\w-]+)\)"/g)].map(m => m[1])
           expect(lit).toEqual([])
-          expect(svg).not.toContain('mix-blend-mode')
+          // The lit look's light is added in screen and overlay blends; a style's own textures may multiply.
+          expect(svg).not.toMatch(/mix-blend-mode:(screen|overlay)/)
         }
       }
     }
