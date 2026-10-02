@@ -39,7 +39,7 @@ describe('the 3D Clawd', () => {
   })
 
   test('a loop bakes one frame per pose, each shown in its own slot', () => {
-    const { svg, frames } = motionSvg('walk', { height: 40, cx: 26, floor: 36, yaw: 0.55, paint: 'solid' })
+    const { svg, frames } = motionSvg('walk', { height: 40, cx: 26, floor: 36, yaw: 0.55 })
     expect(frames).toBe(MOTION_TIMING.walk.frames)
     expect(svg.match(/<g visibility="hidden">/g)).toHaveLength(frames)
     expect(svg).not.toContain('NaN')

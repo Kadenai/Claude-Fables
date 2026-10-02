@@ -12,6 +12,8 @@
  * takes the look's paper and inks.
  */
 
+import type { Painter } from './art/roles'
+import type { HeroPainter } from './hero3d'
 import { BAYER4, cells, edges, gray, hueMask, ink, lift, lumMask, posterize, ramp, screen, screened, screenGray, through } from './grade'
 
 /** How one art pixel of a sprite is drawn. */
@@ -27,6 +29,42 @@ export type Paper = { card: string; ink: string; kinds: Record<WordKind, string>
 
 /** The chapter tag as a look draws it, at the top left, and the room it takes. */
 export type Tag = { svg: string; w: number; h: number }
+
+type Pt = [number, number]
+/**
+ * The caption's bubble as a style draws it: its type, and its frame and tail
+ * under the text. `tail` runs from two points on the frame to a tip by Claude.
+ */
+export type Bubble = {
+  font: string
+  size: number
+  /** The type's average advance, in stage units, to fit the bubble to its lines. */
+  charW: number
+  line: number
+  /** The first line's baseline below the bubble's top. */
+  base: number
+  /** Set the caption in capitals, as a drafting hand would. */
+  upper?: boolean
+  draw: (box: { x: number; y: number; w: number; h: number }, tail: { base: [Pt, Pt]; tip: Pt }) => string
+}
+
+/**
+ * A style drawn as an artwork of its own: every element of the scenery and
+ * Claude himself repainted in its medium, rather than the finished picture graded.
+ */
+export type Art = {
+  /** Paints the scenery's elements, for a stage `sw` wide; `pixel` when it will be pixelized. */
+  painter: (sw: number, pixel: boolean) => Painter
+  /** Paints Claude. */
+  hero: (pixel: boolean) => HeroPainter
+  /** The sky and ground colors past the stage's edges. */
+  sky: string
+  ground: string
+  /** Definitions the painters refer to (patterns, gradients), laid down once under the stage. */
+  defs?: (sw: number, h: number, pixel: boolean) => string
+  /** The pixel-art Claude's eye and outline colors, for the pixelizer's sprite pass. */
+  sprite?: { eye: string; outline: string }
+}
 
 export type Look = {
   name: string
@@ -61,6 +99,10 @@ export type Look = {
   frame?: (sw: number, h: number, ground: number) => string
   /** The chapter tag, drawn in the look; absent, the plain tag. */
   tag?: (text: string, inset: number) => Tag
+  /** Set when the look is an artwork in its own right (see Art). */
+  art?: Art
+  /** The caption's bubble, when the style draws its own. */
+  bubble?: Bubble
 }
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'

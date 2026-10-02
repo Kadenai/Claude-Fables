@@ -14,8 +14,12 @@ const SKIN = {
 /** Shading steps: a few flat tones per face, as the gallery paints it. */
 const STEPS = 6
 
-/** How the faces are painted. Looks restyle the finished stage instead (looks.ts), so there is one way. */
-export type FacePaint = 'solid'
+/**
+ * Paints one posed model, its feet on y = `floor`, centred on x = `cx`. A style
+ * brings its own, drawn the way its art form would draw Clawd; absent, the
+ * gallery's lit 3D model.
+ */
+export type HeroPainter = (m: Model, cx: number, floor: number) => string
 
 const n1 = (v: number) => (Math.round(v * 10) / 10).toString()
 
@@ -36,7 +40,7 @@ const poly = (pts: readonly (readonly [number, number])[], dx: number, dy: numbe
   `M${pts.map(([x, y]) => `${n1(x + dx)} ${n1(y + dy)}`).join('L')}Z`
 
 /** One posed model as SVG, its feet on y = `floor`, centred on x = `cx`. */
-export function modelSvg(m: Model, cx: number, floor: number, _paint: FacePaint): string {
+export function modelSvg(m: Model, cx: number, floor: number): string {
   const shadow = `<path fill="#1f1e1d" opacity=".22" d="${poly(m.shadow, cx, floor)}"/>`
   // Consecutive faces of one color share a path; draw order is kept, so overlaps stay right.
   const runs: { fill: string; d: string[] }[] = []
@@ -71,7 +75,7 @@ export type Frames3d = {
  */
 export function motionSvg(
   motion: Motion,
-  o: { height: number; cx: number; floor: number; yaw: number; paint: FacePaint; until?: number; from?: number },
+  o: { height: number; cx: number; floor: number; yaw: number; hero?: HeroPainter; until?: number; from?: number },
 ): Frames3d {
   const { frames, dur } = MOTION_TIMING[motion]
   const s = o.height / MODEL_H
@@ -90,7 +94,7 @@ export function motionSvg(
       k === 0
         ? `<animate attributeName="visibility" values="visible;hidden" keyTimes="0;${at(1)}" calcMode="discrete" dur="${dur}s" ${timing}/>`
         : `<animate attributeName="visibility" values="hidden;visible;hidden" keyTimes="0;${at(k)};${at(k + 1)}" calcMode="discrete" dur="${dur}s" ${timing}/>`
-    return `<g visibility="hidden">${modelSvg(model, o.cx, o.floor, o.paint)}${anim}</g>`
+    return `<g visibility="hidden">${(o.hero ?? modelSvg)(model, o.cx, o.floor)}${anim}</g>`
   })
   return { svg: groups.join(''), frames }
 }

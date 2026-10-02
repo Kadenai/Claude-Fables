@@ -1,6 +1,6 @@
 import type { FablesProp, FablesScene } from '../types'
 
-import { type FacePaint, motionSvg } from './hero3d'
+import { type HeroPainter, motionSvg } from './hero3d'
 import { gradeFilter } from './grade'
 import { MONOCRAFT, MONOCRAFT_BOLD } from './monocraft'
 import { richBackdrop } from './scenery'
@@ -340,7 +340,7 @@ const heroColor = (k: string) => PALETTE[k]
 type HeroPlan = { svg: string; startX: number; endX: number; endY: number; arrive: number }
 
 /** How the hero is drawn: the pixel sprite in a cell style, or the 3D model painted one way. */
-export type Figure = { kind: 'pixel'; cell: Cell } | { kind: '3d'; paint: FacePaint }
+export type Figure = { kind: 'pixel'; cell: Cell } | { kind: '3d'; hero?: HeroPainter }
 
 /** The 3D model stands a little taller than the sprite, arms reaching past its box. */
 const MODEL_STAGE_H = 40
@@ -367,7 +367,7 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure): He
     `</g>`
   const model = (motion: Parameters<typeof motionSvg>[0], when: { until?: number; from?: number } = {}) =>
     figure.kind === '3d'
-      ? motionSvg(motion, { height: MODEL_STAGE_H, cx: HERO_W / 2, floor: HERO_H, yaw: 0.55, paint: figure.paint, ...when }).svg
+      ? motionSvg(motion, { height: MODEL_STAGE_H, cx: HERO_W / 2, floor: HERO_H, yaw: 0.55, hero: figure.hero, ...when }).svg
       : ''
   // Walking and running stop on arrival and stand idle; swimming and flying keep going.
   const frames =
@@ -579,10 +579,10 @@ function caption(
   // Claude's box, reaching as high as Claude jumps.
   const heroBox: Rect = { x: heroX - 4 - hero.sway, y: heroY - 8 - hero.jump, w: HERO_W + 8 + hero.sway * 2, h: HERO_H + 12 + hero.jump }
   const top = heroY + HERO_H - MODEL_STAGE_H - hero.jump
-  const list = onPaper ? words(text, tone) : text.split(' ').filter(Boolean).map((core): Word => ({ lead: '', core, tail: '', kind: 'plain' }))
+  const list = onPaper ? words(look.bubble?.upper ? text.toUpperCase() : text, tone) : text.split(' ').filter(Boolean).map((core): Word => ({ lead: '', core, tail: '', kind: 'plain' }))
   // On paper the caption is set in Monocraft, whose pixel is a ninth of its size: at 9 units
   // its pixels land on whole device pixels in the band. Elsewhere the look's own type.
-  const type = onPaper ? { font: MONO_FONT, size: 9, charW: 6, line: 12, base: 13 } : { font: look.font, size: 9.5, charW: look.charW, line: 11, base: 12 }
+  const type = onPaper ? (look.bubble ?? { font: MONO_FONT, size: 9, charW: 6, line: 12, base: 13 }) : { font: look.font, size: 9.5, charW: look.charW, line: 11, base: 12 }
   // Claude's path while it walks: the bubble must stay clear of Claude at every point of it.
   const KEYS = [0, 0.2, 0.4, 0.6, 0.8, 1]
   const heroAt = (k: number) => hero.startX + (heroX - hero.startX) * k
@@ -650,6 +650,7 @@ function caption(
     const len = Math.hypot(hx - mx, hy - my) || 1
     const reach = Math.min(10, len * 0.6)
     const tip: P = [mx + ((hx - mx) / len) * reach, my + ((hy - my) / len) * reach]
+    if (look.bubble) return `<g data-part="speech" data-tone="${tone}"${follow || ''}>${look.bubble.font.includes('Monocraft') ? MONO_FACE : ''}${look.bubble.draw({ x, y, w, h }, { base, tip })}${rows}${fade}</g>`
     const shape =
       `<rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="6"/>` +
       `<path d="M${n(base[0][0])} ${n(base[0][1])}L${n(tip[0])} ${n(tip[1])}L${n(base[1][0])} ${n(base[1][1])}z"/>`
@@ -695,7 +696,7 @@ const PIXEL = 2
  * (a tiny dot of a tiled grid, cut out of the drawing) and spread over its whole
  * square. The grid starts at the stage's corner, so pixels line up with it.
  */
-const PIXELIZE = (sw: number, claude: Rect, grade = '') => {
+const PIXELIZE = (sw: number, claude: Rect, grade = '', sprite = { eye: SPRITE_EYE, outline: SPRITE_OUTLINE }) => {
   const dot = 0.4
   const r = n((PIXEL - dot) / 2)
   // The grid: one dot tiled every PIXEL, seeded inside the filter's region on a whole pixel
@@ -729,9 +730,9 @@ const PIXELIZE = (sw: number, claude: Rect, grade = '') => {
     sample('dark', 'darkpx') +
     `<feComponentTransfer in="darkpx"><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>` +
     `<feComposite in2="body" operator="in" result="eyemask"/>` +
-    `<feFlood flood-color="${SPRITE_EYE}"/><feComposite in2="eyemask" operator="in" result="eyes"/>` +
+    `<feFlood flood-color="${sprite.eye}"/><feComposite in2="eyemask" operator="in" result="eyes"/>` +
     `<feMorphology in="body" operator="dilate" radius="${PIXEL}"/><feComposite in2="body" operator="out" result="ring"/>` +
-    `<feFlood flood-color="${SPRITE_OUTLINE}"/><feComposite in2="ring" operator="in" result="outline"/>` +
+    `<feFlood flood-color="${sprite.outline}"/><feComposite in2="ring" operator="in" result="outline"/>` +
     `<feMerge><feMergeNode in="all"/><feMergeNode in="outline"/><feMergeNode in="body"/><feMergeNode in="eyes"/></feMerge></filter>` +
     // The rest sampled crisp, at the middle of each square, so colors stay as rich as drawn. A look's
     // grade runs first in the same filter: one pass over the stage costs far less than two nested.
@@ -759,24 +760,27 @@ export function sceneToSvg(
   const look = lookFor(options.look)
   const rand = rng(`${scene.backdrop}|${scene.caption}`)
   const wants = options.figure && options.figure !== 'auto' ? options.figure : look.figure
-  const figure: Figure = wants === '3d' ? { kind: '3d', paint: 'solid' } : { kind: 'pixel', cell: look.cell }
   // The 3D Claude gets scenery and props with depth to match; the pixel sprite keeps the flat pixel stage.
-  const rich = figure.kind === '3d'
+  const rich = wants === '3d'
   // Pixel art (the default) pixelizes the whole stage crisply; without it the scenery takes a soft blur instead.
   const pixelArt = rich && options.pixelArt !== false
-  // Smooth, the scenery is softened so Claude reads first; a look's grade brings its own treatment instead,
-  // and softening under it would be redone on every frame.
+  // A style drawn as an artwork repaints every element of the scenery, and Claude, in its own medium.
+  const art = rich ? look.art : undefined
+  const painter = art?.painter(sw, pixelArt)
+  const figure: Figure = rich ? { kind: '3d', hero: art?.hero(pixelArt) } : { kind: 'pixel', cell: look.cell }
+  // Smooth, the scenery is softened so Claude reads first; a style brings its own treatment instead,
+  // and softening under a grade would be redone on every frame.
   const stageAt = (lean: boolean) =>
-    rich ? richBackdrop(scene, rng(`${scene.backdrop}|${scene.caption}|stage`), sw, GROUND_Y, W, lean, !pixelArt && !look.grade) : flatStage(backdrop(scene, rand, sw))
+    rich ? richBackdrop(scene, rng(`${scene.backdrop}|${scene.caption}|stage`), sw, GROUND_Y, W, lean, !pixelArt && !look.grade && !art, painter) : flatStage(backdrop(scene, rand, sw))
   let stage = stageAt(false)
-  const dust = particles(scene, rand, sw)
+  const dust = painter ? painter.el('particles', particles(scene, rand, sw)) : particles(scene, rand, sw)
   // The rich stage tells the story in words alone: no props stand about the scene.
   const props = rich ? [] : scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell))
   const plan = hero(scene, stage.floor, sw, figure)
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
-  const sky = stage.sky
-  const ground = stage.ground
+  const sky = art?.sky ?? stage.sky
+  const ground = art?.ground ?? stage.ground
   // A look's grade takes the stage, Claude and all, before any pixelizing; past the stage's edges its own color shows.
   const gradeBody = look.grade?.(sw, H, pixelArt) ?? ''
   // Smooth, the grade is a filter of its own; on a pixel-art stage it runs inside the pixelizer.
@@ -798,10 +802,11 @@ export function sceneToSvg(
   // (past MIN_W or MAX_W) shows more sky and ground instead of the frame's page.
   const build = (withDust: boolean, propCount: number) =>
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${sw} ${H}" width="${width}" height="${height}" ` +
-    `shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" style="display:block;background:${look.grade ? edge : ground}"${look.grade ? ` data-look="${look.name}"` : ''}>` +
+    `shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" style="display:block;background:${look.grade ? edge : ground}"${look.grade || art ? ` data-look="${look.name}"` : ''}>` +
     grade +
     `<rect x="${-sw * 4}" y="${-H * 4}" width="${sw * 9}" height="${H * 4 + GROUND_Y}" fill="${look.grade ? edge : sky}"/>` +
-    (pixelArt ? `<defs>${PIXELIZE(sw, claudeBox, gradeBody)}</defs><g filter="url(#sc-pixelize)">` : '') +
+    (art?.defs ? `<defs>${art.defs(sw, H, pixelArt)}</defs>` : '') +
+    (pixelArt ? `<defs>${PIXELIZE(sw, claudeBox, gradeBody, art?.sprite)}</defs><g filter="url(#sc-pixelize)">` : '') +
     (grade ? `<g filter="url(#lk-grade)">` : '') +
     // The graded stage carries its own sky, so the grade sees the whole picture.
     (look.grade ? `<rect width="${sw}" height="${H}" fill="${sky}"/>` : '') +

@@ -84,7 +84,32 @@ function area(p: readonly P2[]): number {
 export type PartName = 'body' | 'arm' | 'leg'
 export type Face = { part: PartName; name: FaceName; pts: P2[]; light: number }
 export type Eye = { poly?: P2[]; line?: P2[] }
-export type Model = { faces: Face[]; eyes: Eye[]; shadow: P2[] }
+/**
+ * An edge of a part's box, as the gallery's line styles classify it: `sil` where a
+ * shown face meets a hidden one (the outline), `crease` between two shown faces,
+ * `hidden` between two hidden ones (drawn dashed in a technical drawing).
+ */
+export type Edge = { a: P2; b: P2; kind: 'sil' | 'crease' | 'hidden' }
+/** One box of the model, in painter's order: its shown faces, its outline hull and its edges. */
+export type ModelPart = { name: PartName; faces: Face[]; hull: P2[]; edges: Edge[] }
+export type Model = { faces: Face[]; eyes: Eye[]; shadow: P2[]; parts: ModelPart[] }
+
+/** The convex hull of points (monotone chain), clockwise on screen. */
+function hullOf(pts: readonly P2[]): P2[] {
+  const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  const cross = (o: P2, a: P2, b: P2) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+  const lower: P2[] = []
+  for (const q of p) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, q) <= 0) lower.pop()
+    lower.push(q)
+  }
+  const upper: P2[] = []
+  for (const q of [...p].reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, q) <= 0) upper.pop()
+    upper.push(q)
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1))
+}
 
 /**
  * Poses the model and projects it: screen space has y down, the feet's ground
@@ -108,7 +133,7 @@ export function build(pose: Partial<Pose>, s: number): Model {
     return [q[0] * s * f, -(q[1] - groundY) * s * f]
   }
 
-  type Part = { name: PartName; faces: Record<FaceName, Face & { vis: boolean; depth: number }>; depth: number }
+  type Part = { name: PartName; faces: Record<FaceName, Face & { vis: boolean; depth: number }>; depth: number; corners: P2[] }
   const part = (name: PartName, corners: V3[], local?: (c: V3) => V3, skip?: FaceName): Part => {
     const q = corners.map(c => W(...(local ? local(c) : c)))
     const sp = q.map(proj)
@@ -125,7 +150,7 @@ export function build(pose: Partial<Pose>, s: number): Model {
       // Screen y points down, which flips the winding: a face toward the viewer has negative area.
       faces[fn] = { part: name, name: fn, pts: S, light, vis: area(S) < -0.02 && fn !== skip, depth: Q.reduce((t, c) => t + c[2], 0) / 4 }
     }
-    return { name, faces, depth: q.reduce((t, c) => t + c[2], 0) / 8 }
+    return { name, faces, depth: q.reduce((t, c) => t + c[2], 0) / 8, corners: sp }
   }
 
   const body = part('body', box(-D.BW / 2, D.LH, -D.BD / 2, D.BW / 2, D.LH + D.BH, D.BD / 2))
@@ -170,6 +195,28 @@ export function build(pose: Partial<Pose>, s: number): Model {
   if (bf.left.vis) order.push(armL)
   if (bf.right.vis) order.push(armR)
   const faces = order.flatMap(pt => Object.values(pt.faces).filter(f => f.vis).sort((a, b) => a.depth - b.depth)).map(({ part, name, pts, light }) => ({ part, name, pts, light }))
+  const parts = order.map((pt): ModelPart => {
+    // Each of the box's twelve edges, with the faces that meet along it.
+    const meet = new Map<string, { i: number; j: number; shown: number }>()
+    for (const fn of Object.keys(FACES) as FaceName[]) {
+      const ix = FACES[fn]
+      const shown = pt.faces[fn].vis ? 1 : 0
+      ix.forEach((i, k) => {
+        const j = ix[(k + 1) % 4] as number
+        const key = i < j ? `${i}-${j}` : `${j}-${i}`
+        const e = meet.get(key) ?? { i, j, shown: 0 }
+        e.shown += shown
+        meet.set(key, e)
+      })
+    }
+    const edges = [...meet.values()].map(({ i, j, shown }) => ({
+      a: pt.corners[i] as P2,
+      b: pt.corners[j] as P2,
+      kind: shown === 2 ? ('crease' as const) : shown === 1 ? ('sil' as const) : ('hidden' as const),
+    }))
+    const shownFaces = Object.values(pt.faces).filter(f => f.vis).sort((a, b) => a.depth - b.depth).map(({ part, name, pts, light }) => ({ part, name, pts, light }))
+    return { name: pt.name, faces: shownFaces, hull: hullOf(pt.corners), edges }
+  })
 
   const eyes: Eye[] = []
   if (bf.front.vis) {
@@ -198,7 +245,7 @@ export function build(pose: Partial<Pose>, s: number): Model {
     const a = (Math.PI * 2 * i) / 14
     shadow.push(proj(mv(Cm, Math.cos(a) * 8.6, -CY, Math.sin(a) * 4.6)))
   }
-  return { faces, eyes, shadow }
+  return { faces, eyes, shadow, parts }
 }
 
 // ---------------------------------------------------------------- motions

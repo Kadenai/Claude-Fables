@@ -19,6 +19,8 @@
  */
 import type { FablesScene } from '../types'
 
+import { LIT, type Painter } from './art/roles'
+
 export type Stage = {
   sky: string
   ground: string
@@ -257,7 +259,7 @@ const rim = (svg: string, color: string, dx: number, dy: number, opacity = 0.5) 
 
 // ---------------------------------------------------------------- the scenes
 
-type Ctx = { rand: Rand; sw: number; ground: number; detail: number }
+type Ctx = { rand: Rand; sw: number; ground: number; detail: number; p: Painter }
 type Disc = [number, number, number]
 type Scene = { sky: string; soil: string; floor?: number; groundTop?: number; back: string; near: string; keep?: Disc[] }
 
@@ -291,14 +293,12 @@ function forest(c: Ctx): Scene {
     `<g filter="url(#sc-soft)">` +
     `<path fill="#58706e" d="M${f(x)} ${f(y)}q${f(w * 0.25)} -3.2 ${f(w * 0.5)} -2.4q${f(w * 0.3)} -2.6 ${f(w * 0.5)} 1.2q${f(-w * 0.5)} 2.2 ${f(-w)} 1.2z"/>` +
     `<path fill="#f2c08a" opacity=".8" d="M${f(x + w * 0.08)} ${f(y + 0.4)}q${f(w * 0.42)} 1.4 ${f(w * 0.86)} -0.4q${f(-w * 0.42)} -0.6 ${f(-w * 0.86)} 0.4z"/></g>`
-  const sky =
-    `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
-    `<circle cx="${f(sunX)}" cy="${sunY}" r="160" fill="url(#sc-sunwide)"/><circle cx="${f(sunX)}" cy="${sunY}" r="46" fill="url(#sc-sun)"/>` +
-    cloud(sw * 0.04, 30, 150) +
-    cloud(sw * 0.36, 20, 110) +
-    cloud(sw * 0.56, 38, 90) +
-    cloud(sw * 0.82, 26, 100) +
-    bloom(`<circle cx="${f(sunX)}" cy="${sunY}" r="7" fill="#fff8e6"/>`, 1)
+  const sun = { cx: sunX, cy: sunY, r: 7 }
+  const sky = () =>
+    c.p.el('forest.sky', `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>`, { sw }) +
+    c.p.el('forest.sun', `<circle cx="${f(sunX)}" cy="${sunY}" r="160" fill="url(#sc-sunwide)"/><circle cx="${f(sunX)}" cy="${sunY}" r="46" fill="url(#sc-sun)"/>`, { ...sun, part: 'halo' }) +
+    c.p.el('forest.clouds', cloud(sw * 0.04, 30, 150) + cloud(sw * 0.36, 20, 110) + cloud(sw * 0.56, 38, 90) + cloud(sw * 0.82, 26, 100), { sw }) +
+    c.p.el('forest.sun', bloom(`<circle cx="${f(sunX)}" cy="${sunY}" r="7" fill="#fff8e6"/>`, 1), { ...sun, part: 'core' })
 
   // Far: a ridge and two rows of firs, each nearer row a little darker and a little sharper.
   const firRow = (base: (x: number) => number, hgt: (x: number) => number, spacing: number, color: string, rimOn: boolean, width = sw) => {
@@ -329,12 +329,18 @@ function forest(c: Ctx): Scene {
     return `<g id="${id}">${svg}</g>${uses}`
   }
   const farB = noise(rand, [[12, 200], [6, 70]])
-  const far =
-    `<path fill="${mix('#7f9c8a', haze, 0.4)}" d="${ridge(sw, 80, noise(rand, [[10, 300], [4, 90]]))}" filter="url(#sc-dof)"/>` +
-    `<g filter="url(#sc-dof)">${mirrorTile(firRow(x => 86 - farA(x) * 0.2, x => 16 + farA(x), 7, mix('#6f9080', haze, 0.45), false, Math.min(sw, TILE)), 'sc-rowa')}</g>` +
-    `<rect x="${-sw * 0.1}" y="74" width="${sw * 1.2}" height="20" fill="url(#sc-mist)"><animateTransform attributeName="transform" type="translate" values="0 0;${f(sw * 0.04)} 0;0 0" dur="34s" repeatCount="indefinite"/></rect>` +
-    firRow(x => 93 - farB(x) * 0.15, x => 22 + farB(x), c.detail < 1 ? 12 : 9, '#4c6c60', true) +
-    `<rect x="${-sw * 0.1}" y="86" width="${sw * 1.2}" height="16" fill="url(#sc-mist)" opacity=".7"><animateTransform attributeName="transform" type="translate" values="0 0;${f(-sw * 0.03)} 0;0 0" dur="28s" repeatCount="indefinite"/></rect>`
+  // Built in order, as the generator draws them; painted at assembly, after the definitions.
+  const farRidge = `<path fill="${mix('#7f9c8a', haze, 0.4)}" d="${ridge(sw, 80, noise(rand, [[10, 300], [4, 90]]))}" filter="url(#sc-dof)"/>`
+  const farRow = `<g filter="url(#sc-dof)">${mirrorTile(firRow(x => 86 - farA(x) * 0.2, x => 16 + farA(x), 7, mix('#6f9080', haze, 0.45), false, Math.min(sw, TILE)), 'sc-rowa')}</g>`
+  const farMist = `<rect x="${-sw * 0.1}" y="74" width="${sw * 1.2}" height="20" fill="url(#sc-mist)"><animateTransform attributeName="transform" type="translate" values="0 0;${f(sw * 0.04)} 0;0 0" dur="34s" repeatCount="indefinite"/></rect>`
+  const midRow = firRow(x => 93 - farB(x) * 0.15, x => 22 + farB(x), c.detail < 1 ? 12 : 9, '#4c6c60', true)
+  const midMist = `<rect x="${-sw * 0.1}" y="86" width="${sw * 1.2}" height="16" fill="url(#sc-mist)" opacity=".7"><animateTransform attributeName="transform" type="translate" values="0 0;${f(-sw * 0.03)} 0;0 0" dur="28s" repeatCount="indefinite"/></rect>`
+  const far = () =>
+    c.p.el('forest.ridge', farRidge, { sw }) +
+    c.p.el('forest.firs-far', farRow, { sw }) +
+    c.p.el('forest.mist', farMist, { sw, y: 74, h: 20 }) +
+    c.p.el('forest.firs-mid', midRow, { sw }) +
+    c.p.el('forest.mist', midMist, { sw, y: 86, h: 16 })
 
   // Shafts of light fanning from the sun down to the ground, soft-edged, breathing slowly.
   const shafts = [-0.5, -0.26, -0.06, 0.16, 0.38]
@@ -455,12 +461,17 @@ function forest(c: Ctx): Scene {
   // Each depth in turn, a veil of mist rising from the ground between them.
   const veil = `<rect x="0" y="${mid - 34}" width="${sw}" height="36" fill="url(#sc-veil)"/>`
   // The back depth stands further into the haze: its shade is lighter and paler.
-  const row =
-    `<defs>${templates}</defs>` +
+  const row = () =>
+    c.p.defs(`<defs>${templates}</defs>`) +
     rows
       .map((r, i) => {
         const paint = i === 0 && rows.length > 1 ? 'fill="#8a98a0" color="#6a7682"' : `fill="${SHADE}" color="${DEEP}"`
-        return (i > 0 ? veil : '') + `<g filter="url(#sc-bark)" ${paint}>${r.trunks}</g><g filter="url(#sc-needles)" ${paint}>${r.tiers}</g>`
+        const depth = { sw, back: i === 0 && rows.length > 1 }
+        return (
+          (i > 0 ? c.p.el('forest.mist', veil, { sw, y: mid - 34, h: 36, veil: true }) : '') +
+          c.p.el('forest.fir-trunks', `<g filter="url(#sc-bark)" ${paint}>${r.trunks}</g>`, depth) +
+          c.p.el('forest.firs', `<g filter="url(#sc-needles)" ${paint}>${r.tiers}</g>`, depth)
+        )
       })
       .join('')
 
@@ -557,11 +568,9 @@ function forest(c: Ctx): Scene {
     }
     return `<path fill="${SHADE}" d="${d}"/><path fill="${DEEP}" d="${e}"/>`
   }
-  const frame =
-    `<g filter="url(#sc-bark)">${bigTrunk(-8, 24, 1)}${bigTrunk(sw - 18, 28, -1)}</g>` +
-    moss(2, 14) +
-    moss(sw - 10, 14) +
-    `<g filter="url(#sc-leaves)">${canopyLight(8, 1)}${canopyLight(sw - 10, -1)}</g>`
+  const trunksSvg = `<g filter="url(#sc-bark)">${bigTrunk(-8, 24, 1)}${bigTrunk(sw - 18, 28, -1)}</g>` + moss(2, 14) + moss(sw - 10, 14)
+  const canopySvg = `<g filter="url(#sc-leaves)">${canopyLight(8, 1)}${canopyLight(sw - 10, -1)}</g>`
+  const frame = () => c.p.el('forest.trunks', trunksSvg) + c.p.el('forest.canopy', canopySvg)
 
   // Motes drifting in the light.
   const motes = Array.from({ length: Math.round(12 * c.detail) }, () => {
@@ -630,14 +639,14 @@ function forest(c: Ctx): Scene {
     ferns += `<use href="#sc-fern${n}" transform="translate(${f(x)} ${H + 2}) scale(${f(flip)} ${f(k)})"/>`
     if (near(x) > 0.35) fernsLit += `<use href="#sc-fern${n}" transform="translate(${f(x)} ${H + 1.2}) scale(${f(flip)} ${f(k)})"/>`
   }
-  const floor =
-    `<defs>${shrubDefs}<path id="sc-frond" d="${frond}"/>${fernDefs}</defs>` +
-    `<path fill="none" stroke="#2a2418" stroke-width=".6" opacity=".45" d="${ruts}"/>` +
-    `<path fill="#c8884a" opacity=".55" d="${litter}"/>` +
+  const floor = () =>
+    c.p.defs(`<defs>${shrubDefs}<path id="sc-frond" d="${frond}"/>${fernDefs}</defs>`) +
+    c.p.el('forest.litter', `<path fill="none" stroke="#2a2418" stroke-width=".6" opacity=".45" d="${ruts}"/>` + `<path fill="#c8884a" opacity=".55" d="${litter}"/>`) +
     ''
   const fernSvg = `<g fill="${RIM}" opacity=".3">${fernsLit}</g><g fill="#0e1912">${ferns}</g>`
 
   const back =
+    c.p.defs(
     `<defs>` +
     vgrad('sc-sky', [[0, '#203a3c'], [0.28, '#56726a'], [0.46, '#b4a888'], [0.6, '#ecca94'], [0.75, '#f6dcaa'], [1, '#f8e6bc']]) +
     rgrad('sc-sun', '#fff4dc', 0.85) +
@@ -647,14 +656,15 @@ function forest(c: Ctx): Scene {
     vgrad('sc-veil', [[0, '#d8dcc4', 0], [1, '#d8dcc4', 0.42]]) +
     material('sc-needles', ['#11241d', '#172e24', '#1e392b', '#284634'], 1.3, 0.9, 2, 3) +
     material('sc-bark', ['#3a2216', '#4e2f1e', '#653e28', '#7c5034'], 0.9, 0.05, 3, 5) +
-    `</defs>` +
-    sky +
-    far +
-    row +
+    `</defs>`) +
+    sky() +
+    far() +
+    row() +
     // The light is in the air in front of the trees, so the shafts are drawn over them.
-    `<g filter="url(#sc-haze)" style="mix-blend-mode:screen">${shafts}</g>` +
-    motes
+    c.p.el('forest.shafts', `<g filter="url(#sc-haze)" style="mix-blend-mode:screen">${shafts}</g>`, { cx: sunX, cy: sunY, y: ground }) +
+    c.p.el('forest.motes', motes)
   const near_ =
+    c.p.defs(
     `<defs>` +
     vgrad('sc-groundlight', [[0, '#7e8478'], [0.2, '#666e76'], [1, '#353c4a']]) +
     vgrad('sc-pathlight', [[0, '#c8b898'], [1, '#8a8478']]) +
@@ -664,18 +674,18 @@ function forest(c: Ctx): Scene {
     material('sc-soil', ['#3c3020', '#463826', '#50412c', '#5a4a32'], 0.35, 1.4, 3, 9, 1.8) +
     material('sc-leaves', ['#1a3320', '#22402a', '#2c5032', '#38603a'], 0.9, 0.9, 2, 13) +
     `<filter id="sc-blur3" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>` +
-    `</defs>` +
-    `<g filter="url(#sc-grassmat)">${groundLight}</g>` +
+    `</defs>`) +
+    c.p.el('forest.meadow', `<g filter="url(#sc-grassmat)">${groundLight}</g>`, { sw, y: mid - 2 }) +
     // The meadow's far edge dissolves into the mist instead of meeting it in a line.
-    `<g filter="url(#sc-needles)">${shrubs}</g>` +
-    `<rect x="0" y="${mid - 8}" width="${sw}" height="10" fill="url(#sc-groundmist)"/>` +
-    path +
-    floor +
+    c.p.el('forest.shrubs', `<g filter="url(#sc-needles)">${shrubs}</g>`) +
+    c.p.el('forest.groundmist', `<rect x="0" y="${mid - 8}" width="${sw}" height="10" fill="url(#sc-groundmist)"/>`, { sw, y: mid - 8, h: 10 }) +
+    c.p.el('forest.path', path, { sw }) +
+    floor() +
     // Where the sun lands through the clearing the light is strong enough to add, not just tint.
-    `<ellipse cx="${f(sunX)}" cy="${ground}" rx="${f(clearing * 3.4)}" ry="14" fill="url(#sc-sunpatch)" style="mix-blend-mode:screen"/>` +
-    grass +
-    fernSvg +
-    frame
+    c.p.el('forest.sunpatch', `<ellipse cx="${f(sunX)}" cy="${ground}" rx="${f(clearing * 3.4)}" ry="14" fill="url(#sc-sunpatch)" style="mix-blend-mode:screen"/>`, { cx: sunX, cy: ground }) +
+    c.p.el('forest.grass', grass) +
+    c.p.el('forest.ferns', fernSvg) +
+    frame()
   return { sky: '#1c3436', soil: '#2c4a30', groundTop: mid - 2, back, near: near_, keep: [[sunX, sunY, 12]] }
 }
 
@@ -724,6 +734,7 @@ function space(c: Ctx): Scene {
     `</g>` +
     `<circle cx="${f(earthX)}" cy="${earthY}" r="${earthR}" fill="none" stroke="url(#sc-limb)" stroke-width="1.6"/>`
   const back =
+    c.p.defs(
     `<defs>` +
     vgrad('sc-sky', [[0, '#03040a'], [1, '#0e1228']]) +
     rgrad('sc-band', '#b8a8d8', 0.24) +
@@ -735,14 +746,11 @@ function space(c: Ctx): Scene {
     material('sc-planet', ['#0f2c5a', '#163e74', '#2a6a5c', '#5a7a46'], 0.035, 0.05, 4, 9, 2.2) +
     `<filter id="sc-clouds" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".05 .12" numOctaves="4" seed="19"/><feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 3.6 -1.95"/></filter>` +
     `<clipPath id="sc-globe"><circle cx="${f(earthX)}" cy="${earthY}" r="${earthR}"/></clipPath>` +
-    `</defs>` +
-    `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
-    `<ellipse cx="${f(sw * 0.45)}" cy="34" rx="${f(sw * 0.55)}" ry="15" fill="url(#sc-band)" transform="rotate(12 ${f(sw * 0.45)} 34)" filter="url(#sc-milky)"/>` +
-    `<path d="${dust}" fill="white" opacity=".45"/>` +
-    stars(rand, sw, Math.round(80 * c.detail), horizon - 6, [earthX, earthY, earthR + 10]) +
-    spikes +
-    shooting +
-    earth
+    `</defs>`) +
+    c.p.el('space.sky', `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>`, { sw }) +
+    c.p.el('space.milkyway', `<ellipse cx="${f(sw * 0.45)}" cy="34" rx="${f(sw * 0.55)}" ry="15" fill="url(#sc-band)" transform="rotate(12 ${f(sw * 0.45)} 34)" filter="url(#sc-milky)"/>` + `<path d="${dust}" fill="white" opacity=".45"/>`, { sw }) +
+    c.p.el('space.stars', stars(rand, sw, Math.round(80 * c.detail), horizon - 6, [earthX, earthY, earthR + 10]) + spikes + shooting) +
+    c.p.el('space.earth', earth, { cx: earthX, cy: earthY, r: earthR })
 
   // The ground, painted as light. Swells of regolith run across it, each lit on its sunward
   // (left) slope and in shadow on its lee; craters lie flat in perspective.
@@ -808,15 +816,19 @@ function space(c: Ctx): Scene {
   // The base: a dome lit on its sunward side, a module with a lit port, a mast with a blinking light.
   const base = sw * 0.24
   const by = surface(base) + 1
-  const outpost =
-    `<path fill="url(#sc-domelight)" d="M${f(base - 9)} ${f(by)}a9 6.5 0 0 1 18 0z"/>` +
-    `<path fill="none" stroke="#fff4e0" stroke-opacity=".5" stroke-width=".6" d="M${f(base - 8)} ${f(by - 2)}a8 5.5 0 0 1 6 -4"/>` +
-    `<rect x="${f(base + 10)}" y="${f(by - 4.5)}" width="9" height="4.5" fill="#8a8c9a"/><rect x="${f(base + 15)}" y="${f(by - 4.5)}" width="4" height="4.5" fill="${DEEP}" opacity=".6"/>` +
-    bloom(`<rect x="${f(base + 11.5)}" y="${f(by - 3.2)}" width="2" height="1.4" fill="#ffd98a"/>`, 1) +
-    `<rect x="${f(base - 14)}" y="${f(by - 15)}" width=".8" height="15" fill="#b8b8c4"/>` +
-    `<ellipse cx="${f(base + 14)}" cy="${f(by + 0.5)}" rx="22" ry="1.2" fill="${DEEP}" opacity=".7"/>` +
-    bloom(`<circle cx="${f(base - 13.6)}" cy="${f(by - 15.5)}" r="1.1" fill="#ff6a5a"><animate attributeName="opacity" values="1;.1;1" dur="2.2s" repeatCount="indefinite"/></circle>`, 1)
+  const outpost = () =>
+    c.p.el(
+      'space.base',
+      `<path fill="url(#sc-domelight)" d="M${f(base - 9)} ${f(by)}a9 6.5 0 0 1 18 0z"/>` +
+        `<path fill="none" stroke="#fff4e0" stroke-opacity=".5" stroke-width=".6" d="M${f(base - 8)} ${f(by - 2)}a8 5.5 0 0 1 6 -4"/>` +
+        `<rect x="${f(base + 10)}" y="${f(by - 4.5)}" width="9" height="4.5" fill="#8a8c9a"/><rect x="${f(base + 15)}" y="${f(by - 4.5)}" width="4" height="4.5" fill="${DEEP}" opacity=".6"/>`,
+      { cx: base, cy: by },
+    ) +
+    c.p.el('space.lamps', bloom(`<rect x="${f(base + 11.5)}" y="${f(by - 3.2)}" width="2" height="1.4" fill="#ffd98a"/>`, 1)) +
+    c.p.el('space.base', `<rect x="${f(base - 14)}" y="${f(by - 15)}" width=".8" height="15" fill="#b8b8c4"/>` + `<ellipse cx="${f(base + 14)}" cy="${f(by + 0.5)}" rx="22" ry="1.2" fill="${DEEP}" opacity=".7"/>`, { cx: base, cy: by, part: 'mast' }) +
+    c.p.el('space.lamps', bloom(`<circle cx="${f(base - 13.6)}" cy="${f(by - 15.5)}" r="1.1" fill="#ff6a5a"><animate attributeName="opacity" values="1;.1;1" dur="2.2s" repeatCount="indefinite"/></circle>`, 1))
   const near =
+    c.p.defs(
     `<defs>` +
     vgrad('sc-regolight', [[0, '#d8d8e0'], [0.2, '#a8a8b8'], [1, '#5a5c72']]) +
     `<linearGradient id="sc-bowl"><stop offset="0" stop-color="#14151f"/><stop offset=".5" stop-color="${DEEP}"/><stop offset=".78" stop-color="${SHADE}"/><stop offset="1" stop-color="${KEY}"/></linearGradient>` +
@@ -826,9 +838,14 @@ function space(c: Ctx): Scene {
     `<linearGradient id="sc-domelight"><stop offset="0" stop-color="#eae6e0"/><stop offset=".6" stop-color="#9a98a6"/><stop offset="1" stop-color="#5a5a6c"/></linearGradient>` +
     `<linearGradient id="sc-sunside"><stop offset="0" stop-color="#ffe8cc" stop-opacity=".35"/><stop offset=".5" stop-color="#ffe8cc" stop-opacity="0"/><stop offset="1" stop-color="#101428" stop-opacity=".35"/></linearGradient>` +
     material('sc-regolith', ['#6a6872', '#76747d', '#817f88', '#8e8b93'], 0.3, 1, 4, 21, 1.5) +
-    `</defs>` +
-    `<g filter="url(#sc-regolith)"><rect x="0" y="${horizon - 2}" width="${sw}" height="${H - horizon + 2}" fill="${SHADE}"/>${swells.join('')}${pock}${craters}${rocks}<rect x="0" y="${horizon - 2}" width="${sw}" height="${H - horizon + 2}" fill="url(#sc-sunside)"/></g><rect x="0" y="${horizon}" width="${sw}" height="${H - horizon}" fill="url(#sc-foreshade)"/>` +
-    outpost
+    `</defs>`) +
+    c.p.el('space.regolith', `<g filter="url(#sc-regolith)"><rect x="0" y="${horizon - 2}" width="${sw}" height="${H - horizon + 2}" fill="${SHADE}"/>`, { sw, y: horizon - 2, part: 'open' }) +
+    c.p.el('space.swells', swells.join(''), { sw }) +
+    c.p.el('space.pits', pock) +
+    c.p.el('space.craters', craters) +
+    c.p.el('space.rocks', rocks) +
+    c.p.el('space.regolith', `<rect x="0" y="${horizon - 2}" width="${sw}" height="${H - horizon + 2}" fill="url(#sc-sunside)"/></g><rect x="0" y="${horizon}" width="${sw}" height="${H - horizon}" fill="url(#sc-foreshade)"/>`, { sw, y: horizon, part: 'close' }) +
+    outpost()
   return { sky: '#03040a', soil: '#3a3844', floor, groundTop: H, back, near, keep: [[earthX, earthY - 12, earthR + 4]] }
 }
 
@@ -922,6 +939,7 @@ function city(c: Ctx): Scene {
     `<g filter="url(#sc-soft)"><path fill="#2e3664" d="M${f(x)} ${f(y)}q${f(w * 0.25)} -3.2 ${f(w * 0.5)} -2.4q${f(w * 0.3)} -2.6 ${f(w * 0.5)} 1.2q${f(-w * 0.5)} 2.2 ${f(-w)} 1.2z"/>` +
     `<path fill="#e89a8a" opacity="${f(Math.max(0.15, 0.8 - x / sw))}" d="M${f(x + w * 0.08)} ${f(y + 0.4)}q${f(w * 0.42)} 1.4 ${f(w * 0.86)} -0.4q${f(-w * 0.42)} -0.6 ${f(-w * 0.86)} 0.4z"/></g>`
   const back =
+    c.p.defs(
     `<defs>` +
     vgrad('sc-sky', [[0, top], [0.5, '#34427e'], [0.8, '#7a6a9a'], [1, '#d89088']]) +
     `<radialGradient id="sc-west" cx="0" cy="${ground - 20}" r="${f(sw * 0.7)}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffb07a" stop-opacity=".55"/><stop offset="1" stop-color="#ffb07a" stop-opacity="0"/></radialGradient>` +
@@ -930,24 +948,19 @@ function city(c: Ctx): Scene {
     vgrad('sc-facade-mid', [[0, '#7682ba'], [1, '#48507e']]) +
     vgrad('sc-facade-low', [[0, '#434c7a'], [1, '#1e2442']]) +
     material('sc-concrete', ['#50566e', '#565c74', '#5c627a', '#626880'], 0.25, 0.3, 2, 31, 1.3) +
-    `</defs>` +
-    `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
-    `<rect width="${sw}" height="${H}" fill="url(#sc-west)"/>` +
-    stars(rand, sw, Math.round(18 * c.detail), 26) +
-    cloud(sw * 0.04, 26, 150) +
-    cloud(sw * 0.4, 16, 110) +
-    cloud(sw * 0.74, 30, 120) +
-    `<g id="sc-skyline">` +
-    `<g filter="url(#sc-dof)">${far.body}</g>` +
-    far.windows +
-    spire +
-    mid.body +
-    mid.windows +
-    `<path fill="#1c2036" d="M0 ${deckY}h${sw}v3H0z${piers}"/><path fill="${dusk}" opacity=".3" d="M0 ${deckY}h${sw}v.6H0z"/>` +
-    train +
-    low.body +
-    low.windows +
-    `</g>`
+    `</defs>`) +
+    c.p.el('city.sky', `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` + `<rect width="${sw}" height="${H}" fill="url(#sc-west)"/>`, { sw }) +
+    c.p.el('city.stars', stars(rand, sw, Math.round(18 * c.detail), 26)) +
+    c.p.el('city.clouds', cloud(sw * 0.04, 26, 150) + cloud(sw * 0.4, 16, 110) + cloud(sw * 0.74, 30, 120), { sw }) +
+    c.p.el('city.towers-far', `<g id="sc-skyline">` + `<g filter="url(#sc-dof)">${far.body}</g>`, { part: 'open' }) +
+    c.p.el('city.windows-far', far.windows) +
+    c.p.el('city.spire', spire, { cx: spireX, cy: spireBase - 78 }) +
+    c.p.el('city.towers-mid', mid.body) +
+    c.p.el('city.windows-mid', mid.windows) +
+    c.p.el('city.rail', `<path fill="#1c2036" d="M0 ${deckY}h${sw}v3H0z${piers}"/><path fill="${dusk}" opacity=".3" d="M0 ${deckY}h${sw}v.6H0z"/>`, { sw, y: deckY }) +
+    c.p.el('city.train', train, { y: deckY }) +
+    c.p.el('city.towers-low', low.body) +
+    c.p.el('city.windows-low', low.windows + `</g>`, { part: 'close' })
   // The street: wet asphalt over light, the skyline mirrored into it and smeared by the
   // paving, stronger where puddles lie; the curb catches the dusk; two lamps at the thirds.
   let puddles = ''
@@ -966,6 +979,7 @@ function city(c: Ctx): Scene {
     `<rect x="${f(x - 2)}" y="${ground}" width="4" height="${H - ground}" fill="url(#sc-wet)" filter="url(#sc-streak)"/>`
   const mirror = `<use href="#sc-skyline" transform="matrix(1 0 0 -1 0 ${2 * street})"/>`
   const near =
+    c.p.defs(
     `<defs>` +
     vgrad('sc-walk', [[0, '#8a90b8'], [0.3, '#5a6088'], [1, '#2a2e48']]) +
     material('sc-asphalt', ['#3a3c4a', '#40424f', '#474956', '#4e505c'], 0.7, 1.4, 2, 33, 1.4) +
@@ -974,12 +988,11 @@ function city(c: Ctx): Scene {
     `<filter id="sc-streak" x="-200%" y="-10%" width="500%" height="120%"><feGaussianBlur stdDeviation=".9 2.4"/></filter>` +
     `<filter id="sc-ripple" x="0" y="0" width="1" height="1"><feGaussianBlur stdDeviation=".5 1.2" result="b"/><feTurbulence type="fractalNoise" baseFrequency=".02 .6" numOctaves="2" seed="7" result="t"/><feDisplacementMap in="b" in2="t" scale="3" xChannelSelector="R" yChannelSelector="G"/></filter>` +
     `<mask id="sc-wetmask" maskUnits="userSpaceOnUse" x="0" y="${street}" width="${sw}" height="${H - street}"><rect x="0" y="${street}" width="${sw}" height="${H - street}" fill="#5a5a5a"/><g fill="white" filter="url(#sc-soft)">${puddles}</g></mask>` +
-    `</defs>` +
-    `<g filter="url(#sc-asphalt)"><rect x="0" y="${street}" width="${sw}" height="${H - street}" fill="url(#sc-walk)"/></g>` +
-    `<g mask="url(#sc-wetmask)" opacity=".75"><g filter="url(#sc-ripple)">${mirror}</g></g>` +
-    `<rect x="0" y="${street}" width="${sw}" height="1.2" fill="#2a2e44"/><rect x="0" y="${street}" width="${sw}" height=".5" fill="${dusk}" opacity=".45"/>` +
-    lamp(sw * 0.16) +
-    lamp(sw * 0.86)
+    `</defs>`) +
+    c.p.el('city.street', `<g filter="url(#sc-asphalt)"><rect x="0" y="${street}" width="${sw}" height="${H - street}" fill="url(#sc-walk)"/></g>`, { sw, y: street, h: H - street }) +
+    c.p.el('city.reflection', `<g mask="url(#sc-wetmask)" opacity=".75"><g filter="url(#sc-ripple)">${mirror}</g></g>`, { sw, y: street, h: H - street }) +
+    c.p.el('city.curb', `<rect x="0" y="${street}" width="${sw}" height="1.2" fill="#2a2e44"/><rect x="0" y="${street}" width="${sw}" height=".5" fill="${dusk}" opacity=".45"/>`, { sw, y: street }) +
+    c.p.el('city.lamps', lamp(sw * 0.16) + lamp(sw * 0.86), { y: ground })
   return { sky: top, soil: '#2a2d42', groundTop: street, back, near, keep: [[spireX, spireBase - 62, 14]] }
 }
 
@@ -1070,27 +1083,24 @@ function desert(c: Ctx): Scene {
     `<g transform="translate(${f(sw * 0.3)} 26)"><path d="M-6 0q3 -2.6 6 0q3 -2.6 6 0" fill="none" stroke="#3a2438" stroke-width="1" stroke-linecap="round" transform="translate(16 0)"/>` +
     `<animateTransform attributeName="transform" type="rotate" values="0;360" dur="26s" additive="sum" repeatCount="indefinite"/></g>`
   const back =
+    c.p.defs(
     `<defs>` +
     vgrad('sc-sky', [[0, '#26214a'], [0.35, '#5a3466'], [0.62, '#c06258'], [0.8, '#f0a066'], [1, '#ffd894']]) +
     `<radialGradient id="sc-sunwide" cx="${f(sunX)}" cy="${sunY}" r="220" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffd890" stop-opacity=".7"/><stop offset=".3" stop-color="#ffb070" stop-opacity=".25"/><stop offset="1" stop-color="#ff9060" stop-opacity="0"/></radialGradient>` +
     vgrad('sc-rockshade', [[0, '#c0a0c0'], [0.3, SHADE], [1, DEEP]]) +
     material('sc-sandstone', ['#7a3e34', '#88483a', '#965240', '#a45e46'], 0.012, 0.32, 3, 41, 1.8) +
     vgrad('sc-farhaze', [[0, '#ffb880', 0.42], [1, '#ffd090', 0.68]]) +
-    `</defs>` +
-    `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
-    `<rect width="${sw}" height="${H}" fill="url(#sc-sunwide)"/>` +
-    cloud(sw * 0.06, 24, 140) +
-    cloud(sw * 0.4, 16, 120) +
-    cloud(sw * 0.62, 34, 90) +
-    cloud(sw * 0.8, 22, 120) +
-    bloom(`<circle cx="${f(sunX)}" cy="${sunY}" r="11" fill="#fff4d0"/>`, 1) +
-    hawk +
+    `</defs>`) +
+    c.p.el('desert.sky', `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>`, { sw }) +
+    c.p.el('desert.sun', `<rect width="${sw}" height="${H}" fill="url(#sc-sunwide)"/>`, { cx: sunX, cy: sunY, r: 11, part: 'halo' }) +
+    c.p.el('desert.clouds', cloud(sw * 0.06, 24, 140) + cloud(sw * 0.4, 16, 120) + cloud(sw * 0.62, 34, 90) + cloud(sw * 0.8, 22, 120), { sw }) +
+    c.p.el('desert.sun', bloom(`<circle cx="${f(sunX)}" cy="${sunY}" r="11" fill="#fff4d0"/>`, 1), { cx: sunX, cy: sunY, r: 11, part: 'core' }) +
+    c.p.el('desert.hawk', hawk) +
     // The far rank, its shade lost in the glow.
-    paint(farRocks, { side: '#ffd0a0', lip: 'none', gullies: false }) +
-    `<path fill="url(#sc-farhaze)" d="${farRocks.map(k => k.body).join('')}"/>` +
+    c.p.el('desert.mesas-far', paint(farRocks, { side: '#ffd0a0', lip: 'none', gullies: false }) + `<path fill="url(#sc-farhaze)" d="${farRocks.map(k => k.body).join('')}"/>`) +
     // A band of glare along the horizon, shimmering.
-    `<rect x="0" y="${horizon - 6}" width="${sw}" height="8" fill="#ffe0a0" opacity=".2" filter="url(#sc-soft)"><animate attributeName="opacity" values=".12;.26;.12" dur="5s" repeatCount="indefinite"/></rect>` +
-    paint(midRocks, { side: KEY, lip: HOT, gullies: true })
+    c.p.el('desert.glare', `<rect x="0" y="${horizon - 6}" width="${sw}" height="8" fill="#ffe0a0" opacity=".2" filter="url(#sc-soft)"><animate attributeName="opacity" values=".12;.26;.12" dur="5s" repeatCount="indefinite"/></rect>`, { sw, y: horizon - 6, h: 8 }) +
+    c.p.el('desert.mesas', paint(midRocks, { side: KEY, lip: HOT, gullies: true }))
 
   // The sand, painted as light: warm, brightest toward the sun; each formation's shadow runs
   // toward us along the line from the sun through its foot, so the shadows fan out.
@@ -1145,21 +1155,29 @@ function desert(c: Ctx): Scene {
     `<g filter="url(#sc-soft)" opacity=".9"><path fill="none" stroke="${KEY}" stroke-width=".9" d="M${f(sx + 0.4)} ${ground}V${ground - 58}a3.1 3.1 0 0 1 1.5 -2.7M${f(sx - 8.6)} ${ground - 33}V${ground - 44}a2.6 2.6 0 0 1 1.5 -2.4"/></g>` +
     `<path fill="none" stroke="#3a2638" stroke-width=".35" d="M${f(sx + 2.3)} ${ground}V${ground - 58}M${f(sx + 4.6)} ${ground}V${ground - 58}"/>`
   const near =
+    c.p.defs(
     `<defs>` +
     vgrad('sc-sandlight', [[0, '#ffe2b0'], [0.3, '#e0a070'], [1, '#8a5a5a']]) +
     `<radialGradient id="sc-sunlane" cx="${f(sunX)}" cy="${horizon}" r="${f(sw * 0.6)}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff0c0" stop-opacity=".55"/><stop offset="1" stop-color="#fff0c0" stop-opacity="0"/></radialGradient>` +
     vgrad('sc-shadowfade', [[0, '#3a2a50', 0.95], [0.4, '#4a3864', 0.85], [1, '#5a4874', 0.7]]) +
     material('sc-sand', ['#9a6648', '#a46e4e', '#ae7854', '#b8825c'], 0.02, 0.4, 3, 43, 1.6) +
-    `</defs>` +
-    `<g filter="url(#sc-sand)"><rect x="0" y="${midBase - 1}" width="${sw}" height="${H - midBase + 1}" fill="url(#sc-sandlight)"/>` +
-    `<rect x="0" y="${midBase - 1}" width="${sw}" height="${H - midBase + 1}" fill="url(#sc-sunlane)"/>` +
-    `<g filter="url(#sc-soft)"><path fill="url(#sc-shadowfade)" d="${shadows}"/><path fill="${SHADE}" opacity=".8" d="${scrubShadow}"/></g>` +
-    `<path fill="none" stroke="#fff0c8" stroke-width=".45" opacity=".3" d="${ripples}"/></g>` +
-    `<path fill="#3a2436" d="${scrub}"/><path fill="none" stroke="${KEY}" stroke-width=".8" opacity=".75" filter="url(#sc-soft)" d="${scrubLit}"/>` +
-    saguaro +
+    `</defs>`) +
+    c.p.el(
+      'desert.sand',
+      `<g filter="url(#sc-sand)"><rect x="0" y="${midBase - 1}" width="${sw}" height="${H - midBase + 1}" fill="url(#sc-sandlight)"/>` +
+        `<rect x="0" y="${midBase - 1}" width="${sw}" height="${H - midBase + 1}" fill="url(#sc-sunlane)"/>` +
+        `<g filter="url(#sc-soft)"><path fill="url(#sc-shadowfade)" d="${shadows}"/><path fill="${SHADE}" opacity=".8" d="${scrubShadow}"/></g>`,
+      { sw, y: midBase - 1, part: 'open' },
+    ) +
+    c.p.el('desert.ripples', `<path fill="none" stroke="#fff0c8" stroke-width=".45" opacity=".3" d="${ripples}"/></g>`, { part: 'close' }) +
+    c.p.el('desert.scrub', `<path fill="#3a2436" d="${scrub}"/><path fill="none" stroke="${KEY}" stroke-width=".8" opacity=".75" filter="url(#sc-soft)" d="${scrubLit}"/>`) +
+    c.p.el('desert.saguaro', saguaro) +
     // Boulders in the near left corner, black, their crowns rimmed by the sun.
-    `<path fill="#2a1a28" d="M-6 ${H}V${ground + 10}c4 -8 14 -10 22 -6c4 -5 12 -4 15 2c3 1 5 4 5 ${H - ground - 6}z"/>` +
-    `<path fill="none" stroke="${KEY}" stroke-width=".8" opacity=".6" filter="url(#sc-soft)" d="M16 ${ground + 4}c4 -5 12 -4 15 2"/>`
+    c.p.el(
+      'desert.boulders',
+      `<path fill="#2a1a28" d="M-6 ${H}V${ground + 10}c4 -8 14 -10 22 -6c4 -5 12 -4 15 2c3 1 5 4 5 ${H - ground - 6}z"/>` +
+        `<path fill="none" stroke="${KEY}" stroke-width=".8" opacity=".6" filter="url(#sc-soft)" d="M16 ${ground + 4}c4 -5 12 -4 15 2"/>`,
+    )
   return { sky: '#26214a', soil: '#a86a4a', groundTop: midBase, back, near, keep: [[sunX, sunY, 16]] }
 }
 
@@ -1323,6 +1341,7 @@ function volcano(c: Ctx): Scene {
     `<ellipse cx="${f(cx)}" cy="${apexY + 1.2}" rx="${rimW - 1}" ry="1.6" fill="#ffe6a8"/>`
 
   const back =
+    c.p.defs(
     `<defs>` +
     vgrad('sc-sky', [[0, '#07050b'], [0.45, '#1a0b14'], [0.8, '#43140f'], [1, '#6a2410']]) +
     `<radialGradient id="sc-glow" cx="${f(cx)}" cy="${apexY}" r="150" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${GLOW}" stop-opacity=".55"/><stop offset=".35" stop-color="${GLOW}" stop-opacity=".16"/><stop offset="1" stop-color="${GLOW}" stop-opacity="0"/></radialGradient>` +
@@ -1336,17 +1355,17 @@ function volcano(c: Ctx): Scene {
     `<linearGradient id="sc-coneside" x1="0" x2="1"><stop offset="0" stop-color="#8a9ad0" stop-opacity=".35"/><stop offset=".4" stop-color="#8a9ad0" stop-opacity="0"/><stop offset=".6" stop-color="#140a10" stop-opacity="0"/><stop offset="1" stop-color="#140a10" stop-opacity=".7"/></linearGradient>` +
     material('sc-basalt', ['#2a2224', '#33292a', '#3d3130', '#4a3a36'], 0.22, 0.035, 4, 51, 2) +
     vgrad('sc-lava', [[0, '#fff0b0'], [0.4, '#ffb04a'], [1, '#e2461a']]) +
-    `</defs>` +
-    `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
-    stars(rand, sw, Math.round(26 * c.detail), 40, [cx - 60, 20, 140]) +
-    `<rect width="${sw}" height="${H}" fill="url(#sc-glow)"/>` +
-    ridges +
-    `<g filter="url(#sc-wide)">${puffs}</g>` +
-    cloud +
-    crater +
-    coneBody +
-    lavaSvg +
-    embers
+    `</defs>`) +
+    c.p.el('volcano.sky', `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>`, { sw }) +
+    c.p.el('volcano.stars', stars(rand, sw, Math.round(26 * c.detail), 40, [cx - 60, 20, 140])) +
+    c.p.el('volcano.glow', `<rect width="${sw}" height="${H}" fill="url(#sc-glow)"/>`, { cx, cy: apexY, r: 150 }) +
+    c.p.el('volcano.ridges', ridges, { sw }) +
+    c.p.el('volcano.puffs', `<g filter="url(#sc-wide)">${puffs}</g>`, { cx, cy: apexY }) +
+    c.p.el('volcano.ash', cloud, { cx, cy: apexY }) +
+    c.p.el('volcano.crater', crater, { cx, cy: apexY, r: rimW }) +
+    c.p.el('volcano.cone', coneBody, { cx, cy: apexY, d: cone }) +
+    c.p.el('volcano.lava', lavaSvg, { d: channels.map(curve).join('') }) +
+    c.p.el('volcano.embers', embers)
 
   // The plain: a black crust over light, lit red toward the mountain and the stream, crazed
   // with cracks that glow through. The cracks are a net: rows that tighten with distance,
@@ -1395,18 +1414,26 @@ function volcano(c: Ctx): Scene {
     `<path fill="#0c0608" d="M${f(x - w)} ${H + 2}C${f(x - w)} ${f(H - h)} ${f(x - w * 0.2)} ${f(H - h * 1.2)} ${f(x + w * 0.3)} ${f(H - h * 0.9)}S${f(x + w)} ${f(H - h * 0.4)} ${f(x + w)} ${H + 2}z"/>` +
     `<path fill="none" stroke="#ff7a3a" stroke-width=".9" opacity=".7" filter="url(#sc-soft)" d="${lit > 0 ? `M${f(x + w * 0.3)} ${f(H - h * 0.9)}S${f(x + w)} ${f(H - h * 0.4)} ${f(x + w)} ${H}` : `M${f(x - w)} ${H}C${f(x - w)} ${f(H - h)} ${f(x - w * 0.2)} ${f(H - h * 1.2)} ${f(x + w * 0.3)} ${f(H - h * 0.9)}`}"/>`
   const near =
+    c.p.defs(
     `<defs>` +
     vgrad('sc-plainlight', [[0, '#d07a5a'], [0.25, '#7a4a48'], [1, '#2a1e26']]) +
     `<radialGradient id="sc-crackglow" cx="${f(cx + 60)}" cy="${base + 10}" r="${f(sw * 0.7)}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffb060"/><stop offset=".25" stop-color="#ff6a2a" stop-opacity=".85"/><stop offset=".6" stop-color="#c03a1a" stop-opacity=".25"/><stop offset="1" stop-color="#a02a14" stop-opacity=".06"/></radialGradient>` +
     material('sc-crust', ['#1a1214', '#221819', '#2a1e1e', '#352624'], 0.06, 0.3, 4, 53, 2.2) +
-    `</defs>` +
-    `<g filter="url(#sc-crust)"><rect x="0" y="${base - 1}" width="${sw}" height="${H - base + 1}" fill="url(#sc-plainlight)"/>` +
-    `<g filter="url(#sc-wide)"><path d="${curve(streamPts)}" fill="none" stroke="#ffa070" stroke-width="22" opacity=".8"/></g></g>` +
-    glow(crackSvg) +
-    `<g filter="url(#sc-wide)" style="mix-blend-mode:screen" opacity=".6"><path d="${curve(streamPts)}" fill="none" stroke="${GLOW}" stroke-width="14"/></g>` +
-    bloom(`<path fill="url(#sc-lava)" d="${ribbon(streamPts, 2, 9)}"/>` + `<path d="${curve(streamPts)}" fill="none" stroke="#7a1e08" stroke-width="1.6" stroke-dasharray="2 9 1 12" opacity=".3" filter="url(#sc-soft)"><animate attributeName="stroke-dashoffset" values="0;-48" dur="10s" repeatCount="indefinite"/></path>`, 1) +
-    boulder(sw * 0.02, 22, 10, 1) +
-    boulder(sw - 6, 34, 16, -1)
+    `</defs>`) +
+    c.p.el(
+      'volcano.plain',
+      `<g filter="url(#sc-crust)"><rect x="0" y="${base - 1}" width="${sw}" height="${H - base + 1}" fill="url(#sc-plainlight)"/>` +
+        `<g filter="url(#sc-wide)"><path d="${curve(streamPts)}" fill="none" stroke="#ffa070" stroke-width="22" opacity=".8"/></g></g>`,
+      { sw, y: base - 1, d: curve(streamPts) },
+    ) +
+    c.p.el('volcano.cracks', glow(crackSvg)) +
+    c.p.el(
+      'volcano.stream',
+      `<g filter="url(#sc-wide)" style="mix-blend-mode:screen" opacity=".6"><path d="${curve(streamPts)}" fill="none" stroke="${GLOW}" stroke-width="14"/></g>` +
+        bloom(`<path fill="url(#sc-lava)" d="${ribbon(streamPts, 2, 9)}"/>` + `<path d="${curve(streamPts)}" fill="none" stroke="#7a1e08" stroke-width="1.6" stroke-dasharray="2 9 1 12" opacity=".3" filter="url(#sc-soft)"><animate attributeName="stroke-dashoffset" values="0;-48" dur="10s" repeatCount="indefinite"/></path>`, 1),
+      { d: curve(streamPts), ribbon: ribbon(streamPts, 2, 9) },
+    ) +
+    c.p.el('volcano.boulders', boulder(sw * 0.02, 22, 10, 1) + boulder(sw - 6, 34, 16, -1))
   return { sky: '#07050b', soil: '#1e1210', groundTop: base, back, near, keep: [[cx, apexY, 18]] }
 }
 
@@ -1577,6 +1604,7 @@ function lab(c: Ctx): Scene {
   const lampRamp = (id: string, dark: string, lit: string, reach: number) =>
     `<linearGradient id="${id}" x1="0" x2="${sw}" gradientUnits="userSpaceOnUse"><stop offset="${at(sx - reach)}" stop-color="${dark}"/><stop offset="${at(sx)}" stop-color="${lit}"/><stop offset="${at(sx + reach)}" stop-color="${dark}"/></linearGradient>`
   const back =
+    c.p.defs(
     `<defs>` +
     `<radialGradient id="sc-lampwash"><stop offset="0" stop-color="#fff0d0"/><stop offset=".15" stop-color="#ffd8a0"/><stop offset=".45" stop-color="#b0907a" stop-opacity=".6"/><stop offset="1" stop-color="#b0907a" stop-opacity="0"/></radialGradient>` +
     `<radialGradient id="sc-screenwash"><stop offset="0" stop-color="#8ae0d8" stop-opacity=".55"/><stop offset="1" stop-color="#8ae0d8" stop-opacity="0"/></radialGradient>` +
@@ -1588,34 +1616,32 @@ function lab(c: Ctx): Scene {
     `<linearGradient id="sc-boardlight" x2="1"><stop offset="0" stop-color="#9a9a98"/><stop offset="1" stop-color="#cfc8b8"/></linearGradient>` +
     vgrad('sc-night', [[0, '#0a1020'], [1, '#283050']]) +
     vgrad('sc-cone', [[0, warm, 0.4], [1, warm, 0.05]]) +
-    `</defs>` +
-    `<g id="sc-room">` +
-    wallSvg +
-    windowSvg +
-    board +
-    benchSvg +
-    books +
-    lamp +
-    mug +
-    monitor(sw * 0.31, 28) +
-    monitor(sw * 0.31 + 32, 24) +
-    rack +
-    `</g>` +
-    `<ellipse cx="${f(sx)}" cy="${bench + 0.3}" rx="22" ry="1.6" fill="#fff0c8" opacity=".5" filter="url(#sc-soft)"/>` +
-    cone +
-    motes
+    `</defs>`) +
+    c.p.el('lab.wall', `<g id="sc-room">` + wallSvg, { sw, y: bench, cx: sx, part: 'open' }) +
+    c.p.el('lab.window', windowSvg, { cx: wx, cy: wy, sw: ww, h: wh }) +
+    c.p.el('lab.board', board, { cx: bx, cy: 20, sw: bw }) +
+    c.p.el('lab.bench', benchSvg, { sw, y: bench }) +
+    c.p.el('lab.books', books) +
+    c.p.el('lab.lamp', lamp, { cx: sx, cy: sy }) +
+    c.p.el('lab.mug', mug) +
+    c.p.el('lab.monitors', monitor(sw * 0.31, 28) + monitor(sw * 0.31 + 32, 24)) +
+    c.p.el('lab.rack', rack + `</g>`, { part: 'close' }) +
+    c.p.el('lab.pool', `<ellipse cx="${f(sx)}" cy="${bench + 0.3}" rx="22" ry="1.6" fill="#fff0c8" opacity=".5" filter="url(#sc-soft)"/>`, { cx: sx, cy: bench }) +
+    c.p.el('lab.cone', cone, { cx: sx, cy: sy, y: bench }) +
+    c.p.el('lab.motes', motes)
   // The floor: polished concrete, the room mirrored dimly in it.
   const near =
+    c.p.defs(
     `<defs>` +
     vgrad('sc-floor', [[0, '#5a5c64'], [1, '#2a2c32']]) +
     material('sc-epoxy', ['#2a2c30', '#2e3034', '#32343a', '#36383e'], 0.03, 0.4, 3, 73, 1.4) +
     `<filter id="sc-polish" x="0" y="0" width="1" height="1"><feGaussianBlur stdDeviation=".6 1.6"/></filter>` +
     vgrad('sc-fade', [[0, 'white', 0.7], [1, 'white', 0.05]]) +
     `<mask id="sc-floormask" maskUnits="userSpaceOnUse" x="0" y="${floorY}" width="${sw}" height="${H - floorY}"><rect x="0" y="${floorY}" width="${sw}" height="${H - floorY}" fill="url(#sc-fade)"/></mask>` +
-    `</defs>` +
-    `<g filter="url(#sc-epoxy)"><rect x="0" y="${floorY}" width="${sw}" height="${H - floorY}" fill="url(#sc-floor)"/></g>` +
-    `<g mask="url(#sc-floormask)"><g filter="url(#sc-polish)"><use href="#sc-room" transform="matrix(1 0 0 -1 0 ${2 * floorY})"/></g></g>` +
-    `<ellipse cx="${f(sx)}" cy="${floorY + 6}" rx="50" ry="5" fill="${warm}" opacity=".12" filter="url(#sc-soft)"/>`
+    `</defs>`) +
+    c.p.el('lab.floor', `<g filter="url(#sc-epoxy)"><rect x="0" y="${floorY}" width="${sw}" height="${H - floorY}" fill="url(#sc-floor)"/></g>`, { sw, y: floorY, h: H - floorY }) +
+    c.p.el('lab.reflection', `<g mask="url(#sc-floormask)"><g filter="url(#sc-polish)"><use href="#sc-room" transform="matrix(1 0 0 -1 0 ${2 * floorY})"/></g></g>`, { sw, y: floorY }) +
+    c.p.el('lab.pool', `<ellipse cx="${f(sx)}" cy="${floorY + 6}" rx="50" ry="5" fill="${warm}" opacity=".12" filter="url(#sc-soft)"/>`, { cx: sx, cy: floorY + 6 })
   return { sky: '#1a2028', soil: '#1a1e24', groundTop: floorY, back, near, keep: [[wx + ww / 2, wy + wh / 2, 22], [bx + bw / 2, 39, bw / 2], [sx, sy, 12]] }
 }
 
@@ -1692,13 +1718,18 @@ function night(c: Ctx): Scene {
   const vx = sw * 0.46
 
   // The sky: deep blue to a paler band at the horizon, stars, the moon with its halo and a few lit wisps.
-  const sky =
-    `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
-    stars(rand, sw, Math.round(90 * c.detail), 64, [moonX, moonY, 28]) +
-    `<circle cx="${f(moonX)}" cy="${moonY}" r="70" fill="url(#sc-moon)"/>` +
-    `<circle cx="${f(moonX)}" cy="${moonY}" r="23" fill="none" stroke="#c8cce8" stroke-opacity=".1" stroke-width="3" filter="url(#sc-soft)"/>` +
-    bloom(orb(moonX, moonY, 9.5, '#f3ecd4', 'sc-moonball'), 0.8) +
-    `<g filter="url(#sc-soft)"><path fill="#3a4676" d="M${f(moonX - 90)} ${moonY + 10}q40 -3 80 -1.5q30 -2 50 1.5q-60 2.4 -130 0z"/><path fill="#8a94c8" opacity=".6" d="M${f(moonX - 60)} ${moonY + 10.6}q40 -1.4 70 0q-35 1 -70 0z"/></g>`
+  const nightStars = stars(rand, sw, Math.round(90 * c.detail), 64, [moonX, moonY, 28])
+  const sky = () =>
+    c.p.el('night.sky', `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>`, { sw }) +
+    c.p.el('night.stars', nightStars) +
+    c.p.el(
+      'night.moon',
+      `<circle cx="${f(moonX)}" cy="${moonY}" r="70" fill="url(#sc-moon)"/>` +
+        `<circle cx="${f(moonX)}" cy="${moonY}" r="23" fill="none" stroke="#c8cce8" stroke-opacity=".1" stroke-width="3" filter="url(#sc-soft)"/>` +
+        bloom(orb(moonX, moonY, 9.5, '#f3ecd4', 'sc-moonball'), 0.8),
+      { cx: moonX, cy: moonY, r: 9.5 },
+    ) +
+    c.p.el('night.clouds', `<g filter="url(#sc-soft)"><path fill="#3a4676" d="M${f(moonX - 90)} ${moonY + 10}q40 -3 80 -1.5q30 -2 50 1.5q-60 2.4 -130 0z"/><path fill="#8a94c8" opacity=".6" d="M${f(moonX - 60)} ${moonY + 10.6}q40 -1.4 70 0q-35 1 -70 0z"/></g>`, { cx: moonX - 30, cy: moonY + 10 })
 
   // The far hills: one band, hazed toward the sky, its crest a touch lighter.
   const farHills =
@@ -1784,6 +1815,7 @@ function night(c: Ctx): Scene {
   }).join('')
 
   const back =
+    c.p.defs(
     `<defs>` +
     vgrad('sc-sky', [[0, top], [0.55, '#1a2656'], [0.78, low], [1, '#5a6aa0']]) +
     rgrad('sc-moon', '#f4ecd0', 0.42) +
@@ -1792,18 +1824,18 @@ function night(c: Ctx): Scene {
     `<linearGradient id="sc-crest"><stop offset="0" stop-color="#8a96d0" stop-opacity=".15"/><stop offset=".75" stop-color="#c8d4ff" stop-opacity=".7"/><stop offset="1" stop-color="#c8d4ff" stop-opacity=".9"/></linearGradient>` +
     vgrad('sc-hilllight', [[0, '#d0daff'], [0.06, '#a0aad4'], [0.3, '#6e78a2'], [1, '#3a4266']]) +
     material('sc-nightgrass', ['#18223a', '#1d2942', '#232f4a', '#2a3854'], 0.07, 0.18, 4, 31, 2) +
-    `</defs>` +
-    sky +
-    `<path fill="#3a4880" opacity=".7" d="${ridge(sw, 0, x => -(far(x) - 6 - farH(x * 1.7) * 0.4))}" filter="url(#sc-dof)"/>` +
-    farHills +
+    `</defs>`) +
+    sky() +
+    c.p.el('night.hills-far', `<path fill="#3a4880" opacity=".7" d="${ridge(sw, 0, x => -(far(x) - 6 - farH(x * 1.7) * 0.4))}" filter="url(#sc-dof)"/>` + farHills, { sw }) +
     // Mist lying in the valley between the far hills and the village's hill.
-    `<g filter="url(#sc-haze)"><rect x="${-sw * 0.1}" y="66" width="${sw * 1.2}" height="20" fill="url(#sc-lowmist)"><animateTransform attributeName="transform" type="translate" values="0 0;${f(sw * 0.03)} 0;0 0" dur="40s" repeatCount="indefinite"/></rect></g>` +
-    `<g filter="url(#sc-nightgrass)">${hillLight}</g>` +
+    c.p.el('night.mist', `<g filter="url(#sc-haze)"><rect x="${-sw * 0.1}" y="66" width="${sw * 1.2}" height="20" fill="url(#sc-lowmist)"><animateTransform attributeName="transform" type="translate" values="0 0;${f(sw * 0.03)} 0;0 0" dur="40s" repeatCount="indefinite"/></rect></g>`, { sw, y: 66, h: 20 }) +
+    c.p.el('night.hill', `<g filter="url(#sc-nightgrass)">${hillLight}</g>`, { sw }) +
     // The crest catches the moon: a fine line of light along it, strongest toward the moon.
-    `<g filter="url(#sc-soft)" style="mix-blend-mode:screen"><path fill="none" stroke="url(#sc-crest)" stroke-width="1.6" d="${crestLine(sw, hill)}"/></g>` +
-    villageTrees +
-    cottages
+    c.p.el('night.crest', `<g filter="url(#sc-soft)" style="mix-blend-mode:screen"><path fill="none" stroke="url(#sc-crest)" stroke-width="1.6" d="${crestLine(sw, hill)}"/></g>`, { d: crestLine(sw, hill) }) +
+    c.p.el('night.trees', villageTrees) +
+    c.p.el('night.cottages', cottages)
   const near =
+    c.p.defs(
     `<defs>` +
     vgrad('sc-lowmist', [[0, '#9aa8e0', 0], [0.6, '#9aa8e0', 0.35], [1, '#9aa8e0', 0]]) +
     vgrad('sc-meadowlight', [[0, '#5e6890'], [0.3, '#6a76a0'], [1, '#30384f']]) +
@@ -1813,12 +1845,12 @@ function night(c: Ctx): Scene {
     material('sc-oakbark', ['#2a1a12', '#3a2418', '#4a2e1e', '#5a3a26'], 0.7, 0.05, 3, 37) +
     material('sc-oakleaves', ['#0e1a1e', '#132226', '#192a2e', '#203436'], 0.8, 0.8, 2, 39) +
     `<filter id="sc-blur3" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>` +
-    `</defs>` +
-    `<g filter="url(#sc-meadow)">${meadowLight}</g>` +
-    `<g filter="url(#sc-nightsoil)"><path fill="url(#sc-pathnight)" d="${pathD}" filter="url(#sc-soft)"/></g>` +
-    `<path fill="#0c1222" d="${blades}"/><path fill="${KEY}" opacity=".22" d="${tips}"/>` +
-    oak +
-    flies
+    `</defs>`) +
+    c.p.el('night.meadow', `<g filter="url(#sc-meadow)">${meadowLight}</g>`, { sw }) +
+    c.p.el('night.path', `<g filter="url(#sc-nightsoil)"><path fill="url(#sc-pathnight)" d="${pathD}" filter="url(#sc-soft)"/></g>`, { d: pathD }) +
+    c.p.el('night.grass', `<path fill="#0c1222" d="${blades}"/><path fill="${KEY}" opacity=".22" d="${tips}"/>`) +
+    c.p.el('night.oak', oak) +
+    c.p.el('night.fireflies', flies)
   return { sky: top, soil: '#141c30', groundTop: H, back, near, keep: [[moonX, moonY, 14]] }
 }
 
@@ -1829,9 +1861,9 @@ const SCENES: Record<string, (c: Ctx) => Scene> = { forest, space, city, desert,
  * `lean` thins the scene's fine detail (stars, motes, rain) for a scene that
  * would not otherwise fit the Svg element.
  */
-export function richBackdrop(scene: FablesScene, rand: Rand, sw: number, ground: number, _w: number, lean = false, soft = false): Stage {
+export function richBackdrop(scene: FablesScene, rand: Rand, sw: number, ground: number, _w: number, lean = false, soft = false, p: Painter = LIT): Stage {
   const make = SCENES[scene.backdrop] ?? night
-  const s = make({ rand, sw, ground, detail: lean ? 0.4 : 1 })
+  const s = make({ rand, sw, ground, detail: lean ? 0.4 : 1, p })
   const floor = s.floor ?? ground
   const groundTop = s.groundTop ?? ground - 6
   return {
@@ -1851,11 +1883,11 @@ export function richBackdrop(scene: FablesScene, rand: Rand, sw: number, ground:
       clip(soft ? `<g filter="url(#sc-calm)">${s.back}</g>` : s.back),
     near: clip(soft ? `<g filter="url(#sc-calm)">${s.near}</g>` : s.near),
     keep: (s.keep ?? []).map(([x, y, r]) => ({ x: x - r, y: y - r, w: r * 2, h: r * 2 })),
-    lens: clip(
+    lens: p.el('lens', clip(
       `<defs><filter id="sc-grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="11"/><feColorMatrix type="saturate" values="0"/></filter>` +
         `<radialGradient id="sc-vignette" cx=".5" cy=".46" r=".72"><stop offset=".5" stop-color="black" stop-opacity="0"/><stop offset="1" stop-color="black" stop-opacity=".42"/></radialGradient></defs>` +
         `<rect width="${sw}" height="${H}" filter="url(#sc-grain)" opacity=".1" style="mix-blend-mode:overlay"/>` +
         `<rect width="${sw}" height="${H}" fill="url(#sc-vignette)"/>`,
-    ),
+    ), { sw }),
   }
 }
