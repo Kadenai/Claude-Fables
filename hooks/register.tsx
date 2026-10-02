@@ -5,12 +5,17 @@ import type { FablesScene } from '../types'
 
 import { type Activity, pushActivity, summarizeSpeech, summarizeTool } from './activity'
 import { backoffMs, buildPrompt, remember, sceneFromReply, type StoryBeat, SYSTEM } from './narrator'
+import { DEFAULT_LOOK, LOOK_NAMES, LOOKS, lookFor } from './looks'
 import { H, sceneToSvg, W } from './svg'
 
 const scene = atom({ plugin: 'fables', key: 'scene' } as const, null)
 const enabled = atom({ plugin: 'fables', key: 'enabled' } as const, true)
+const look = atom({ plugin: 'fables', key: 'look' } as const, DEFAULT_LOOK)
 
 const STORE_ENABLED = 'enabled'
+const STORE_STYLE = 'style'
+/** The style setting that draws each turn in the next look. */
+const SHUFFLE = 'shuffle'
 /** How long the closing scene of a turn stays up. */
 const LINGER_MS = 30000
 /** This plugin's own tools, if it ever registers any, are not part of the story. */
@@ -39,6 +44,10 @@ type Ending = 'answer' | 'aborted' | 'error' | 'refusal'
 type Narrator = {
   model: string
   isOn: boolean
+  /** A look's name, or SHUFFLE. */
+  style: string
+  /** The look this turn is drawn in. */
+  look: string
   ask: string
   log: Activity[]
   story: StoryBeat[]
@@ -62,12 +71,13 @@ async function narrate($: EngineInterface, n: Narrator) {
   n.isDirty = false
   const forTurn = n.turn
   const closing = n.ending
+  const drawnIn = n.look
   n.ending = undefined
   try {
     const reply = await $.model.complete({
       model: n.model,
       system: SYSTEM,
-      prompt: buildPrompt({ ask: n.ask, log: n.log, story: n.story, ending: closing }),
+      prompt: buildPrompt({ ask: n.ask, log: n.log, story: n.story, ending: closing, look: lookFor(drawnIn) }),
       maxTokens: 2000,
       effort: 'low',
       timeoutMs: 30000,
@@ -81,6 +91,9 @@ async function narrate($: EngineInterface, n: Narrator) {
     // A reply that lands after a newer turn began belongs to a story nobody is watching.
     if (forTurn !== n.turn) return
     n.story = remember(n.story, drawn)
+    // The look goes up with the scene it was written for, so a scene still on
+    // screen when a shuffled turn starts keeps its own look.
+    await update($, look, () => drawnIn)
     await update($, scene, () => drawn)
     if (closing) {
       n.linger?.cancel()
@@ -111,10 +124,31 @@ async function setOn($: EngineInterface, n: Narrator, value: boolean) {
   if (!value) await update($, scene, () => null)
 }
 
+/** The look a turn is drawn in: the style itself, or under shuffle a new one each turn. */
+function lookOfTurn(style: string, turn: number): string {
+  if (style !== SHUFFLE) return lookFor(style).name
+  return LOOK_NAMES[turn % LOOK_NAMES.length] ?? DEFAULT_LOOK
+}
+
+async function setStyle($: EngineInterface, n: Narrator, style: string) {
+  n.style = style
+  n.look = lookOfTurn(style, n.turn)
+  await $.store.set(STORE_STYLE, style)
+  await update($, look, () => n.look)
+}
+
+function styleList(n: Narrator): string {
+  const rows = LOOK_NAMES.map(name => `${name === n.style ? '*' : ' '} ${name.padEnd(11)} ${LOOKS[name]?.label ?? ''}`)
+  rows.push(`${n.style === SHUFFLE ? '*' : ' '} ${SHUFFLE.padEnd(11)} a different look each turn`)
+  return `Claude Fables styles (\`/fables style <name>\`):\n${rows.join('\n')}`
+}
+
 export const register: Register = (on, options) => {
   const n: Narrator = {
     model: typeof options.model === 'string' && options.model ? options.model : 'sonnet',
     isOn: true,
+    style: DEFAULT_LOOK,
+    look: DEFAULT_LOOK,
     ask: '',
     log: [],
     story: [],
@@ -131,10 +165,14 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     n.isOn = (await $.store.get(STORE_ENABLED)) !== false
     await update($, enabled, () => n.isOn)
+    const stored = await $.store.get(STORE_STYLE)
+    n.style = typeof stored === 'string' && (stored === SHUFFLE || stored in LOOKS) ? stored : DEFAULT_LOOK
+    n.look = lookOfTurn(n.style, n.turn)
+    await update($, look, () => n.look)
     await $.command.register({
       name: 'fables',
-      description: 'Claude Fables: turn the cartoons above the prompt on or off',
-      argumentHint: '[on|off]',
+      description: 'Claude Fables: turn the cartoons above the prompt on or off, or pick their style',
+      argumentHint: '[on|off|style <name>]',
     })
     $.clock.every(1000, () => void tick($, n))
     return next(e)
@@ -142,6 +180,18 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'fables' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
+    const [word, name] = arg.split(/\s+/)
+    if (word === 'style' || word === 'styles') {
+      if (!name) return { text: styleList(n) }
+      if (name !== SHUFFLE && !(name in LOOKS)) return { text: `fables: no style "${name}". ${styleList(n)}` }
+      await setStyle($, n, name)
+      return {
+        text:
+          name === SHUFFLE
+            ? 'Claude Fables will draw each turn in a different style.'
+            : `Claude Fables draws in ${LOOKS[name]?.label ?? name} now.`,
+      }
+    }
     const value = arg === 'on' ? true : arg === 'off' ? false : !n.isOn
     await setOn($, n, value)
     return {
@@ -153,6 +203,7 @@ export const register: Register = (on, options) => {
 
   on('prompt.submit', async ($, e, next) => {
     n.turn++
+    n.look = lookOfTurn(n.style, n.turn)
     n.ask = e.text.replace(/\s+/g, ' ').trim().slice(0, 300)
     n.log = []
     n.ending = undefined
@@ -196,13 +247,14 @@ export const register: Register = (on, options) => {
     if (e.surface !== 'desktop' || e.props.hasSurvey) return next(e)
     const current = await read($, scene)
     if (!current || !(await read($, enabled))) return next(e)
+    const drawnIn = await read($, look)
     const { Svg } = $.ui.resolve(e)
     // The interactive frame does not size itself from the markup (left alone it
     // is a 300x150 box), so give it the band's box; a new width draws anew.
     const { width, height } = bandBox(e.props.bodyColumns)
     return (
       <Svg
-        source={sceneToSvg(current, { width, height })}
+        source={sceneToSvg(current, { width, height, look: drawnIn })}
         alt={current.caption}
         width={width}
         height={height}

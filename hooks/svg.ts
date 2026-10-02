@@ -1,5 +1,6 @@
 import type { FablesProp, FablesScene } from '../types'
 
+import { type Cell, type Layer, type Look, lightness, lookFor, remapColors } from './looks'
 import { HERO_FRAMES, PALETTE, SPRITES, type SpriteName } from './sprites'
 
 /**
@@ -48,12 +49,33 @@ export function rng(seedText: string): () => number {
 
 const n = (v: number) => (Math.round(v * 100) / 100).toString()
 
+/** Denser glyphs for darker colors, as a line printer overstrikes. */
+const GLYPHS = '@#%+:'
+
 /**
- * Pixel rows to compact SVG: one <path> per color, each horizontal run of a
- * color one `M x y h w v 1 h -w z` segment, in art-pixel units.
+ * Pixel rows to compact SVG, in art-pixel units, drawn as `cell` says. Solid
+ * cells are one <path> per color, each horizontal run of a color one
+ * `M x y h w v 1 h -w z` segment; the other cells draw each pixel apart.
  */
-export function pixelPaths(rows: readonly string[], colorOf: (key: string) => string | undefined): string {
+export function pixelPaths(rows: readonly string[], colorOf: (key: string) => string | undefined, cell: Cell = 'solid'): string {
+  if (cell === 'glyph') {
+    return rows
+      .map((row, y) => {
+        const line = [...row].map(k => {
+          const color = k === '.' ? undefined : colorOf(k)
+          return color ? (GLYPHS[Math.min(GLYPHS.length - 1, Math.floor(lightness(color) * GLYPHS.length))] ?? '#') : ' '
+        })
+        if (!line.some(c => c !== ' ')) return ''
+        return `<text x="0" y="${y + 0.85}" font-family="${FONT}" font-size="1.15" font-weight="700" textLength="${row.length}" lengthAdjust="spacingAndGlyphs" xml:space="preserve" fill="#2a2a2a">${line.join('')}</text>`
+      })
+      .join('')
+  }
   const byColor = new Map<string, string[]>()
+  const add = (color: string, d: string) => {
+    const list = byColor.get(color) ?? []
+    list.push(d)
+    byColor.set(color, list)
+  }
   rows.forEach((row, y) => {
     let x = 0
     while (x < row.length) {
@@ -62,14 +84,27 @@ export function pixelPaths(rows: readonly string[], colorOf: (key: string) => st
       let end = x + 1
       while (end < row.length && row[end] === key) end++
       if (color) {
-        const list = byColor.get(color) ?? []
-        list.push(`M${x} ${y}h${end - x}v1h-${end - x}z`)
-        byColor.set(color, list)
+        if (cell === 'solid') add(color, `M${x} ${y}h${end - x}v1h-${end - x}z`)
+        else {
+          for (let px = x; px < end; px++) {
+            if (cell === 'tile') add(color, `M${px + 0.12} ${y + 0.12}h.76v.76h-.76z`)
+            else if (cell === 'stitch') add(color, `M${px + 0.18} ${y + 0.18}l.64 .64m-.64 0l.64-.64`)
+            else add(color, `M${px} ${y}h1v1h-1z`)
+          }
+        }
       }
       x = end
     }
   })
-  return [...byColor].map(([color, d]) => `<path fill="${color}" d="${d.join('')}"/>`).join('')
+  const paint = (color: string) =>
+    cell === 'stitch'
+      ? `fill="none" stroke="${color}" stroke-width=".3" stroke-linecap="round" shape-rendering="geometricPrecision"`
+      : cell === 'lead'
+        ? `fill="${color}" stroke="#1a1414" stroke-width=".2"`
+        : cell === 'draft'
+          ? `fill="${color}" fill-opacity=".16" stroke="${color}" stroke-width=".1"`
+          : `fill="${color}"`
+  return [...byColor].map(([color, d]) => `<path ${paint(color)} d="${d.join('')}"/>`).join('')
 }
 
 const widthOf = (rows: readonly string[]) => Math.max(0, ...rows.map(r => r.length))
@@ -291,7 +326,7 @@ function label(text: string, cx: number, y: number, color: string, sw: number): 
   )
 }
 
-function propSvg(prop: FablesProp, floor: number, index: number, sw: number): string {
+function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cell: Cell): string {
   const art = artFor(prop)
   const w = widthOf(art.rows) * U
   const h = art.rows.length * U
@@ -299,7 +334,7 @@ function propSvg(prop: FablesProp, floor: number, index: number, sw: number): st
   const y = prop.y === 'ground' ? floor - h : prop.y === 'air' ? 58 - h / 2 : 8
   const cx = x + w / 2
   const cy = y + h / 2
-  const body = `<g transform="translate(${x} ${n(y)}) scale(${U})">${pixelPaths(art.rows, art.colorOf)}</g>`
+  const body = `<g transform="translate(${x} ${n(y)}) scale(${U})">${pixelPaths(art.rows, art.colorOf, cell)}</g>`
   const slow = n(2 + (index % 3) * 0.7)
   let motion = ''
   switch (prop.motion) {
@@ -337,7 +372,7 @@ const heroColor = (k: string) => PALETTE[k]
 
 type HeroPlan = { svg: string; endX: number; endY: number }
 
-function hero(scene: FablesScene, floor: number, sw: number): HeroPlan {
+function hero(scene: FablesScene, floor: number, sw: number, cell: Cell): HeroPlan {
   const { action } = scene.hero
   const isMoving = action === 'walk' || action === 'run' || action === 'swim' || action === 'fly'
   const span = sw - HERO_W
@@ -351,7 +386,7 @@ function hero(scene: FablesScene, floor: number, sw: number): HeroPlan {
   const flip = toX < fromX ? ` translate(${HERO_W} 0) scale(-1 1)` : ''
 
   const legs = (frame: number, values: string) =>
-    `<g opacity="${frame === 0 ? 1 : 0}" transform="scale(${U})">${pixelPaths(HERO_FRAMES[frame] ?? [], heroColor)}` +
+    `<g opacity="${frame === 0 ? 1 : 0}" transform="scale(${U})">${pixelPaths(HERO_FRAMES[frame] ?? [], heroColor, cell)}` +
     (steps
       ? `<animate attributeName="opacity" values="${values}" dur="${step * 2}s" calcMode="discrete" repeatCount="${steps / 2}"/>`
       : '') +
@@ -434,10 +469,10 @@ export function wrap(text: string, width: number): string[] {
   return lines
 }
 
-function caption(text: string, heroX: number, heroY: number, idPrefix: string, sw: number): string {
+function caption(text: string, heroX: number, heroY: number, idPrefix: string, sw: number, look: Look): string {
+  const { fill, stroke, ink, radius } = look.caption
   const lines = wrap(text, 34).slice(0, 3)
-  const charW = 5.7
-  const w = Math.ceil(Math.max(...lines.map(l => l.length)) * charW + 14)
+  const w = Math.ceil(Math.max(...lines.map(l => l.length)) * look.charW + 14)
   const h = lines.length * 11 + 8
   const rightX = heroX + HERO_W + 8
   const x = rightX + w <= sw - 2 ? rightX : Math.max(2, heroX - w - 8)
@@ -453,20 +488,21 @@ function caption(text: string, heroX: number, heroY: number, idPrefix: string, s
       delay += dur
       return (
         reveal +
-        `<text clip-path="url(#${id})" x="${n(x + 7)}" y="${n(y + 12 + i * 11)}" font-family="${FONT}" font-size="9.5" fill="${PAPER}">${escapeXml(line)}</text>`
+        `<text clip-path="url(#${id})" x="${n(x + 7)}" y="${n(y + 12 + i * 11)}" font-family="${look.font}" font-size="9.5" fill="${ink}">${escapeXml(line)}</text>`
       )
     })
     .join('')
   return (
-    `<g><rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="2" fill="#2b1c1a" stroke="#cfc8b8" stroke-width="1"/>${rows}` +
+    `<g><rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>${rows}` +
     `<animate attributeName="opacity" values="0;1" dur=".2s" fill="freeze"/></g>`
   )
 }
 
-function title(text: string, color: string): string {
-  const w = text.length * 5.4 + 16
+function title(text: string, color: string, look: Look): string {
+  const w = text.length * (look.charW - 0.3) + 16
+  const inset = look.inset ?? 0
   return (
-    `<g font-family="${FONT}" font-size="9" fill="${color}">` +
+    `<g font-family="${look.font}" font-size="9" fill="${color}" transform="translate(${inset} ${inset})">` +
     `<path d="M6 12V6h6M${n(6 + w)} 12V6h-6" fill="none" stroke="${color}" stroke-width="1"/>` +
     `<text x="14" y="10">${escapeXml(text)}</text></g>`
   )
@@ -484,35 +520,44 @@ export function stageWidth(width: number, height: number): number {
  * Compiles a validated scene into one self-animating SVG document (SMIL), so
  * the desktop plays it with no redraws. The stage takes the box's shape
  * (`width` by `height` CSS pixels; absent, the default stage at its own size).
+ * `look` names the graphic style (looks.ts); absent, plain pixel art.
  * Stays under the Svg element's limit by shedding particles, then props, if a
  * scene is too rich.
  */
-export function sceneToSvg(scene: FablesScene, options: { width?: number; height?: number } = {}): string {
+export function sceneToSvg(scene: FablesScene, options: { width?: number; height?: number; look?: string } = {}): string {
   const sw = options.width && options.height ? stageWidth(options.width, options.height) : W
   const width = options.width ?? sw
   const height = options.height ?? Math.round((width * H) / sw)
+  const look = lookFor(options.look)
+  const paint = (layer: Layer, svg: string) => (look.color ? remapColors(svg, hex => look.color?.(hex, layer) ?? hex) : svg)
+  const tint = (layer: Layer, hex: string) => look.color?.(hex, layer) ?? hex
   const rand = rng(`${scene.backdrop}|${scene.caption}`)
   const stage = backdrop(scene, rand, sw)
   const dust = particles(scene, rand, sw)
-  const props = scene.props.map((p, i) => propSvg(p, stage.floor, i, sw))
-  const plan = hero(scene, stage.floor, sw)
+  const props = scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell))
+  const plan = hero(scene, stage.floor, sw, look.cell)
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
+  const sky = tint('sky', stage.sky)
+  const ground = tint('ground', stage.ground)
+  const fore = (withDust: boolean, propCount: number) =>
+    paint('fore', (withDust ? dust : '') + props.slice(0, propCount).join('') + plan.svg)
 
   // Sky and ground run far past the stage, so a box the stage could not match
   // (past MIN_W or MAX_W) shows more sky and ground instead of the frame's page.
   const build = (withDust: boolean, propCount: number) =>
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${sw} ${H}" width="${width}" height="${height}" ` +
-    `shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" style="display:block;background:${stage.ground}">` +
-    `<rect x="${-sw * 4}" y="${-H * 4}" width="${sw * 9}" height="${H * 4 + GROUND_Y}" fill="${stage.sky}"/>` +
-    stage.back +
-    `<rect x="${-sw * 4}" y="${GROUND_Y}" width="${sw * 9}" height="${H * 4}" fill="${stage.ground}"/>` +
-    (withDust ? dust : '') +
-    props.slice(0, propCount).join('') +
-    plan.svg +
-    stage.front +
-    (scene.title ? title(scene.title, accent) : '') +
-    caption(scene.caption, plan.endX, plan.endY, idPrefix, sw) +
+    `shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" style="display:block;background:${ground}">` +
+    (look.defs ? `<defs>${look.defs}</defs>` : '') +
+    `<rect x="${-sw * 4}" y="${-H * 4}" width="${sw * 9}" height="${H * 4 + GROUND_Y}" fill="${sky}"/>` +
+    (look.under?.(sw, H, GROUND_Y) ?? '') +
+    paint('back', stage.back) +
+    `<rect x="${-sw * 4}" y="${GROUND_Y}" width="${sw * 9}" height="${H * 4}" fill="${ground}"/>` +
+    (look.foreFilter ? `<g filter="url(#${look.foreFilter})">${fore(withDust, propCount)}</g>` : fore(withDust, propCount)) +
+    paint('back', stage.front) +
+    (look.over?.(sw, H, GROUND_Y) ?? '') +
+    (scene.title ? title(scene.title, look.titleColor ?? accent, look) : '') +
+    caption(scene.caption, plan.endX, plan.endY, idPrefix, sw, look) +
     `</svg>`
 
   let svg = build(true, props.length)

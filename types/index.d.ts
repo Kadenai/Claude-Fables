@@ -49,6 +49,8 @@ declare module 'claude-code' {
     fables: {
       scene: FablesScene | null
       enabled: boolean
+      /** The look the band draws in: a name from hooks/looks.ts. */
+      look: string
     }
   }
 }

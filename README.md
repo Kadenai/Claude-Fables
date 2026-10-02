@@ -33,6 +33,7 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 | `hooks/scene.ts` | The scene format and its validator |
 | `hooks/sprites.ts` | The pixel-art library: Claude in two walk frames, plus 30+ props |
 | `hooks/svg.ts` | Scene → animated SVG: backdrops, particles, props, hero, caption |
+| `hooks/looks.ts` | The graphic styles: color remaps, pixel treatments, textures and frames |
 | `types/index.d.ts` | The scene types and the mod's `$.state` contract |
 
 ## Install (Claude Code desktop)
@@ -56,9 +57,32 @@ To try it from the terminal for one session instead, run `claude --plugin-dir ~/
 ## Use
 
 - `/fables`: toggle the mod on or off. `/fables on` and `/fables off` also work. The setting is remembered across sessions.
+- `/fables style`: list the graphic styles. `/fables style <name>` picks one, and `/fables style shuffle` draws each turn in a different style. The choice is remembered across sessions.
 - **Scene model:** Sonnet by default. You can switch to `haiku` (cheaper, faster) or `opus` in the config menu, or under `pluginConfigs.fables.model` in settings.
 
 Every scene is one small Sonnet request, so this costs a few requests per minute while Claude is working.
+
+## Styles
+
+Thirteen graphic styles, after looks from the [Claude Mascot Style Gallery](https://github.com/henrik-thevibe/Claude-Mascot-Style-Gallery). A style changes how a scene is painted, never what happens in it. It remaps every color, chooses how one art pixel is drawn (a solid block, a mosaic tile, a pane of leaded glass, a cross stitch, a printed character, a drafted square) and adds its own textures and frames. The narrator hears which style it is writing for, so the caption's voice can suit it.
+
+| Name | Style | What it looks like |
+| --- | --- | --- |
+| `pixel` | Pixel Art | the original: solid 16-bit pixels (the default) |
+| `handheld` | Handheld | four shades of green on a dotted LCD |
+| `teletext` | Teletext Page | eight broadcast colors, blocky cells, scanlines |
+| `blueprint` | Blueprint | white drafting lines on a blue grid, with a title block |
+| `neon` | Neon | glowing tubes on a brick wall that flickers now and then |
+| `silhouette` | Silhouette | black cut paper on cream, in a gilt frame |
+| `ukiyoe` | Ukiyo-e | indigo and vermilion woodblock print on grainy paper |
+| `tomb` | Tomb Painting | earth pigments with a painted frieze |
+| `glass` | Stained Glass | jewel-toned panes with leading |
+| `mosaic` | Mosaic | tesserae and grout with a meander border |
+| `sampler` | Sampler | cross stitches on linen |
+| `printer` | Line Printer | ASCII characters on greenbar paper |
+| `comic` | Golden Age Comic | primary colors, ink outlines and halftone dots |
+
+The styles live in `hooks/looks.ts`. Adding one means adding one entry there.
 
 ## Develop
 
@@ -66,6 +90,7 @@ Every scene is one small Sonnet request, so this costs a few requests per minute
 claude plugin validate .              # manifest, hooks and state contract
 claude plugin test .                  # unit tests plus engine tests (stubbed Sonnet)
 bun scripts/preview.ts > gallery.html # render sample scenes to a page in the browser
+bun scripts/preview.ts --look all > gallery.html # every sample in every style
 ```
 
 `bun scripts/preview.ts my-scenes.json` renders your own scenes, which is handy for tuning sprites or trying out what Sonnet sent back.

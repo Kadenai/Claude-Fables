@@ -46,9 +46,11 @@ export type PromptInput = {
   story: readonly StoryBeat[]
   /** Set for the closing scene of a turn. */
   ending?: 'answer' | 'aborted' | 'error' | 'refusal'
+  /** The graphic style the scene is drawn in, so the caption can suit it. */
+  look?: { label: string; voice: string }
 }
 
-export function buildPrompt({ ask, log, story, ending }: PromptInput): string {
+export function buildPrompt({ ask, log, story, ending, look }: PromptInput): string {
   const lines = log.map(a => `- ${a.kind === 'said' ? 'said' : a.kind === 'failed' ? 'FAILED' : 'did'}: ${a.text}`)
   const past = story.map(b => `- [${b.backdrop}] "${b.caption}"`)
   const parts = [
@@ -56,6 +58,9 @@ export function buildPrompt({ ask, log, story, ending }: PromptInput): string {
     past.length ? `Story so far (oldest first):\n${past.join('\n')}` : 'This is the first scene.',
     lines.length ? `Latest activity (oldest first):\n${lines.join('\n')}` : 'No activity yet: the agent is thinking.',
   ]
+  if (look && look.label !== 'Pixel Art') {
+    parts.push(`This scene is drawn in the style of ${look.label}. Let the caption sound like ${look.voice}, still about the real work.`)
+  }
   if (ending === 'answer') parts.push('The agent just FINISHED the task. Draw a short, happy closing scene (celebrate).')
   else if (ending === 'aborted') parts.push('The person just interrupted the agent. Draw a sheepish closing scene.')
   else if (ending) parts.push('The turn just ended badly. Draw a brave-but-battered closing scene.')
