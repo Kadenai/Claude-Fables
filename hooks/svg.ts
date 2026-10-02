@@ -345,7 +345,7 @@ export type Figure = { kind: 'pixel'; cell: Cell } | { kind: '3d'; hero?: HeroPa
 /** The 3D model stands a little taller than the sprite, arms reaching past its box. */
 const MODEL_STAGE_H = 40
 
-function hero(scene: FablesScene, floor: number, sw: number, figure: Figure): HeroPlan {
+function hero(scene: FablesScene, floor: number, sw: number, figure: Figure, tint: (svg: string) => string = svg => svg): HeroPlan {
   const cell = figure.kind === 'pixel' ? figure.cell : 'solid'
   const { action } = scene.hero
   const isMoving = action === 'walk' || action === 'run' || action === 'swim' || action === 'fly'
@@ -433,7 +433,7 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure): He
   const at = isMoving ? fromX : toX
   const svg =
     `<g transform="translate(${at} ${baseY})">${travel}` +
-    `<g>${inner}<g transform="${flip.trim() || 'translate(0 0)'}">${frames}</g>${extras}</g></g>`
+    `<g>${inner}<g transform="${flip.trim() || 'translate(0 0)'}">${frames}</g>${tint(extras)}</g></g>`
   return { svg, startX: isMoving ? fromX : toX, endX: toX, endY: baseY, arrive: isMoving ? moveDur : 0 }
 }
 
@@ -776,7 +776,8 @@ export function sceneToSvg(
   const dust = painter ? painter.el('particles', particles(scene, rand, sw)) : particles(scene, rand, sw)
   // The rich stage tells the story in words alone: no props stand about the scene.
   const props = rich ? [] : scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell))
-  const plan = hero(scene, stage.floor, sw, figure)
+  // A style paints Claude's confetti and dug-up earth in its own inks too.
+  const plan = hero(scene, stage.floor, sw, figure, painter ? svg => painter.el('particles', svg) : undefined)
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
   const sky = art?.sky ?? stage.sky
