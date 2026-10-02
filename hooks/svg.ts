@@ -515,6 +515,15 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure): He
 
 // ---------------------------------------------------------------- thought
 
+type P = [number, number]
+
+/** The cartoon paper both bubbles are cut from: a soft drop shadow, an ink outline, cream paper. */
+const CARD = '#f6f1e7'
+const CARD_INK = '#2b2420'
+const paper = (shape: string) =>
+  `<g transform="translate(1.2 1.8)" fill="black" opacity=".22">${shape}</g>` +
+  `<g fill="${CARD_INK}" stroke="${CARD_INK}" stroke-width="2.2" stroke-linejoin="round">${shape}</g><g fill="${CARD}">${shape}</g>`
+
 /** How many of the scene's props Claude thinks about at once. */
 const THOUGHTS = 3
 
@@ -526,20 +535,22 @@ const THOUGHTS = 3
 function thought(props: readonly FablesProp[], plan: HeroPlan, sw: number): { svg: string; rect?: Rect } {
   const items = props.slice(0, THOUGHTS)
   if (items.length === 0) return { svg: '' }
-  const CHAR = 3.15
+  // Labels are set large enough to read at the band's size: about 11 px on screen.
+  const SIZE = 7.6
+  const CHAR = SIZE * 0.6
   const slots = items.map(p => {
     const art = artFor(p)
     const rows = art.rows.length
     const cols = widthOf(art.rows)
     const unit = Math.min(1.7, 15 / rows, 24 / cols)
-    const label = (p.label ?? '').slice(0, 14)
+    const label = (p.label ?? '').slice(0, 12)
     return { art, unit, iw: cols * unit, ih: rows * unit, label, w: Math.max(cols * unit, label.length * CHAR) + 4 }
   })
   const pad = 6
-  const gap = 5
+  const gap = 7
   const hasLabel = slots.some(sl => sl.label)
   const w = slots.reduce((t, sl) => t + sl.w, 0) + gap * (slots.length - 1) + pad * 2
-  const h = 16 + (hasLabel ? 8 : 0) + pad * 2
+  const h = 16 + (hasLabel ? 11 : 0) + pad * 2
   const headX = plan.endX + HERO_W / 2
   const headY = plan.endY + HERO_H - MODEL_STAGE_H
   let x = Math.min(sw - w - 3, Math.max(3, headX - w / 2 + 10))
@@ -574,7 +585,7 @@ function thought(props: readonly FablesProp[], plan: HeroPlan, sw: number): { sv
       const iy = y + pad + (16 - sl.ih) / 2
       const icon = `<g transform="translate(${n(ix)} ${n(iy)}) scale(${n(sl.unit)})">${pixelPaths(sl.art.rows, sl.art.colorOf)}</g>`
       const text = sl.label
-        ? `<text x="${n(cursor + sl.w / 2)}" y="${n(y + pad + 22)}" text-anchor="middle" font-family="${FONT}" font-size="5.2" fill="#4a3a30">${escapeXml(sl.label)}</text>`
+        ? `<text x="${n(cursor + sl.w / 2)}" y="${n(y + pad + 25.5)}" text-anchor="middle" font-family="${FONT}" font-size="${SIZE}" fill="#3a2e26">${escapeXml(sl.label)}</text>`
         : ''
       cursor += sl.w + gap
       return icon + text
@@ -582,8 +593,7 @@ function thought(props: readonly FablesProp[], plan: HeroPlan, sw: number): { sv
     .join('')
   const appear = n(plan.arrive + 0.2)
   const svg =
-    `<g opacity="0"><g transform="translate(1.2 1.8)" fill="black" opacity=".22">${shape}</g>` +
-    `<g fill="#2b2420" stroke="#2b2420" stroke-width="2.2">${shape}</g><g fill="#f6f1e7">${shape}</g>${icons}` +
+    `<g data-part="thought" opacity="0">${paper(shape)}${icons}` +
     `<animate attributeName="opacity" values="0;1" dur=".35s" begin="${appear}s" fill="freeze"/>` +
     `<animateTransform attributeName="transform" type="translate" values="0 0;0 -1.2;0 0" dur="3.4s" begin="${appear}s" repeatCount="indefinite"/></g>`
   return { svg, rect: { x: x - 4, y: y - 6, w: w + 8, h: h + 12 } }
@@ -633,8 +643,9 @@ function propRects(prop: FablesProp, floor: number, sw: number, unit: number): R
  * that covers the least of Claude, the props, their labels and the chapter
  * tag, the nearest to Claude among equals.
  */
-function caption(text: string, heroX: number, heroY: number, idPrefix: string, sw: number, look: Look, avoid: readonly Rect[]): string {
-  const { fill, stroke, ink, radius } = look.caption
+function caption(text: string, heroX: number, heroY: number, idPrefix: string, sw: number, look: Look, avoid: readonly Rect[], onPaper = false): string {
+  const { fill, stroke, radius } = look.caption
+  const ink = onPaper ? CARD_INK : look.caption.ink
   const heroBox: Rect = { x: heroX - 4, y: heroY - 8, w: HERO_W + 8, h: HERO_H + 8 }
   // A narrower wrap, taller, is tried when the wide one finds no clear place.
   let best = { x: 2, y: 4, score: Infinity, lines: [] as string[], w: 0, h: 0 }
@@ -663,7 +674,7 @@ function caption(text: string, heroX: number, heroY: number, idPrefix: string, s
       const dur = Math.max(0.2, line.length * 0.03)
       const id = `${idPrefix}${i}`
       const reveal =
-        `<clipPath id="${id}"><rect x="${n(x)}" y="${n(y + 2 + i * 11)}" width="0" height="11">` +
+        `<clipPath id="${id}"><rect x="${n(x)}" y="${n(y + 1 + i * 11)}" width="0" height="14">` +
         `<animate attributeName="width" from="0" to="${w}" dur="${n(dur)}s" begin="${n(delay)}s" fill="freeze"/></rect></clipPath>`
       delay += dur
       return (
@@ -672,8 +683,29 @@ function caption(text: string, heroX: number, heroY: number, idPrefix: string, s
       )
     })
     .join('')
+  if (onPaper) {
+    // Cut from the same paper as the thought bubble, with a tail pointing back at Claude.
+    const hx = heroX + HERO_W / 2
+    const hy = heroY + HERO_H - MODEL_STAGE_H + 10
+    let base: [P, P]
+    if (x >= hx) base = [[x + 2, y + h - 13], [x + 2, y + h - 5]]
+    else if (x + w <= hx) base = [[x + w - 2, y + h - 13], [x + w - 2, y + h - 5]]
+    else {
+      const cx = Math.min(x + w - 12, Math.max(x + 12, hx))
+      base = y + h < hy ? [[cx - 4, y + h - 2], [cx + 4, y + h - 2]] : [[cx - 4, y + 2], [cx + 4, y + 2]]
+    }
+    const mx = (base[0][0] + base[1][0]) / 2
+    const my = (base[0][1] + base[1][1]) / 2
+    const len = Math.hypot(hx - mx, hy - my) || 1
+    const reach = Math.min(10, len * 0.6)
+    const tip: P = [mx + ((hx - mx) / len) * reach, my + ((hy - my) / len) * reach]
+    const shape =
+      `<rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="6"/>` +
+      `<path d="M${n(base[0][0])} ${n(base[0][1])}L${n(tip[0])} ${n(tip[1])}L${n(base[1][0])} ${n(base[1][1])}z"/>`
+    return `<g data-part="speech">${paper(shape)}${rows}<animate attributeName="opacity" values="0;1" dur=".2s" fill="freeze"/></g>`
+  }
   return (
-    `<g><rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>${rows}` +
+    `<g data-part="speech"><rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>${rows}` +
     `<animate attributeName="opacity" values="0;1" dur=".2s" fill="freeze"/></g>`
   )
 }
@@ -756,7 +788,7 @@ export function sceneToSvg(
     thinks(propCount).svg +
     (look.over?.(sw, H, GROUND_Y) ?? '') +
     (scene.title ? title(scene.title, look.titleColor ?? (rich ? '#efe6d2' : accent), look) : '') +
-    caption(scene.caption, plan.endX, plan.endY, idPrefix, sw, look, avoid(propCount)) +
+    caption(scene.caption, plan.endX, plan.endY, idPrefix, sw, look, avoid(propCount), rich) +
     `</svg>`
 
   const propsShown = rich ? Math.min(THOUGHTS, scene.props.length) : props.length

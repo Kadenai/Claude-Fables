@@ -93,7 +93,7 @@ The band's frame takes at most 131,072 characters, so repeated things are drawn 
 
 ### Thoughts
 
-Props aren't scattered on the ground. They are what Claude is thinking about: up to three of them appear in a thought bubble above Claude once it arrives, each icon with its label. The speech bubble picks the spot beside or above Claude that covers the least of Claude, the thought, the chapter tag and the scene's focal points, wrapping its caption narrower when a band is too tight.
+Props aren't scattered on the ground. They are what Claude is thinking about: up to three of them appear in a thought bubble above Claude once it arrives, each icon with its label. The speech bubble is cut from the same paper as the thought, with a tail pointing back at Claude. It picks the spot beside or above Claude that covers the least of Claude, the thought, the chapter tag and the scene's focal points, wrapping its caption narrower when a band is too tight.
 
 The model and its projection are ported from the gallery's engine by [ChetasLua](https://github.com/ChetasLua), under the MIT License.
 

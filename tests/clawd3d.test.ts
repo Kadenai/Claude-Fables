@@ -90,18 +90,18 @@ describe('layering', () => {
     expect(path).toBeGreaterThan(-1)
     expect(path).toBeLessThan(claude)
     // The thought bubble comes last of all, over Claude and the lens.
-    expect(rich.indexOf('<g fill="#f6f1e7">')).toBeGreaterThan(claude)
+    expect(rich.indexOf('data-part="thought"')).toBeGreaterThan(claude)
   })
 
   test('3D stages put the props in a thought bubble instead of on the ground', () => {
     const scene = parseScene({ backdrop: 'city', hero: { action: 'walk', from: 0, to: 20 }, props: [{ sprite: 'trophy', x: 70, label: '17 tests' }], caption: 'Solid gold.' })
     if (!scene) throw new Error('expected a scene')
     const rich = sceneToSvg(scene, { figure: '3d' })
-    expect(rich).toContain('<g fill="#f6f1e7">')
+    expect(rich).toContain('data-part="thought"')
     expect(rich).toContain('>17 tests</text>')
     expect(rich).not.toContain('href="#fp0"')
     const flat = sceneToSvg(scene, { figure: 'pixel' })
-    expect(flat).not.toContain('<g fill="#f6f1e7">')
+    expect(flat).not.toContain('data-part="thought"')
     expect(flat).toContain('17 tests')
   })
 
@@ -121,6 +121,8 @@ describe('layering', () => {
 
 describe('composition', () => {
   const rectOf = (m: RegExpMatchArray | null) => (m ? { x: +m[1]!, y: +m[2]!, w: +m[3]!, h: +m[4]! } : undefined)
+  // The first rect of a bubble's paper is its body.
+  const partRect = (part: string) => new RegExp(`data-part="${part}"[^>]*><g[^>]*><rect x="([\\d.]+)" y="([\\d.]+)" width="([\\d.]+)" height="([\\d.]+)"`)
   const hit = (a: { x: number; y: number; w: number; h: number }, b: typeof a) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 
   test('the speech bubble keeps clear of the thought bubble', () => {
@@ -133,8 +135,8 @@ describe('composition', () => {
     if (!scene) throw new Error('expected a scene')
     for (const width of [480, 960, 2400]) {
       const svg = sceneToSvg(scene, { width, height: 192, figure: '3d' })
-      const bubble = rectOf(svg.match(/<g><rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" rx=/))
-      const thought = rectOf(svg.match(/<g fill="#f6f1e7"><rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/))
+      const bubble = rectOf(svg.match(partRect('speech')))
+      const thought = rectOf(svg.match(partRect('thought')))
       if (!bubble || !thought) throw new Error('expected a speech bubble and a thought')
       expect(hit(bubble, thought)).toBe(false)
     }
@@ -145,8 +147,8 @@ describe('composition', () => {
     if (!scene) throw new Error('expected a scene')
     // The thought bubble is drawn past the look's remap: its paper and ink stay its own.
     const svg = sceneToSvg(scene, { look: 'blueprint', figure: '3d' })
-    expect(svg).toContain('<g fill="#f6f1e7">')
-    expect(svg).toMatch(/fill="#4a3a30">db\.ts<\/text>/)
+    expect(svg).toContain('data-part="thought"')
+    expect(svg).toMatch(/fill="#3a2e26">db\.ts<\/text>/)
   })
 
   test('every rich backdrop clips its scenery to the stage', () => {
