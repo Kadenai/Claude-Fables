@@ -95,7 +95,16 @@ Eighteen graphic styles, after looks from the [Claude Mascot Style Gallery](http
 
 Most styles draw Claude as the gallery's 3D model rather than the pixel sprite: the same box body, arms, legs and pill eyes, lit and depth-sorted. The band's frame runs no script, so the model can't be drawn live. `hooks/clawd3d.ts` poses it 6 to 12 times per motion (walk, run, swim, fly, dig, inspect, celebrate, think, idle), `hooks/hero3d.ts` bakes each pose into flat SVG polygons, and the scene flips through them with SMIL. Walking and running end in an idle loop on arrival. The model can't follow the cursor or be dragged; those need the live engine.
 
-The scenery and props change to match. With the 3D Claude, each backdrop is built in depth: far ridges and skylines in haze, middle scenery from boxes lit from the same upper left as the model, gradient skies, and glows around lamps, lava and the moon (`hooks/scenery.ts`). Props get a solid extruded side and a contact shadow. Shading is drawn in neutral black and white, so it survives every style's palette. With the pixel Claude, the stage stays flat pixel art.
+The scenery and props change to match (`hooks/scenery.ts`). Every backdrop is composed the same way, back to front:
+
+- **Sky:** a gradient, then the sun or moon with its glow, stars and clouds.
+- **Far band:** ridges, a skyline or a tree line, faded into the sky.
+- **Middle row:** trees, buildings, mesas or houses standing on their own baseline a little behind the front edge. They are packed left to right so no two overlap, then spread so the row ends exactly at the margins.
+- **Front edge:** where Claude and the props stand, with the details on the ground in front of it.
+
+Everything is clipped to the stage. Details sit on grids that divide their surfaces exactly (windows on their facades, panels on the lab wall, sleepers on the track), and every animation stays inside its own region. Boxes are lit from the same upper left as the model. Shading is drawn in neutral black and white, so it survives every style's palette. Props get a solid extruded side and a contact shadow. With the pixel Claude, the stage stays flat pixel art.
+
+The speech bubble picks the spot beside or above Claude that covers the least of Claude, the props, their labels, the chapter tag and the sun or moon. Prop labels take the style's caption colors, so they stay readable in every style.
 
 `/fables figure 3d` or `/fables figure pixel` draws Claude the same way in every style. `/fables figure auto`, the default, lets each style choose.
 

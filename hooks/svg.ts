@@ -49,6 +49,8 @@ export function rng(seedText: string): () => number {
   }
 }
 
+type Rect = { x: number; y: number; w: number; h: number }
+
 const n = (v: number) => (Math.round(v * 100) / 100).toString()
 
 /** Denser glyphs for darker colors, as a line printer overstrikes. */
@@ -269,7 +271,7 @@ function backdrop(scene: FablesScene, rand: () => number, sw: number): Stage {
 }
 
 /** The flat stage in the shape the scene draws: its front details sit on the ground, behind the props. */
-const flatStage = (s: Stage) => ({ sky: s.sky, ground: s.ground, floor: s.floor, back: s.back, near: s.front })
+const flatStage = (s: Stage) => ({ sky: s.sky, ground: s.ground, floor: s.floor, groundTop: GROUND_Y, back: s.back, near: s.front, keep: [] as Rect[] })
 
 // ---------------------------------------------------------------- particles
 
@@ -321,13 +323,27 @@ function particles(scene: FablesScene, rand: () => number, sw: number): string {
 
 // ---------------------------------------------------------------- props
 
-function label(text: string, cx: number, y: number, color: string, sw: number): string {
+/**
+ * A hex color as rgb(): the palette remap only rewrites hex colors, so a label
+ * written this way keeps the colors it was given inside a remapped layer.
+ */
+function fixed(hex: string): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex)
+  if (!m?.[1]) return hex
+  const v = parseInt(m[1], 16)
+  return `rgb(${(v >> 16) & 255},${(v >> 8) & 255},${v & 255})`
+}
+
+/** Label colors: the prop's own tint in the plain look, the look's caption colors in every other. */
+export type TagStyle = { fill: string; ink: string; stroke: string }
+
+function label(text: string, cx: number, y: number, tag: TagStyle, sw: number): string {
   const w = text.length * 5 + 8
   const x = Math.min(sw - w - 2, Math.max(2, cx - w / 2))
   const top = Math.max(2, y - 13)
   return (
-    `<rect x="${n(x)}" y="${n(top)}" width="${w}" height="11" fill="${INK}" stroke="${color}" stroke-width="1"/>` +
-    `<text x="${n(x + 4)}" y="${n(top + 8)}" font-family="${FONT}" font-size="8" fill="${color}">${escapeXml(text)}</text>`
+    `<rect x="${n(x)}" y="${n(top)}" width="${w}" height="11" fill="${fixed(tag.fill)}" stroke="${fixed(tag.stroke)}" stroke-width="1"/>` +
+    `<text x="${n(x + 4)}" y="${n(top + 8)}" font-family="${FONT}" font-size="8" fill="${fixed(tag.ink)}">${escapeXml(text)}</text>`
   )
 }
 
@@ -336,7 +352,7 @@ function label(text: string, cx: number, y: number, color: string, sw: number): 
  * copies behind it, offset up and right as the scenery's boxes are, and a
  * contact shadow under it when it stands on the ground.
  */
-function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cell: Cell, solid: boolean): string {
+function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cell: Cell, solid: boolean, look: Look): string {
   const art = artFor(prop)
   const w = widthOf(art.rows) * U
   const h = art.rows.length * U
@@ -377,7 +393,9 @@ function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cel
       motion = `<animateTransform attributeName="transform" type="translate" values="${sw - x} 0;${-x - w} 0" dur="${n(7 + index)}s" repeatCount="indefinite"/>`
       break
   }
-  const tag = prop.label ? label(prop.label, cx, y, prop.color ?? '#d9d4c7', sw) : ''
+  const tint = prop.color ?? '#d9d4c7'
+  const style: TagStyle = look.color ? { fill: look.caption.fill, ink: look.caption.ink, stroke: look.caption.stroke } : { fill: INK, ink: tint, stroke: tint }
+  const tag = prop.label ? label(prop.label, cx, y, style, sw) : ''
   return `${shade}<g>${body}${tag}${motion}</g>`
 }
 
@@ -505,14 +523,51 @@ export function wrap(text: string, width: number): string[] {
   return lines
 }
 
-function caption(text: string, heroX: number, heroY: number, idPrefix: string, sw: number, look: Look): string {
+const overlap = (a: Rect, b: Rect) =>
+  Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))
+
+/** Where a prop and its label sit while it stays put; a scrolling prop crosses the whole stage and blocks nothing. */
+function propRects(prop: FablesProp, floor: number, sw: number): Rect[] {
+  if (prop.motion === 'scroll') return []
+  const art = artFor(prop)
+  const w = widthOf(art.rows) * U
+  const h = art.rows.length * U
+  const x = Math.round(((sw - w) * prop.x) / 100)
+  const y = prop.y === 'ground' ? floor - h : prop.y === 'air' ? 58 - h / 2 : 8
+  const reach = prop.motion === 'drift' ? 24 : prop.motion === 'bob' ? 0 : 2
+  const rects: Rect[] = [{ x: x - 2, y: y - 4, w: w + reach + 4, h: h + 6 }]
+  if (prop.label) {
+    const lw = prop.label.length * 5 + 8
+    rects.push({ x: Math.min(sw - lw - 2, Math.max(2, x + w / 2 - lw / 2)), y: Math.max(2, y - 13), w: lw, h: 11 })
+  }
+  return rects
+}
+
+/**
+ * The speech bubble. Of the places beside and above Claude, it takes the one
+ * that covers the least of Claude, the props, their labels and the chapter
+ * tag, the nearest to Claude among equals.
+ */
+function caption(text: string, heroX: number, heroY: number, idPrefix: string, sw: number, look: Look, avoid: readonly Rect[]): string {
   const { fill, stroke, ink, radius } = look.caption
   const lines = wrap(text, 34).slice(0, 3)
   const w = Math.ceil(Math.max(...lines.map(l => l.length)) * look.charW + 14)
   const h = lines.length * 11 + 8
-  const rightX = heroX + HERO_W + 8
-  const x = rightX + w <= sw - 2 ? rightX : Math.max(2, heroX - w - 8)
-  const y = Math.max(4, Math.min(heroY - 4, GROUND_Y - h - 4) - (heroY > 40 ? 16 : 0))
+  const heroBox: Rect = { x: heroX - 4, y: heroY - 8, w: HERO_W + 8, h: HERO_H + 8 }
+  const low = Math.max(4, Math.min(heroY - 4, GROUND_Y - h - 4) - (heroY > 40 ? 16 : 0))
+  const xs = [heroX + HERO_W + 8, heroX - w - 8, heroX + HERO_W / 2 - w / 2, heroX + HERO_W + 40, heroX - w - 40]
+  const ys = [low, 4, Math.round((low + 4) / 2)]
+  let best = { x: 2, y: 4, score: Infinity }
+  for (const [yi, y0] of ys.entries()) {
+    for (const [xi, x0] of xs.entries()) {
+      const x = Math.min(sw - w - 2, Math.max(2, x0))
+      const y = Math.min(GROUND_Y - h - 4, Math.max(4, y0))
+      const r = { x, y, w, h }
+      const score = overlap(r, heroBox) * 4 + avoid.reduce((t, a) => t + overlap(r, a) * 3, 0) + (xi + yi * 2) * 6
+      if (score < best.score) best = { x, y, score }
+    }
+  }
+  const { x, y } = best
   let delay = 0.2
   const rows = lines
     .map((line, i) => {
@@ -576,14 +631,20 @@ export function sceneToSvg(
   // The 3D Claude gets scenery and props with depth to match; the pixel sprite keeps the flat pixel stage.
   const rich = figure.kind === '3d'
   const stage = rich ? richBackdrop(scene, rand, sw, GROUND_Y, W) : flatStage(backdrop(scene, rand, sw))
-  const groundTop = rich ? stage.floor : GROUND_Y
+  const groundTop = stage.groundTop
   const dust = particles(scene, rand, sw)
-  const props = scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell, rich))
+  const props = scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell, rich, look))
   const plan = hero(scene, stage.floor, sw, figure)
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
   const sky = tint('sky', stage.sky)
   const ground = tint('ground', stage.ground)
+  // What the speech bubble keeps clear of: the props still drawn, their labels, the chapter tag.
+  const avoid = (propCount: number): Rect[] => [
+    ...scene.props.slice(0, propCount).flatMap(p => propRects(p, stage.floor, sw)),
+    ...(scene.title ? [{ x: 0, y: 0, w: scene.title.length * look.charW + 34 + (look.inset ?? 0), h: 16 + (look.inset ?? 0) }] : []),
+    ...stage.keep,
+  ]
   const fore = (withDust: boolean, propCount: number) =>
     paint('fore', (withDust ? dust : '') + props.slice(0, propCount).join('') + plan.svg)
 
@@ -602,7 +663,7 @@ export function sceneToSvg(
     (look.foreFilter ? `<g filter="url(#${look.foreFilter})">${fore(withDust, propCount)}</g>` : fore(withDust, propCount)) +
     (look.over?.(sw, H, GROUND_Y) ?? '') +
     (scene.title ? title(scene.title, look.titleColor ?? accent, look) : '') +
-    caption(scene.caption, plan.endX, plan.endY, idPrefix, sw, look) +
+    caption(scene.caption, plan.endX, plan.endY, idPrefix, sw, look, avoid(propCount)) +
     `</svg>`
 
   let svg = build(true, props.length)

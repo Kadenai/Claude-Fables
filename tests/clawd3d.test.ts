@@ -90,3 +90,44 @@ describe('layering', () => {
     expect(sceneToSvg(scene, { figure: 'pixel' })).not.toContain('sc-deep')
   })
 })
+
+describe('composition', () => {
+  const rectOf = (m: RegExpMatchArray | null) => (m ? { x: +m[1]!, y: +m[2]!, w: +m[3]!, h: +m[4]! } : undefined)
+  const hit = (a: { x: number; y: number; w: number; h: number }, b: typeof a) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+
+  test('the speech bubble keeps clear of a prop label beside Claude', () => {
+    const scene = parseScene({
+      backdrop: 'forest',
+      hero: { action: 'walk', from: 5, to: 30 },
+      props: [{ sprite: 'bug', x: 60, y: 'ground', label: 'parseHex' }],
+      caption: 'A long enough caption to need a wide bubble here.',
+    })
+    if (!scene) throw new Error('expected a scene')
+    for (const look of ['pixel', 'comic', 'blueprint']) {
+      const svg = sceneToSvg(scene, { look })
+      const bubble = rectOf(svg.match(/<g><rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" rx=/))
+      const tag = rectOf(svg.match(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="(11)" fill="/))
+      if (!bubble || !tag) throw new Error('expected a bubble and a label')
+      expect(hit(bubble, tag)).toBe(false)
+    }
+  })
+
+  test('labels stay readable in a look that paints the foreground one color', () => {
+    const scene = parseScene({ backdrop: 'lab', hero: { action: 'think', from: 20, to: 20 }, props: [{ sprite: 'server', x: 80, label: 'db.ts' }], caption: 'Hmm.' })
+    if (!scene) throw new Error('expected a scene')
+    const svg = sceneToSvg(scene, { look: 'blueprint' })
+    const m = svg.match(/height="11" fill="(rgb\([^)]*\))"[^>]*\/><text[^>]*fill="(rgb\([^)]*\))">db\.ts/)
+    expect(m).not.toBeNull()
+    expect(m?.[1]).not.toBe(m?.[2])
+  })
+
+  test('every rich backdrop clips its scenery to the stage', () => {
+    for (const backdrop of ['forest', 'sea', 'space', 'city', 'desert', 'volcano', 'rails', 'lab', 'night']) {
+      const scene = parseScene({ backdrop, hero: { action: 'walk', from: 0, to: 40 }, caption: 'x' })
+      if (!scene) throw new Error('expected a scene')
+      const svg = sceneToSvg(scene, { figure: '3d', width: 1800, height: 192 })
+      expect(svg).toContain('<clipPath id="sc-stage">')
+      expect(svg.match(/clip-path="url\(#sc-stage\)"/g)?.length).toBe(2)
+    }
+  })
+})

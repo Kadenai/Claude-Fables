@@ -232,7 +232,7 @@ export const LOOKS: Record<string, Look> = {
     color: (hex, layer) => {
       if (layer === 'sky') return '#2a1512'
       if (layer === 'ground') return '#1c0f0d'
-      if (layer === 'back') return '#3a1d18'
+      if (layer === 'back') return lightness(hex) > 0.72 ? '#ffe9c8' : '#3a1d18'
       const { sat } = hueSat(hex)
       if (sat < 0.25) return lightness(hex) < 0.3 ? '#1c0f0d' : '#fff1e8'
       return nearest(hex, NEON)
@@ -454,7 +454,7 @@ export const LOOKS: Record<string, Look> = {
     color: (hex, layer) => {
       if (layer === 'sky') return '#1f4a4c'
       if (layer === 'ground') return '#d9a53a'
-      if (layer === 'back') return nearest(hex, ['#2f6a5a', '#5f8a4a', '#3a7a6a', '#24585a'])
+      if (layer === 'back') return lightness(hex) > 0.72 ? '#f0deb0' : nearest(hex, ['#2f6a5a', '#5f8a4a', '#3a7a6a', '#24585a', '#d9a53a', '#c0392b'])
       if (isWarm(hex)) return ramp(hex, ['#b85c3e', '#e08a64', '#f0b090'])
       return nearest(hex, ['#e8dcc0', '#2a2a2a', '#c0392b', '#5f8a4a', '#d9a53a', '#3a7a6a'])
     },
@@ -462,9 +462,8 @@ export const LOOKS: Record<string, Look> = {
     charW: 5.2,
     caption: { fill: '#f3e6c4', stroke: '#2a2a2a', ink: '#2a2a2a', radius: 4 },
     titleColor: '#f3e6c4',
-    under: (sw, h, ground) =>
-      stripes(sw, ground, 12, 6, '#24585a', 0.5) +
-      `<circle cx="${sw * 0.82}" cy="30" r="22" fill="#f0deb0"/><path d="M${sw * 0.82} 8v44a22 22 0 0 0 0-44z" fill="#e6c89a"/>`,
+    // Sky bands only: the scenery brings its own sun or moon.
+    under: (sw, h, ground) => stripes(sw, ground, 12, 6, '#24585a', 0.5),
     over: (sw, h, ground) =>
       Array.from({ length: Math.ceil(sw / 26) }, (_, i) => `<path d="M${i * 26 + 9} ${ground + 9}l2 -4l2 4" fill="none" stroke="#b8862a" stroke-width="1"/>`).join(''),
   },
