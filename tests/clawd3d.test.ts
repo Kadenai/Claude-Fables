@@ -69,3 +69,24 @@ describe('figures in scenes', () => {
     }
   })
 })
+
+describe('layering', () => {
+  test('ground-level scenery is drawn before the props and Claude, in both kinds of stage', () => {
+    const scene = parseScene({ backdrop: 'forest', hero: { action: 'think', from: 30, to: 30 }, props: [{ sprite: 'bug', x: 60 }], caption: 'Grass stays behind me.' })
+    if (!scene) throw new Error('expected a scene')
+    for (const figure of ['pixel', '3d'] as const) {
+      const svg = sceneToSvg(scene, { figure })
+      const grass = svg.indexOf(figure === 'pixel' ? 'fill="#5e9c4a"' : 'fill="#6bab55"')
+      const prop = svg.indexOf('scale(4)')
+      expect(grass).toBeGreaterThan(-1)
+      expect(grass).toBeLessThan(prop)
+    }
+  })
+
+  test('3D stages give props a depth and a contact shadow', () => {
+    const scene = parseScene({ backdrop: 'city', hero: { action: 'walk', from: 0, to: 20 }, props: [{ sprite: 'trophy', x: 70 }], caption: 'Solid gold.' })
+    if (!scene) throw new Error('expected a scene')
+    expect(sceneToSvg(scene, { figure: '3d' })).toContain('filter="url(#sc-deep)"')
+    expect(sceneToSvg(scene, { figure: 'pixel' })).not.toContain('sc-deep')
+  })
+})

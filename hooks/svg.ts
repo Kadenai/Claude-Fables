@@ -1,6 +1,7 @@
 import type { FablesProp, FablesScene } from '../types'
 
 import { type FacePaint, motionSvg } from './hero3d'
+import { richBackdrop } from './scenery'
 import { type Cell, type Layer, type Look, lightness, lookFor, remapColors } from './looks'
 import { HERO_FRAMES, PALETTE, SPRITES, type SpriteName } from './sprites'
 
@@ -267,6 +268,9 @@ function backdrop(scene: FablesScene, rand: () => number, sw: number): Stage {
   }
 }
 
+/** The flat stage in the shape the scene draws: its front details sit on the ground, behind the props. */
+const flatStage = (s: Stage) => ({ sky: s.sky, ground: s.ground, floor: s.floor, back: s.back, near: s.front })
+
 // ---------------------------------------------------------------- particles
 
 function particles(scene: FablesScene, rand: () => number, sw: number): string {
@@ -327,7 +331,12 @@ function label(text: string, cx: number, y: number, color: string, sw: number): 
   )
 }
 
-function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cell: Cell): string {
+/**
+ * One prop. `solid` gives it depth to stand beside the 3D Claude: two darkened
+ * copies behind it, offset up and right as the scenery's boxes are, and a
+ * contact shadow under it when it stands on the ground.
+ */
+function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cell: Cell, solid: boolean): string {
   const art = artFor(prop)
   const w = widthOf(art.rows) * U
   const h = art.rows.length * U
@@ -335,7 +344,14 @@ function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cel
   const y = prop.y === 'ground' ? floor - h : prop.y === 'air' ? 58 - h / 2 : 8
   const cx = x + w / 2
   const cy = y + h / 2
-  const body = `<g transform="translate(${x} ${n(y)}) scale(${U})">${pixelPaths(art.rows, art.colorOf, cell)}</g>`
+  const id = `fp${index}`
+  const sprite = `<g${solid ? ` id="${id}"` : ''} transform="translate(${x} ${n(y)}) scale(${U})">${pixelPaths(art.rows, art.colorOf, cell)}</g>`
+  const depth = solid
+    ? [2, 1].map(k => `<use href="#${id}" transform="translate(${n(k * 1.6)} ${n(-k * 0.9)})" filter="url(#sc-deep)"/>`).join('')
+    : ''
+  const shade = solid && prop.y === 'ground' ? `<ellipse cx="${n(cx + 2)}" cy="${n(floor)}" rx="${n(w * 0.55)}" ry="2.6" fill="black" opacity=".28"/>` : ''
+  // The sprite is defined first so the copies behind it can refer to it, then drawn again on top.
+  const body = solid ? `<defs>${sprite}</defs>${depth}<use href="#${id}"/>` : sprite
   const slow = n(2 + (index % 3) * 0.7)
   let motion = ''
   switch (prop.motion) {
@@ -362,7 +378,7 @@ function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cel
       break
   }
   const tag = prop.label ? label(prop.label, cx, y, prop.color ?? '#d9d4c7', sw) : ''
-  return `<g>${body}${tag}${motion}</g>`
+  return `${shade}<g>${body}${tag}${motion}</g>`
 }
 
 // ---------------------------------------------------------------- hero
@@ -555,11 +571,14 @@ export function sceneToSvg(
   const paint = (layer: Layer, svg: string) => (look.color ? remapColors(svg, hex => look.color?.(hex, layer) ?? hex) : svg)
   const tint = (layer: Layer, hex: string) => look.color?.(hex, layer) ?? hex
   const rand = rng(`${scene.backdrop}|${scene.caption}`)
-  const stage = backdrop(scene, rand, sw)
-  const dust = particles(scene, rand, sw)
-  const props = scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell))
   const wants = options.figure && options.figure !== 'auto' ? options.figure : look.figure
   const figure: Figure = wants === '3d' ? { kind: '3d', paint: look.facePaint ?? 'solid' } : { kind: 'pixel', cell: look.cell }
+  // The 3D Claude gets scenery and props with depth to match; the pixel sprite keeps the flat pixel stage.
+  const rich = figure.kind === '3d'
+  const stage = rich ? richBackdrop(scene, rand, sw, GROUND_Y, W) : flatStage(backdrop(scene, rand, sw))
+  const groundTop = rich ? stage.floor : GROUND_Y
+  const dust = particles(scene, rand, sw)
+  const props = scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell, rich))
   const plan = hero(scene, stage.floor, sw, figure)
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
@@ -577,9 +596,10 @@ export function sceneToSvg(
     `<rect x="${-sw * 4}" y="${-H * 4}" width="${sw * 9}" height="${H * 4 + GROUND_Y}" fill="${sky}"/>` +
     (look.under?.(sw, H, GROUND_Y) ?? '') +
     paint('back', stage.back) +
-    `<rect x="${-sw * 4}" y="${GROUND_Y}" width="${sw * 9}" height="${H * 4}" fill="${ground}"/>` +
+    `<rect x="${-sw * 4}" y="${groundTop}" width="${sw * 9}" height="${H * 4}" fill="${ground}"/>` +
+    // Ground-level scenery goes down before anything that stands on it.
+    paint('back', stage.near) +
     (look.foreFilter ? `<g filter="url(#${look.foreFilter})">${fore(withDust, propCount)}</g>` : fore(withDust, propCount)) +
-    paint('back', stage.front) +
     (look.over?.(sw, H, GROUND_Y) ?? '') +
     (scene.title ? title(scene.title, look.titleColor ?? accent, look) : '') +
     caption(scene.caption, plan.endX, plan.endY, idPrefix, sw, look) +

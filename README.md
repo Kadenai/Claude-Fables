@@ -36,6 +36,7 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 | `hooks/looks.ts` | The graphic styles: color remaps, pixel treatments, textures and frames |
 | `hooks/clawd3d.ts` | The 3D Claude: the box model, its motions and its projection (ported from the gallery) |
 | `hooks/hero3d.ts` | Bakes the posed 3D model into SVG frames that SMIL plays in turn |
+| `hooks/scenery.ts` | The layered, shaded backdrops drawn with the 3D Claude |
 | `types/index.d.ts` | The scene types and the mod's `$.state` contract |
 
 ## Install (Claude Code desktop)
@@ -93,6 +94,8 @@ Eighteen graphic styles, after looks from the [Claude Mascot Style Gallery](http
 ### The 3D Claude
 
 Most styles draw Claude as the gallery's 3D model rather than the pixel sprite: the same box body, arms, legs and pill eyes, lit and depth-sorted. The band's frame runs no script, so the model can't be drawn live. `hooks/clawd3d.ts` poses it 6 to 12 times per motion (walk, run, swim, fly, dig, inspect, celebrate, think, idle), `hooks/hero3d.ts` bakes each pose into flat SVG polygons, and the scene flips through them with SMIL. Walking and running end in an idle loop on arrival. The model can't follow the cursor or be dragged; those need the live engine.
+
+The scenery and props change to match. With the 3D Claude, each backdrop is built in depth: far ridges and skylines in haze, middle scenery from boxes lit from the same upper left as the model, gradient skies, and glows around lamps, lava and the moon (`hooks/scenery.ts`). Props get a solid extruded side and a contact shadow. Shading is drawn in neutral black and white, so it survives every style's palette. With the pixel Claude, the stage stays flat pixel art.
 
 `/fables figure 3d` or `/fables figure pixel` draws Claude the same way in every style. `/fables figure auto`, the default, lets each style choose.
 

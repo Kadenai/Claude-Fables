@@ -123,10 +123,10 @@ const isWarm = (hex: string) => {
 
 /**
  * Remaps every color in the attributes of an SVG fragment that paint (fill,
- * stroke, an animation's values), never text, so a "#123" in a label stays.
+ * stroke, a gradient stop, an animation's values), never text, so a "#123" in a label stays.
  */
 export function remapColors(svg: string, map: (hex: string) => string): string {
-  return svg.replace(/\b(fill|stroke|values)="([^"]*)"/g, (_, attr: string, value: string) => {
+  return svg.replace(/\b(fill|stroke|values|stop-color)="([^"]*)"/g, (_, attr: string, value: string) => {
     const mapped = value.replace(/#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-zA-Z])/g, hex => map(hex.toLowerCase()))
     return `${attr}="${mapped}"`
   })
@@ -398,7 +398,14 @@ export const LOOKS: Record<string, Look> = {
     voice: 'a punchy 1938 comic book',
     cell: 'solid',
     figure: '3d',
-    color: (hex, layer) => (layer === 'sky' ? '#f3c623' : layer === 'ground' ? '#e8312a' : layer === 'back' ? nearest(hex, ['#f08a3a', '#e8a33a', '#f3d65a']) : nearest(hex, COMIC)),
+    color: (hex, layer) =>
+      layer === 'sky'
+        ? '#f3c623'
+        : layer === 'ground'
+          ? nearest(hex, ['#e8312a', '#3f9e4a', '#2a7bc0', '#8a5a3a', '#7a7a80'])
+          : layer === 'back'
+            ? nearest(hex, ['#f08a3a', '#3f9e4a', '#2a7bc0', '#7a4a9a', '#f3d65a', '#c0392b', '#8a5a3a', '#e8e0c8', '#4a4a58'])
+            : nearest(hex, COMIC),
     inset: 4,
     font: "'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif",
     charW: 5.2,
