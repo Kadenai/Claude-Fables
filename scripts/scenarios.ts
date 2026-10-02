@@ -67,9 +67,9 @@ export const SCENARIOS: Scenario[] = [
     replies: {
       sonnet: [
         json(3.8, { backdrop: 'lab', hero: { action: 'think', from: 20, to: 20 }, caption: 'A leap-year test in `dates.test.ts` went red overnight. Calendar crime scene o_O', tone: 'trouble', title: 'case file' }),
-        json(4.2, { backdrop: 'forest', hero: { action: 'sneak', from: 5, to: 30, then: 'peek' }, particles: { kind: 'leaves', density: 0.3 }, caption: '`npm test` tripped over Feb 29. Tracking `daysInMonth()` through the undergrowth...', tone: 'trouble', title: 'the hunt' }),
+        json(4.2, { backdrop: 'forest', hero: { action: 'sneak', from: 5, to: 30, then: 'peek' }, particles: { kind: 'leaves', density: 0.3 }, caption: '`npm test` tripped over Feb 29. Tracking `daysInMonth()`...', tone: 'trouble', title: 'the hunt' }),
         json(3.5, { backdrop: 'desert', hero: { action: 'dig', from: 10, to: 25, then: 'point' }, caption: '`daysInMonth()` hardcodes February at 28. Every 4th year: ¯\\_(ツ)_/¯', title: 'found it' }),
-        fenced(4.6, { backdrop: 'lab', hero: { action: 'inspect', from: 15, to: 32 }, particles: { kind: 'sparks', density: 0.4 }, caption: 'Teaching `daysInMonth()` to ask `isLeapYear()` again. `npm test`, fingers crossed...' }),
+        fenced(4.6, { backdrop: 'lab', hero: { action: 'inspect', from: 15, to: 32 }, particles: { kind: 'sparks', density: 0.4 }, caption: '`daysInMonth()` asks `isLeapYear()` again. `npm test`, fingers crossed' }),
         json(3.9, { backdrop: 'city', hero: { action: 'dance', from: 10, to: 30 }, particles: { kind: 'stars', density: 0.5 }, caption: 'Leap day is back on the calendar: all 42 tests pass \\o/', tone: 'milestone', title: 'fixed' }),
       ],
       haiku: [
@@ -103,9 +103,9 @@ export const SCENARIOS: Scenario[] = [
     end: 34,
     replies: {
       sonnet: [
-        json(3.4, { backdrop: 'night', hero: { action: 'wave', from: 20, to: 20 }, particles: { kind: 'stars', density: 0.4 }, caption: 'Dark mode for the settings page? The village is already practising after sunset ^_^', title: 'night shift' }),
-        json(4.1, { backdrop: 'city', hero: { action: 'walk', from: 5, to: 30, then: 'inspect' }, caption: 'Colors already live as CSS vars in `tokens.css`. Dark mode = same town, lights off', title: 'tokens' }),
-        json(3.7, { backdrop: 'lab', hero: { action: 'inspect', from: 10, to: 28 }, particles: { kind: 'sparks', density: 0.3 }, caption: '`useTheme()` is born: follows the OS, then remembers you. A second palette in `tokens.css`' }),
+        json(3.4, { backdrop: 'night', hero: { action: 'wave', from: 20, to: 20 }, particles: { kind: 'stars', density: 0.4 }, caption: 'Dark mode for settings? The village practises after sunset ^_^', title: 'night shift' }),
+        json(4.1, { backdrop: 'city', hero: { action: 'walk', from: 5, to: 30, then: 'inspect' }, caption: 'Colors live as CSS vars in `tokens.css`. Dark mode = lights off', title: 'tokens' }),
+        json(3.7, { backdrop: 'lab', hero: { action: 'inspect', from: 10, to: 28 }, particles: { kind: 'sparks', density: 0.3 }, caption: '`useTheme()` is born: follows the OS, then remembers you <3' }),
         json(4.4, { backdrop: 'night', hero: { action: 'carry', from: 5, to: 35, then: 'dance' }, caption: 'Wiring the switch through `Settings.tsx` and `App.tsx`. `npm run build`...' }),
         json(3.6, { backdrop: 'night', hero: { action: 'celebrate', from: 15, to: 30 }, particles: { kind: 'stars', density: 0.6 }, caption: 'Dark mode lives under Appearance: follows your OS until you choose ^_^', tone: 'milestone', title: 'shipped' }),
       ],
@@ -180,7 +180,7 @@ export const SCENARIOS: Scenario[] = [
     replies: {
       sonnet: [
         json(3.9, { backdrop: 'volcano', hero: { action: 'think', from: 20, to: 20 }, particles: { kind: 'sparks', density: 0.4 }, caption: 'CI erupted after the eslint 9 bump. Grabbing a fire extinguisher...', tone: 'trouble', title: 'red' }),
-        json(4.2, { backdrop: 'night', hero: { action: 'inspect', from: 10, to: 28 }, caption: 'eslint 9 ignores `.eslintrc.json`. Reading the flat-config migration guide by moonlight' }),
+        json(4.2, { backdrop: 'night', hero: { action: 'inspect', from: 10, to: 28 }, caption: 'eslint 9 ignores `.eslintrc.json`. Flat-config guide by moonlight' }),
         chatty(3.5, 'Scene:', { backdrop: 'volcano', hero: { action: 'tumble', from: 40, to: 15, then: 'shrug' }, caption: 'New `eslint.config.js`, new eruption: lint fails again >_<', tone: 'trouble' }),
         json(4.5, { backdrop: 'lab', hero: { action: 'walk', from: 5, to: 25, then: 'think' }, caption: 'react-hooks bumped, lint runs clean, old `.eslintrc.json` retired. Tests next...' }),
         json(3.6, { backdrop: 'forest', hero: { action: 'celebrate', from: 10, to: 30 }, particles: { kind: 'leaves', density: 0.4 }, caption: 'CI is green: flat config, react-hooks v5, eslint 9 happy ^_^', tone: 'milestone', title: 'green' }),
@@ -263,6 +263,29 @@ export const SCENARIOS: Scenario[] = [
         json(1.3, { backdrop: 'city', hero: { action: 'think', from: 20, to: 20 }, caption: 'Upgrading React to 19 everywhere' }),
         json(1.5, { backdrop: 'city', hero: { action: 'walk', from: 5, to: 30 }, caption: 'Updating `package.json` files' }),
         json(1.2, { backdrop: 'night', hero: { action: 'shrug', from: 25, to: 25 }, caption: 'Stopped before deleting the lockfile. OK!', title: 'stopped' }),
+      ],
+    },
+  },
+  {
+    // Over in seconds: the first scene has barely gone up when the turn ends, so the closing one cuts in on it.
+    id: 'quick',
+    title: 'A quick lookup',
+    repo: 'no repo · a question',
+    ask: 'What are the largest railway operators in the world by revenue?',
+    steps: [
+      { at: 0.4, tool: 'WebSearch', input: { query: 'largest railway companies by revenue 2025' }, out: '10 results' },
+      { at: 1.6, tool: 'WebSearch', input: { query: 'largest rail freight operators by tonnage' }, out: '10 results' },
+      { at: 3, said: 'Deutsche Bahn leads on revenue at $47.72B, with Indian Railways and Union Pacific behind it.' },
+    ],
+    end: 4.5,
+    replies: {
+      sonnet: [
+        json(3.4, { backdrop: 'city', hero: { action: 'walk', from: 10, to: 40, then: 'inspect' }, caption: 'Two `WebSearch`es for the biggest railways. Checking the departures board...', title: 'all aboard' }),
+        json(3.6, { backdrop: 'city', hero: { action: 'celebrate', from: 40, to: 40 }, caption: 'Wait- already there! Deutsche Bahn leads at $47.72B. All aboard \\o/', tone: 'milestone', title: 'end of the line' }),
+      ],
+      haiku: [
+        json(1.1, { backdrop: 'city', hero: { action: 'walk', from: 10, to: 40 }, caption: 'Searching for the largest railway operators' }),
+        json(1.2, { backdrop: 'city', hero: { action: 'celebrate', from: 40, to: 40 }, caption: 'Oh! Done: Deutsche Bahn leads at $47.72B', tone: 'milestone' }),
       ],
     },
   },

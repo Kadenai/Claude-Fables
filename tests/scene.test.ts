@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { summarizeTool } from '../hooks/activity'
-import { buildPrompt, sceneFromReply } from '../hooks/narrator'
-import { extractJson, parseHex, parseScene } from '../hooks/scene'
+import { buildPrompt, GLANCE_MS, readMs, sceneFromReply, typeMs } from '../hooks/narrator'
+import { cleanCaption, extractJson, MAX_CAPTION, parseHex, parseScene } from '../hooks/scene'
 import { H, MAX_SVG, MAX_W, MIN_W, sceneToSvg, stageWidth } from '../hooks/svg'
 import { NARRATOR_MODELS } from '../hooks/director'
 import { rehearse } from '../scripts/rehearse'
@@ -46,8 +46,18 @@ describe('parseScene', () => {
     expect(scene?.hero).toEqual({ action: 'walk', from: 0, to: 100 })
     expect(scene?.props.length).toBe(8)
     expect(scene?.props[0]).toEqual({ sprite: 'bug', x: 40, y: 'ground', motion: 'none' })
-    expect(scene?.caption.length).toBe(90)
+    expect(scene?.caption.length).toBe(80)
     expect('evil' in (scene ?? {})).toBe(false)
+  })
+
+  test('a long caption is cut to fit the bubble at a sentence or a word, never mid-word', () => {
+    const long = 'Leaderboard delivered: Deutsche Bahn $47.72B, Indian Railways close behind. All aboard for the next stop!'
+    const cut = cleanCaption(long) ?? ''
+    expect(cut).toBe('Leaderboard delivered: Deutsche Bahn $47.72B, Indian Railways close behind.')
+    const words = cleanCaption('Tracking the parser through the undergrowth while the tests rerun quietly in the background somewhere') ?? ''
+    expect(words.length).toBeLessThanOrEqual(MAX_CAPTION)
+    expect(words).toBe('Tracking the parser through the undergrowth while the tests rerun quietly in…')
+    expect(cleanCaption('short and sweet')).toBe('short and sweet')
   })
 
   test('accepts only 3 and 6 digit hex colors', () => {
@@ -178,6 +188,35 @@ describe('viewer scenarios', () => {
         expect(closing?.at).toBeGreaterThanOrEqual(s.end * 1000)
         expect(moments.some(m => m.kind === 'show' && m.at > s.end * 1000)).toBe(true)
       }
+    }
+  })
+
+  test('every scene is typed out and read before the next replaces it; only news cuts in, and says so', async () => {
+    for (const s of SCENARIOS) {
+      for (const model of NARRATOR_MODELS) {
+        const { moments } = await rehearse(s, model)
+        const shows = moments.filter(m => m.kind === 'show')
+        for (const [i, next] of shows.entries()) {
+          const prev = shows[i - 1]
+          if (!prev || prev.kind !== 'show' || next.kind !== 'show') continue
+          const up = next.at - prev.at
+          const ask = moments.findLast(m => m.kind === 'ask' && m.at <= next.at && m.at >= prev.at)
+          const cutsIn = ask?.kind === 'ask' && ask.prompt.includes('breaks off')
+          // Nothing replaces a caption before it is typed out and glanced at; only a cut-in replaces one before it is read.
+          expect([s.id, model, up >= typeMs(prev.scene.caption) + GLANCE_MS]).toEqual([s.id, model, true])
+          if (!cutsIn) expect([s.id, model, up >= readMs(prev.scene.caption) - 1000]).toEqual([s.id, model, true])
+        }
+      }
+    }
+    // A turn over in seconds still shows its first scene. Sonnet's closing comes back while
+    // that one is still being read, so it breaks off from it; Haiku's waits it out.
+    const quick = SCENARIOS.find(s => s.id === 'quick')
+    if (!quick) throw new Error('expected the quick session')
+    for (const model of NARRATOR_MODELS) {
+      const { moments } = await rehearse(quick, model)
+      expect(moments.filter(m => m.kind === 'show').length).toBe(2)
+      const closing = moments.find(m => m.kind === 'ask' && m.closing)
+      expect(closing?.kind === 'ask' && closing.prompt.includes('breaks off')).toBe(model === 'sonnet')
     }
   })
 

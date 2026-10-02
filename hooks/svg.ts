@@ -4,6 +4,7 @@ import { type Motion, MOTION_TIMING } from './clawd3d'
 import { type HeroPainter, motionSvg } from './hero3d'
 import { gradeFilter } from './grade'
 import { MONOCRAFT, MONOCRAFT_BOLD } from './monocraft'
+import { TYPE_SECONDS_PER_CHAR } from './scene'
 import { richBackdrop } from './scenery'
 import { type Cell, type Look, lookFor, PAPER as CARD_PAPER, type Paper, type Tag, type WordKind } from './looks'
 import { HERO_FRAMES, PALETTE, SPRITES, type SpriteName } from './sprites'
@@ -572,6 +573,9 @@ const WIDE = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F
 const cols = (t: string) => t.length + (t.match(WIDE)?.length ?? 0)
 const wordLen = (w: Word) => cols(w.lead) + cols(w.core) + cols(w.tail)
 
+/** The most lines a bubble takes, so it stays clear of the ground. */
+const MAX_LINES = 4
+
 /** Greedy wrap of words into lines of at most `width` characters; a word longer than the line is cut. */
 function wrapWords(list: readonly Word[], width: number): Word[][] {
   const lines: Word[][] = []
@@ -649,10 +653,12 @@ function caption(
   const heroAt = (k: number) => hero.startX + (heroX - hero.startX) * k
   const boxAt = (k: number): Rect => ({ ...heroBox, x: heroAt(k) - 4 - hero.sway })
   const clampX = (v: number, w: number) => Math.min(sw - w - 2, Math.max(2, v))
-  // A narrower wrap, taller, is tried when the wide one finds no clear place.
+  // A narrower wrap, taller, is tried when the wide one finds no clear place; one that
+  // would need more than four lines is not, as every word of the caption is shown.
   let best = { x: 2, y: 4, ox: 0, score: Infinity, lines: [] as Word[][], w: 0, h: 0 }
-  for (const [wi, width] of [32, 25, 19].entries()) {
-    const lines = wrapWords(list, width).slice(0, wi === 0 ? 3 : 4)
+  const wraps = [32, 25, 19].map(width => wrapWords(list, width))
+  const fits = wraps.filter(lines => lines.length <= MAX_LINES)
+  for (const [wi, lines] of (fits.length ? fits : wraps.slice(0, 1)).entries()) {
     const w = Math.ceil(Math.max(...lines.map(lineLen)) * type.charW + 14)
     const h = lines.length * type.line + 7
     const beside = Math.min(GROUND_Y - h - 4, Math.max(4, top - 4))
@@ -681,7 +687,7 @@ function caption(
   let delay = 0.2
   const rows = lines
     .map((line, i) => {
-      const dur = Math.max(0.2, lineLen(line) * 0.03)
+      const dur = Math.max(0.2, lineLen(line) * TYPE_SECONDS_PER_CHAR)
       const id = `${idPrefix}${i}`
       const reveal =
         `<clipPath id="${id}"><rect x="${n(x)}" y="${n(y + 2 + i * type.line)}" width="0" height="${type.line + 2}">` +

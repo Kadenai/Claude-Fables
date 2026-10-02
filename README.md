@@ -8,7 +8,7 @@ While Claude works, Fables watches each tool call it makes and each line it says
 
 ```
 tool calls, Claude's own words ──► activity log (last 14 lines)
-                                         │  every ≥5s while a turn runs
+                                         │  as each scene is read, ≥5s apart
                                          ▼
         Sonnet or Haiku ($.model.complete) ──► JSON scene ──► parseScene (validate + clamp)
                                                                   │
@@ -21,6 +21,8 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 
 - **The model writes data, not code.** Each scene is a small declarative JSON object: a backdrop, Claude's action, particles, a caption and its tone. `hooks/scene.ts` validates it strictly: unknown fields are dropped, numbers clamped, strings flattened and cut, and colors must be 3- or 6-digit hex. A bad reply can't break anything; it just doesn't show.
 - **The animation runs inside the SVG.** `hooks/svg.ts` compiles a scene into one SVG document that animates itself with SMIL: walk cycles, bobbing, scrolling trains, twinkling stars, and a speech bubble that types itself out. Once the scene is drawn, the desktop needs no redraws for it.
+- **Every line gets read.** A scene stays up until its bubble has typed out and been on screen long enough to read, which takes longer for a longer caption. The narrator asks for the next scene a little before that, timed to how quickly the model has been answering, and a reply that comes back early waits its turn. Only news cuts in: a failure, or the end of the turn. Even then the current caption has typed out and been up for two seconds first, and the narrator is told the hero was mid-sentence, so the new caption opens by breaking off ("Wait-", "Oh!").
+- **Captions fit the bubble.** The narrator is asked for at most 70 characters. The hard limit is 80, the most the bubble shows whole in four lines. A longer caption is cut after its last full sentence, or else after a whole word with an ellipsis, never mid-word. The bubble always shows every word it is given.
 - **It has limits.** Only one model request runs at a time, scenes come at least 5 seconds apart, and after errors it backs off exponentially, up to 60 seconds. The prompt is always bounded (the last 14 activity lines and the last 4 scenes), so a long session can't outgrow the context window.
 - **It fits the window.** The band always gets a cartoon as wide as it is and 192 px tall. A wider window shows more of the scene, not a bigger one, so the art and the text stay the same size. Resizing the window redraws it.
 - **Desktop only.** In the terminal the band is left exactly as the engine draws it.
@@ -167,6 +169,6 @@ bun scripts/preview.ts > gallery.html # render sample scenes to a page in the br
 bun scripts/preview.ts --look all > styles.html # every look
 ```
 
-`scripts/scenarios.ts` holds six whole sessions: the prompt, each tool call and its result, Claude's words, and what Sonnet and what Haiku write back each time the narrator asks, as raw text, quirks included (code fences, a word of chatter, a missing caption, an empty answer). `scripts/rehearse.ts` plays a session through the narrator's own loop on a clock of its own, so the asks land when the plugin would make them, see exactly the prompt it would send, and bad replies are skipped and backed off from the same way. The viewer's **Sessions** tab shows it side by side: Claude Code's activity, the narrator's asks (with each prompt) and the model's replies (with each raw reply and the validator's verdict), the band, and a box to paste a reply of your own and see what the plugin would make of it. A test rehearses every session with both models. `bun scripts/preview.ts my-scenes.json` renders your own scenes, which is handy for tuning sprites or trying out what Sonnet sent back.
+`scripts/scenarios.ts` holds seven whole sessions: the prompt, each tool call and its result, Claude's words, and what Sonnet and what Haiku write back each time the narrator asks, as raw text, quirks included (code fences, a word of chatter, a missing caption, an empty answer). `scripts/rehearse.ts` plays a session through the narrator's own loop on a clock of its own, so the asks land when the plugin would make them, see exactly the prompt it would send, and bad replies are skipped and backed off from the same way. The viewer's **Sessions** tab shows it side by side: Claude Code's activity, the narrator's asks (with each prompt) and the model's replies (with each raw reply and the validator's verdict), the band, and a box to paste a reply of your own and see what the plugin would make of it. A test rehearses every session with both models. `bun scripts/preview.ts my-scenes.json` renders your own scenes, which is handy for tuning sprites or trying out what Sonnet sent back.
 
 The mod API is early access and may change between Claude Code releases. This mod was built against Claude Code 2.1.287. If something stops drawing, run `claude --debug`: the log line will name what the engine refused.

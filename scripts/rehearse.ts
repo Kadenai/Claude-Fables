@@ -21,6 +21,7 @@ export type Moment =
   | { at: number; kind: 'reply'; model: NarratorModel; text: string; isAnswered: boolean; scene: FablesScene | null; isStale: boolean; took: number }
   | { at: number; kind: 'failed'; error: string }
   | { at: number; kind: 'wait'; until: number; failures: number }
+  | { at: number; kind: 'hold'; until: number }
   | { at: number; kind: 'show'; scene: FablesScene }
   | { at: number; kind: 'clear' }
 

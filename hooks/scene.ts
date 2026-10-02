@@ -61,7 +61,12 @@ export const PARTICLES: readonly FablesParticles[] = [
 ]
 
 export const MAX_PROPS = 8
-export const MAX_CAPTION = 90
+/** What the narrator is asked to keep a caption to. */
+export const CAPTION_BUDGET = 70
+/** The hard limit: the most the bubble shows whole, at its widest, in four lines. Longer is cut at a sentence or a word. */
+export const MAX_CAPTION = 80
+/** How fast the bubble types its caption out, per character. */
+export const TYPE_SECONDS_PER_CHAR = 0.03
 export const MAX_LABEL = 18
 export const MAX_TITLE = 24
 export const MAX_PIXEL_SIDE = 16
@@ -99,6 +104,22 @@ export function cleanText(v: unknown, max: number): string | undefined {
     .trim()
   if (flat === '') return undefined
   return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat
+}
+
+/**
+ * The caption, cut to fit the bubble whole: at the last sentence that fits if
+ * that keeps most of it, else at the last word, with an ellipsis; never mid-word.
+ */
+export function cleanCaption(v: unknown): string | undefined {
+  const flat = cleanText(v, Infinity)
+  if (!flat || flat.length <= MAX_CAPTION) return flat
+  const head = flat.slice(0, MAX_CAPTION)
+  const sentence = /^.*[.!?](?=\s)/.exec(head)?.[0]
+  if (sentence && sentence.length >= MAX_CAPTION * 0.6) return sentence
+  const room = flat.slice(0, MAX_CAPTION - 1)
+  const space = room.lastIndexOf(' ')
+  const words = space >= MAX_CAPTION / 2 ? room.slice(0, space) : room
+  return `${words.replace(/[\s,;:.\-–—]+$/, '')}…`
 }
 
 function parsePixelArt(v: Loose): FablesPixelArt | undefined {
@@ -146,7 +167,7 @@ function parseProp(v: unknown): FablesProp | undefined {
  */
 export function parseScene(raw: unknown): FablesScene | null {
   if (!isObject(raw)) return null
-  const caption = cleanText(raw.caption, MAX_CAPTION)
+  const caption = cleanCaption(raw.caption)
   if (!caption) return null
 
   const hero = isObject(raw.hero) ? raw.hero : {}

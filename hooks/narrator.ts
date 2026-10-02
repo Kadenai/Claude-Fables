@@ -1,7 +1,7 @@
 import type { FablesScene } from '../types'
 
 import type { Activity } from './activity'
-import { extractJson, MAX_CAPTION, parseScene } from './scene'
+import { CAPTION_BUDGET, extractJson, parseScene, TYPE_SECONDS_PER_CHAR } from './scene'
 
 /** Remembered between scenes so the story stays continuous; capped so it never grows. */
 export type StoryBeat = { backdrop: string; caption: string }
@@ -9,6 +9,13 @@ export const MAX_STORY = 4
 
 export const MIN_GAP_MS = 5000
 export const MAX_BACKOFF_MS = 60000
+
+/** How long the bubble takes to type a caption out. */
+export const typeMs = (caption: string) => Math.round(200 + caption.length * TYPE_SECONDS_PER_CHAR * 1000)
+/** A typed caption stays up at least this long before anything may cut in. */
+export const GLANCE_MS = 2000
+/** How long a scene stays up to be read through: typed out, then read at a calm pace. */
+export const readMs = (caption: string) => typeMs(caption) + GLANCE_MS + caption.length * 45
 
 export const SYSTEM = `You are the narrator of "Claude Fables": tiny animated pixel-art cartoons that play while an AI coding agent works.
 The hero is always a small orange critter (the agent). You turn what it is doing right now into a whimsical visual metaphor:
@@ -20,7 +27,7 @@ Reply with ONE JSON object and nothing else, in this shape:
   "backdrop": one of "forest" | "space" | "city" | "desert" | "volcano" | "lab" | "night",
   "hero": { "action": one of the actions below, "from": 0-100, "to": 0-100, "then"?: an action to do next, where it stands },
   "particles"?: { "kind": "stars" | "rain" | "bubbles" | "sparks" | "snow" | "leaves", "density": 0-1 },
-  "caption": what the hero says: witty, a bit nerdy, specific to the real work, max ${MAX_CAPTION} characters,
+  "caption": what the hero says: witty, a bit nerdy, specific to the real work, at most ${CAPTION_BUDGET} characters (count them: a longer one is cut),
   "tone": "work" (the default) | "trouble" (something just failed) | "milestone" (tests pass, a fix lands, the task is done),
   "title"?: a 1-3 word chapter tag
 }
@@ -45,9 +52,14 @@ export type PromptInput = {
   ending?: 'answer' | 'aborted' | 'error' | 'refusal'
   /** The graphic style the scene is drawn in, so the caption can suit it; absent for the default look. */
   look?: { label: string; voice: string }
+  /**
+   * Set when this scene will cut in on the one still being read: the news that
+   * cuts in, and the line the hero is in the middle of.
+   */
+  interrupts?: { why: 'failed' | 'ended'; line: string }
 }
 
-export function buildPrompt({ ask, log, story, ending, look }: PromptInput): string {
+export function buildPrompt({ ask, log, story, ending, look, interrupts }: PromptInput): string {
   const lines = log.map(a => `- ${a.kind === 'said' ? 'said' : a.kind === 'failed' ? 'FAILED' : 'did'}: ${a.text}`)
   const past = story.map(b => `- [${b.backdrop}] "${b.caption}"`)
   const parts = [
@@ -57,6 +69,10 @@ export function buildPrompt({ ask, log, story, ending, look }: PromptInput): str
   ]
   if (look) {
     parts.push(`This scene is drawn in the style of ${look.label}. Let the caption sound like ${look.voice}, still about the real work.`)
+  }
+  if (interrupts) {
+    const news = interrupts.why === 'failed' ? 'something just FAILED' : 'the turn just ended'
+    parts.push(`The hero is still saying "${interrupts.line}" when ${news}. It breaks off: open the caption by cutting itself short ("Wait-", "Oh!", "Hold on:"), then tell the news.`)
   }
   if (ending === 'answer') parts.push('The agent just FINISHED the task. Draw a short, happy closing scene (celebrate or dance).')
   else if (ending === 'aborted') parts.push('The person just interrupted the agent. Draw a sheepish closing scene (shrug).')
