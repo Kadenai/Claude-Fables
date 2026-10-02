@@ -3,6 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { DEFAULT_MODEL, Director, findModel, type Host, MODEL_LABELS, NARRATOR_MODELS, type NarratorModel } from './director'
 import { DEFAULT_LOOK, findLook, LOOK_NAMES, LOOKS, lookFor } from './looks'
+import { typeMs } from './narrator'
+import { ENTRANCE_SECONDS } from './scene'
 import { H, sceneToSvg, W } from './svg'
 
 const scene = atom({ plugin: 'fables', key: 'scene' } as const, null)
@@ -41,7 +43,6 @@ function host($: EngineInterface): Host {
     now: () => $.clock.now(),
     complete: ask => $.model.complete(ask),
     show: drawn => update($, scene, () => drawn),
-    after: (ms, run) => $.clock.after(ms, run),
   }
 }
 
@@ -65,8 +66,17 @@ async function setOn($: EngineInterface, n: Director, value: boolean) {
   await update($, enabled, () => value)
 }
 
+/**
+ * The band's drawing of the scene up now. The same scene in the same box draws
+ * the same, so the desktop keeps playing it; redrawn in a new box or style
+ * once its caption is out, it opens with the caption already written rather
+ * than typing it again.
+ */
+type Drawn = { scene: string; key: string; source: string; at: number }
+
 export const register: Register = (on, options) => {
   const n = new Director()
+  let drawn: Drawn | undefined
   // The config menu's choice is the default; /fables model overrides it.
   const configured = findModel(options.model) ?? DEFAULT_MODEL
   n.model = configured
@@ -164,9 +174,18 @@ export const register: Register = (on, options) => {
     // The interactive frame does not size itself from the markup (left alone it
     // is a 300x150 box), so give it the band's box; a new width draws anew.
     const { width, height } = bandBox(e.props.bodyColumns)
+    const look = await read($, style)
+    const key = `${width}x${height}|${look}`
+    const now = await $.clock.now()
+    const same = JSON.stringify(current)
+    if (drawn?.scene !== same || drawn.key !== key) {
+      const isUp = drawn?.scene === same
+      const isSettled = isUp && now - (drawn?.at ?? now) >= typeMs(current.caption) + (current.enter ? ENTRANCE_SECONDS * 1000 : 0)
+      drawn = { scene: same, key, at: isUp ? (drawn?.at ?? now) : now, source: sceneToSvg(current, { width, height, look, figure: FIGURE, isSettled }) }
+    }
     return (
       <Svg
-        source={sceneToSvg(current, { width, height, look: await read($, style), figure: FIGURE })}
+        source={drawn.source}
         alt={current.caption}
         width={width}
         height={height}

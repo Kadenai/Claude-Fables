@@ -8,7 +8,7 @@
 import type { FablesScene } from '../types'
 
 import { type Activity, pushActivity, summarizeSpeech, summarizeTool } from './activity'
-import { backoffMs, buildPrompt, GLANCE_MS, readMs, remember, sceneFromReply, type StoryBeat, SYSTEM, typeMs } from './narrator'
+import { backoffMs, buildPrompt, readMs, remember, sceneFromReply, type StoryBeat, SYSTEM } from './narrator'
 import { lookFor } from './looks'
 
 /** The models that can write the story: Sonnet by default, Haiku for quicker, cheaper scenes. */
@@ -23,7 +23,7 @@ export function findModel(name: unknown): NarratorModel | undefined {
   return NARRATOR_MODELS.find(m => s === m || s.startsWith(`claude-${m}`) || s.includes(m))
 }
 
-/** How long the closing scene of a turn stays up. */
+/** How long the last scene of a turn stays up once the turn is over (and at least until it is read). */
 export const LINGER_MS = 30000
 /** What the model is expected to take to answer until it has been timed, and the bounds of that guess. */
 export const FIRST_LATENCY_MS = 3000
@@ -49,10 +49,23 @@ export type Host = {
   now(): number | Promise<number>
   complete(ask: Ask): Promise<Answer>
   show(scene: FablesScene | null): void | Promise<void>
-  after(ms: number, run: () => void): { cancel(): void }
   trace?(event: Trace): void
 }
 
+/** A scene come back from the model, waiting for its turn on the band. */
+type Queued = { scene: FablesScene; closing: Ending | undefined; turn: number }
+
+/** The most scenes that wait at once: the next one, and the turn's closing scene behind it. */
+export const MAX_QUEUE = 2
+
+/**
+ * The band plays scenes from a queue, one at a time, and each one stays up
+ * until its caption has typed out and been read, however the work runs on:
+ * nothing cuts in, not a failure, not the turn's end, not the next prompt.
+ * The narrator asks for the next scene so it comes back as the one on the
+ * band is read through; news (a failure, the turn ending) is asked for at
+ * once and waits its turn in the queue.
+ */
 export class Director {
   model: NarratorModel = DEFAULT_MODEL
   isOn = true
@@ -68,26 +81,28 @@ export class Director {
   nextAt = 0
   failures = 0
   turn = 0
-  /** The scene on the band, if any. */
+  /** The scene on the band, if any, and when it went up. */
   shown: FablesScene | undefined = undefined
-  /** Until then the scene on the band is still typing, or only just typed: nothing replaces it. */
-  typedUntil = 0
-  /** Until then the scene on the band is still being read: only news (a failure, the turn ending) cuts in. */
+  shownAt = 0
+  /** Until then the scene on the band is still being typed out and read: nothing replaces it. */
   readUntil = 0
-  /** A scene come back while the one on the band is still being read; it goes up when that one is. */
-  waiting: { scene: FablesScene; closing: Ending | undefined; cutsIn: boolean } | undefined = undefined
-  /** Something failed since the last ask: the next scene may cut in on the one being read. */
+  /** Scenes come back while the one on the band is still being read, oldest first. */
+  queue: Queued[] = []
+  /** Something failed since the last ask: the next scene is asked for at once. */
   isUrgent = false
   /** How long the model takes to answer, smoothed, so the next scene is asked for in time to follow on. */
   latency = FIRST_LATENCY_MS
-  private linger: { cancel(): void } | undefined
 
   private note(entry: Activity) {
     this.log = pushActivity(this.log, entry)
     this.isDirty = true
   }
 
-  /** The person asked something: a new turn, a fresh log. */
+  /**
+   * The person asked something: a new turn, a fresh log. The scene on the band
+   * is still read through, and a closing scene still waiting plays first; the
+   * old turn's other scenes are behind the story now and are dropped.
+   */
   submit(text: string) {
     this.turn++
     this.ask = text.replace(/\s+/g, ' ').trim().slice(0, 300)
@@ -96,10 +111,7 @@ export class Director {
     this.isTurnRunning = true
     this.isDirty = true
     this.isUrgent = false
-    this.waiting = undefined
-    // The last turn's closing scene has been read enough once typed: the new story may begin.
-    this.readUntil = Math.min(this.readUntil, this.typedUntil)
-    this.linger?.cancel()
+    this.queue = this.queue.filter(q => q.closing !== undefined)
   }
 
   /** The agent called a tool. */
@@ -127,24 +139,33 @@ export class Director {
   }
 
   /**
-   * Called once a second, with the host to ask through. Puts up a scene that was
-   * waiting once the one on the band has been read, and asks for the next scene
-   * when there is news: early enough that it comes back as the one on the band
-   * is read through, or at once for a failure or the turn's end.
+   * Called once a second, with the host to ask through. Puts the next scene in
+   * the queue up once the one on the band has been read, clears the band once
+   * the turn is over and its last scene has lingered, and asks for the next
+   * scene when there is news.
    */
   async tick(host: Host) {
     if (!this.isOn) return
     const now = await host.now()
-    if (this.waiting) {
-      if (now >= (this.waiting.cutsIn ? this.typedUntil : this.readUntil)) await this.present(host, this.waiting, now)
-      return
+    const next = this.queue[0]
+    if (next && now >= this.readUntil) await this.present(host, next, now)
+    else if (this.isIdle && this.shown && now >= this.readUntil && now >= this.shownAt + LINGER_MS) {
+      this.shown = undefined
+      await host.show(null)
+      host.trace?.({ kind: 'clear', at: now })
     }
     if (this.isAsking) return
-    if (this.ending) return this.narrate(host, now)
-    if (!this.isTurnRunning || !this.isDirty) return
+    // The closing scene is asked for at once, and may wait behind one other scene.
+    if (this.ending) return this.queue.length < MAX_QUEUE ? this.narrate(host, now) : undefined
+    if (!this.isTurnRunning || !this.isDirty || this.queue.length > 0) return
     if (now < this.nextAt) return
     if (!this.isUrgent && now < this.readUntil - this.latency) return
     return this.narrate(host, now)
+  }
+
+  /** Nothing more to come: the turn is over, and no scene is asked for or waiting. */
+  private get isIdle() {
+    return !this.isTurnRunning && !this.isAsking && !this.ending && this.queue.length === 0
   }
 
   private async narrate(host: Host, startedAt: number) {
@@ -155,9 +176,10 @@ export class Director {
     this.ending = undefined
     const isUrgent = this.isUrgent || closing !== undefined
     this.isUrgent = false
-    // News that will come back while the scene on the band is still being read cuts in on it, and the narrator is told so.
-    const interrupts =
-      isUrgent && this.shown && startedAt + this.latency < this.readUntil ? { why: closing ? ('ended' as const) : ('failed' as const), line: this.shown.caption } : undefined
+    // The line the hero will still be saying when this scene comes back: news breaks in on it, in the story.
+    const before = this.queue.at(-1)?.scene ?? this.shown
+    const isMidLine = this.queue.length > 0 || startedAt + this.latency < this.readUntil
+    const interrupts = isUrgent && before && isMidLine ? { why: closing ? ('ended' as const) : ('failed' as const), line: before.caption } : undefined
     const look = lookFor(this.look)
     const prompt = buildPrompt({ ask: this.ask, log: this.log, story: this.story, ending: closing, look: look.voice ? look : undefined, interrupts })
     host.trace?.({ kind: 'ask', at: startedAt, model: this.model, prompt, closing })
@@ -169,20 +191,22 @@ export class Director {
         this.latency = Math.round(Math.min(hi, Math.max(lo, this.latency * 0.6 + (now - startedAt) * 0.4)))
       }
       const drawn = reply.isAnswered ? sceneFromReply(reply.text) : null
-      // A reply that lands after a newer turn began belongs to a story nobody is watching.
-      const isStale = forTurn !== this.turn
+      // A scene that lands after a newer turn began belongs to a story nobody is following, unless it closes that story.
+      const isStale = forTurn !== this.turn && !closing
       host.trace?.({ kind: 'reply', at: now, model: this.model, text: reply.text, isAnswered: reply.isAnswered, scene: drawn, isStale })
       if (!drawn) {
         this.failures++
         return
       }
       this.failures = 0
-      if (isStale) return
-      // Only a scene written to cut in may cut in; any other waits for the one on the band to be read.
-      this.waiting = { scene: drawn, closing, cutsIn: interrupts !== undefined }
-      const until = interrupts ? this.typedUntil : this.readUntil
-      if (now >= until) await this.present(host, this.waiting, now)
-      else host.trace?.({ kind: 'hold', at: now, until })
+      if (isStale || !this.isOn) return
+      const queued: Queued = { scene: drawn, closing, turn: forTurn }
+      // A closing scene goes ahead of any scene of a newer turn already waiting.
+      const at = closing ? this.queue.findIndex(q => q.turn > forTurn) : -1
+      if (at >= 0) this.queue.splice(at, 0, queued)
+      else this.queue.push(queued)
+      if (this.queue[0] === queued && now >= this.readUntil) await this.present(host, queued, now)
+      else host.trace?.({ kind: 'hold', at: now, until: this.readUntil })
     } catch (err) {
       this.failures++
       host.trace?.({ kind: 'failed', at: await host.now(), error: err instanceof Error ? err.message : String(err) })
@@ -194,32 +218,25 @@ export class Director {
     }
   }
 
-  /** Puts a scene on the band, and holds it there until it has been read. */
-  private async present(host: Host, next: NonNullable<Director['waiting']>, now: number) {
-    this.waiting = undefined
-    const { scene, closing } = next
-    this.story = remember(this.story, scene)
+  /** Puts the next scene on the band, and holds it there until it has been read. */
+  private async present(host: Host, next: Queued, now: number) {
+    this.queue = this.queue.filter(q => q !== next)
+    // A new setting fades in from the last; the same one carries straight on.
+    const scene: FablesScene = this.shown && this.shown.backdrop !== next.scene.backdrop ? { ...next.scene, enter: 'fade' } : next.scene
+    this.story = remember(this.story, next.scene)
     this.shown = scene
-    this.typedUntil = now + typeMs(scene.caption) + GLANCE_MS
-    this.readUntil = now + readMs(scene.caption)
+    this.shownAt = now
+    this.readUntil = now + readMs(scene)
     await host.show(scene)
-    if (closing) {
-      this.linger?.cancel()
-      this.linger = host.after(LINGER_MS, () => {
-        if (this.isTurnRunning) return
-        this.shown = undefined
-        void host.show(null)
-        void Promise.resolve(host.now()).then(at => host.trace?.({ kind: 'clear', at }))
-      })
-    }
   }
 
   /** Turned off: no more asking, and the band is cleared. */
   async setOn(host: Host, value: boolean) {
     this.isOn = value
     if (value) return
-    this.waiting = undefined
+    this.queue = []
     this.shown = undefined
+    this.readUntil = 0
     await host.show(null)
   }
 }

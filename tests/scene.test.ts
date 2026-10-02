@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { summarizeTool } from '../hooks/activity'
-import { buildPrompt, GLANCE_MS, readMs, sceneFromReply, typeMs } from '../hooks/narrator'
+import { buildPrompt, readMs, sceneFromReply } from '../hooks/narrator'
 import { cleanCaption, extractJson, MAX_CAPTION, parseHex, parseScene } from '../hooks/scene'
 import { H, MAX_SVG, MAX_W, MIN_W, sceneToSvg, stageWidth } from '../hooks/svg'
 import { NARRATOR_MODELS } from '../hooks/director'
@@ -191,32 +191,33 @@ describe('viewer scenarios', () => {
     }
   })
 
-  test('every scene is typed out and read before the next replaces it; only news cuts in, and says so', async () => {
+  test('every scene is typed out and read before the next replaces it, whatever happens', async () => {
     for (const s of SCENARIOS) {
       for (const model of NARRATOR_MODELS) {
         const { moments } = await rehearse(s, model)
-        const shows = moments.filter(m => m.kind === 'show')
-        for (const [i, next] of shows.entries()) {
-          const prev = shows[i - 1]
-          if (!prev || prev.kind !== 'show' || next.kind !== 'show') continue
-          const up = next.at - prev.at
-          const ask = moments.findLast(m => m.kind === 'ask' && m.at <= next.at && m.at >= prev.at)
-          const cutsIn = ask?.kind === 'ask' && ask.prompt.includes('breaks off')
-          // Nothing replaces a caption before it is typed out and glanced at; only a cut-in replaces one before it is read.
-          expect([s.id, model, up >= typeMs(prev.scene.caption) + GLANCE_MS]).toEqual([s.id, model, true])
-          if (!cutsIn) expect([s.id, model, up >= readMs(prev.scene.caption) - 1000]).toEqual([s.id, model, true])
+        const shown = moments.filter(m => m.kind === 'show' || m.kind === 'clear')
+        for (const [i, next] of shown.entries()) {
+          const prev = shown[i - 1]
+          if (!prev || prev.kind !== 'show') continue
+          expect([s.id, model, next.at - prev.at >= readMs(prev.scene)]).toEqual([s.id, model, true])
+        }
+        // A scene in a new setting fades in; one in the same setting carries straight on.
+        const scenes = shown.filter(m => m.kind === 'show')
+        for (const [i, m] of scenes.entries()) {
+          const before = scenes[i - 1]
+          if (m.kind === 'show') expect(m.scene.enter === 'fade').toBe(before?.kind === 'show' && before.scene.backdrop !== m.scene.backdrop)
         }
       }
     }
-    // A turn over in seconds still shows its first scene. Sonnet's closing comes back while
-    // that one is still being read, so it breaks off from it; Haiku's waits it out.
+    // A turn over in seconds still shows its first scene, read through, then the closing one.
+    // Sonnet's closing is asked for while that first line is still being read, so the news breaks in on it.
     const quick = SCENARIOS.find(s => s.id === 'quick')
     if (!quick) throw new Error('expected the quick session')
     for (const model of NARRATOR_MODELS) {
       const { moments } = await rehearse(quick, model)
       expect(moments.filter(m => m.kind === 'show').length).toBe(2)
       const closing = moments.find(m => m.kind === 'ask' && m.closing)
-      expect(closing?.kind === 'ask' && closing.prompt.includes('breaks off')).toBe(model === 'sonnet')
+      expect(closing?.kind === 'ask' && closing.prompt.includes('breaks in')).toBe(model === 'sonnet')
     }
   })
 

@@ -4,7 +4,7 @@ import { type Motion, MOTION_TIMING } from './clawd3d'
 import { type HeroPainter, motionSvg } from './hero3d'
 import { gradeFilter } from './grade'
 import { MONOCRAFT, MONOCRAFT_BOLD } from './monocraft'
-import { TYPE_SECONDS_PER_CHAR } from './scene'
+import { ENTRANCE_SECONDS, TYPE_SECONDS_PER_CHAR } from './scene'
 import { richBackdrop } from './scenery'
 import { type Cell, type Look, lookFor, PAPER as CARD_PAPER, type Paper, type Tag, type WordKind } from './looks'
 import { HERO_FRAMES, PALETTE, SPRITES, type SpriteName } from './sprites'
@@ -634,6 +634,8 @@ function caption(
   look: Look,
   avoid: readonly Rect[],
   tone?: Tone,
+  /** When the caption starts typing, in seconds: later when the scene fades in. */
+  start = 0.2,
 ): string {
   const { fill, stroke, radius } = look.caption
   const onPaper = tone !== undefined
@@ -684,7 +686,7 @@ function caption(
     }
   }
   const { lines, w, h, x, y, ox } = best
-  let delay = 0.2
+  let delay = start
   const rows = lines
     .map((line, i) => {
       const dur = Math.max(0.2, lineLen(line) * TYPE_SECONDS_PER_CHAR)
@@ -819,7 +821,14 @@ const PIXELIZE = (sw: number, claude: Rect, grade = '', sprite = { eye: SPRITE_E
  */
 export function sceneToSvg(
   scene: FablesScene,
-  options: { width?: number; height?: number; look?: string; figure?: 'auto' | 'pixel' | '3d' } = {},
+  options: {
+    width?: number
+    height?: number
+    look?: string
+    figure?: 'auto' | 'pixel' | '3d'
+    /** Redrawn while it is up (a new width, a new style): no fade, and the caption already written. */
+    isSettled?: boolean
+  } = {},
 ): string {
   const sw = options.width && options.height ? stageWidth(options.width, options.height) : W
   const width = options.width ?? sw
@@ -848,6 +857,7 @@ export function sceneToSvg(
   let plan = hero(scene, stage.floor, sw, figure, tint)
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
+  const entrance = scene.enter === 'fade' && !options.isSettled ? ENTRANCE_SECONDS : 0
   const sky = art?.sky ?? stage.sky
   const ground = art?.ground ?? stage.ground
   // A look's grade takes the stage, Claude and all, before any pixelizing; past the stage's edges its own color shows.
@@ -891,7 +901,9 @@ export function sceneToSvg(
     (look.texture?.(sw, H, GROUND_Y, pixelArt) ?? '') +
     (look.frame?.(sw, H, GROUND_Y) ?? '') +
     (tag?.svg ?? '') +
-    caption(scene.caption, { startX: plan.startX, x: plan.endX, y: plan.endY, arrive: plan.arrive, jump: Math.max(heroReach(scene.hero.action), scene.hero.then ? heroReach(scene.hero.then) : 0), sway: scene.hero.action === 'inspect' ? 2 * U : 0 }, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined) +
+    caption(scene.caption, { startX: plan.startX, x: plan.endX, y: plan.endY, arrive: plan.arrive, jump: Math.max(heroReach(scene.hero.action), scene.hero.then ? heroReach(scene.hero.then) : 0), sway: scene.hero.action === 'inspect' ? 2 * U : 0 }, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined, options.isSettled ? -60 : entrance + 0.2) +
+    // A new setting fades in from the dark, so the band never jumps from one place to the next.
+    (entrance ? `<rect x="${-sw * 4}" y="${-H * 4}" width="${sw * 9}" height="${H * 9}" fill="#0b0b10" pointer-events="none"><animate attributeName="opacity" values="1;0" dur="${n(entrance)}s" fill="freeze"/></rect>` : '') +
     `</svg>`
 
   const propsShown = props.length

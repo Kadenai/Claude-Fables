@@ -65,11 +65,6 @@ export async function rehearse(scenario: Scenario, model: NarratorModel, look = 
         })
       }),
     show: scene => void moments.push(scene ? { at: now, kind: 'show', scene } : { at: now, kind: 'clear' }),
-    after: (ms, run) => {
-      const timer: { due: number; run: () => void; done?: boolean } = { due: now + ms, run }
-      timers.push(timer)
-      return { cancel: () => void (timer.done = true) }
-    },
     trace: event => {
       if (event.kind === 'reply') {
         const ask = moments.findLast(m => m.kind === 'ask')

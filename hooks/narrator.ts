@@ -1,7 +1,7 @@
 import type { FablesScene } from '../types'
 
 import type { Activity } from './activity'
-import { CAPTION_BUDGET, extractJson, parseScene, TYPE_SECONDS_PER_CHAR } from './scene'
+import { CAPTION_BUDGET, ENTRANCE_SECONDS, extractJson, parseScene, TYPE_SECONDS_PER_CHAR } from './scene'
 
 /** Remembered between scenes so the story stays continuous; capped so it never grows. */
 export type StoryBeat = { backdrop: string; caption: string }
@@ -12,10 +12,11 @@ export const MAX_BACKOFF_MS = 60000
 
 /** How long the bubble takes to type a caption out. */
 export const typeMs = (caption: string) => Math.round(200 + caption.length * TYPE_SECONDS_PER_CHAR * 1000)
-/** A typed caption stays up at least this long before anything may cut in. */
+/** However short the caption, it stays up this long once typed. */
 export const GLANCE_MS = 2000
-/** How long a scene stays up to be read through: typed out, then read at a calm pace. */
-export const readMs = (caption: string) => typeMs(caption) + GLANCE_MS + caption.length * 45
+/** How long a scene stays up to be read through: faded in, typed out, then read at a calm pace. */
+export const readMs = (scene: Pick<FablesScene, 'caption' | 'enter'>) =>
+  (scene.enter ? ENTRANCE_SECONDS * 1000 : 0) + typeMs(scene.caption) + GLANCE_MS + scene.caption.length * 45
 
 export const SYSTEM = `You are the narrator of "Claude Fables": tiny animated pixel-art cartoons that play while an AI coding agent works.
 The hero is always a small orange critter (the agent). You turn what it is doing right now into a whimsical visual metaphor:
@@ -53,8 +54,8 @@ export type PromptInput = {
   /** The graphic style the scene is drawn in, so the caption can suit it; absent for the default look. */
   look?: { label: string; voice: string }
   /**
-   * Set when this scene will cut in on the one still being read: the news that
-   * cuts in, and the line the hero is in the middle of.
+   * Set when news comes while the hero is still saying its last line: what the
+   * news is, and that line. The scene still plays after the line is read.
    */
   interrupts?: { why: 'failed' | 'ended'; line: string }
 }
@@ -72,7 +73,7 @@ export function buildPrompt({ ask, log, story, ending, look, interrupts }: Promp
   }
   if (interrupts) {
     const news = interrupts.why === 'failed' ? 'something just FAILED' : 'the turn just ended'
-    parts.push(`The hero is still saying "${interrupts.line}" when ${news}. It breaks off: open the caption by cutting itself short ("Wait-", "Oh!", "Hold on:"), then tell the news.`)
+    parts.push(`The hero has only just said "${interrupts.line}" when ${news}. The news breaks in: open the caption by reacting to it ("Wait-", "Oh!", "Hold on:"), then tell it.`)
   }
   if (ending === 'answer') parts.push('The agent just FINISHED the task. Draw a short, happy closing scene (celebrate or dance).')
   else if (ending === 'aborted') parts.push('The person just interrupted the agent. Draw a sheepish closing scene (shrug).')

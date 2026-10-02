@@ -160,3 +160,25 @@ test('/fables model switches the storyteller between Sonnet and Haiku, and remem
   await $.session.start({ cwd: '/work', surface: 'desktop', isInteractive: true })
   expect((await run('model')).text).toContain('Haiku writes the story')
 })
+
+test('a scene redrawn while it is up keeps its caption written instead of typing it again', async ($, on) => {
+  const clock = world(on)
+  on('model.complete', () => answer(JSON.stringify(SCENE)))
+  const source = async (bodyColumns: number) => {
+    const desktop = await $.ui.mount({ ...BAND, surface: 'desktop', props: { ...BAND.props, bodyColumns } })
+    const svg = await desktop.find({ type: 'Svg' })
+    await desktop.unmount()
+    return String((svg?.props as { source?: unknown } | undefined)?.source)
+  }
+
+  await $.session.start({ cwd: '/work', surface: 'desktop', isInteractive: true })
+  await $.prompt.submit({ text: 'look for bugs', wait: false, origin: { kind: 'composer' } })
+  await clock.advance(1000)
+  const first = await source(100)
+  expect(first).not.toContain('begin="-60s"')
+  // The same box draws the same, so the desktop plays on.
+  expect(await source(100)).toBe(first)
+  // A wider window once the caption is out: the caption is already written.
+  await clock.advance(4000)
+  expect(await source(140)).toContain('begin="-60s"')
+})

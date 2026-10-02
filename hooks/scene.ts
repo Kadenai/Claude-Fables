@@ -67,6 +67,8 @@ export const CAPTION_BUDGET = 70
 export const MAX_CAPTION = 80
 /** How fast the bubble types its caption out, per character. */
 export const TYPE_SECONDS_PER_CHAR = 0.03
+/** How long a scene in a new setting takes to fade in from the last; its caption starts after. */
+export const ENTRANCE_SECONDS = 0.6
 export const MAX_LABEL = 18
 export const MAX_TITLE = 24
 export const MAX_PIXEL_SIDE = 16

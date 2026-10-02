@@ -55,6 +55,8 @@ export type FablesScene = {
   /** How the work is going, which the caption's paper shows. */
   tone?: 'work' | 'trouble' | 'milestone'
   title?: string
+  /** Set by the narrator's loop, never the model: the scene fades in, as it opens on a new setting. */
+  enter?: 'fade'
 }
 
 declare module 'claude-code' {
