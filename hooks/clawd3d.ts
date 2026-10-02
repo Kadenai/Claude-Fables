@@ -207,15 +207,15 @@ export type Motion = 'walk' | 'run' | 'swim' | 'fly' | 'dig' | 'inspect' | 'cele
 
 /** Frames per loop and the loop's length in seconds, per motion. */
 export const MOTION_TIMING: Record<Motion, { frames: number; dur: number }> = {
-  walk: { frames: 8, dur: 0.64 },
-  run: { frames: 8, dur: 0.4 },
-  swim: { frames: 8, dur: 1.2 },
+  walk: { frames: 6, dur: 0.64 },
+  run: { frames: 6, dur: 0.4 },
+  swim: { frames: 6, dur: 1.2 },
   fly: { frames: 6, dur: 0.6 },
   dig: { frames: 6, dur: 0.45 },
   inspect: { frames: 12, dur: 3 },
   celebrate: { frames: 8, dur: 0.7 },
-  think: { frames: 8, dur: 2.4 },
-  idle: { frames: 8, dur: 2.4 },
+  think: { frames: 6, dur: 2.4 },
+  idle: { frames: 6, dur: 2.4 },
 }
 
 /** The pose `t` of the way (0 to 1) through one loop of a motion; `yaw` turns it toward where it goes. */
@@ -242,8 +242,8 @@ export function poseAt(motion: Motion, t: number, yaw: number): Partial<Pose> {
       return { hop: up * 3.2, armL: 0.1 + 1.3 * up, armR: 0.1 + 1.3 * up, pitch: -up * 0.25, sq: 1 + 0.08 * up, eyes: 'happy' }
     }
     case 'think':
-      return { yaw: yaw * 0.4 + 0.15 * sin, eyeX: 0.5, eyeY: 1, roll: 0.06 * sin, sq: 1 + 0.015 * sin, armR: 0.5, eyes: t > 0.86 && t < 0.96 ? 'closed' : 'open' }
+      return { yaw: yaw * 0.4 + 0.15 * sin, eyeX: 0.5, eyeY: 1, roll: 0.06 * sin, sq: 1 + 0.015 * sin, armR: 0.5, eyes: t > 0.78 && t < 0.9 ? 'closed' : 'open' }
     case 'idle':
-      return { yaw: yaw * 0.5, sq: 1 + 0.015 * sin, eyes: t > 0.86 && t < 0.96 ? 'closed' : 'open' }
+      return { yaw: yaw * 0.5, sq: 1 + 0.015 * sin, eyes: t > 0.78 && t < 0.9 ? 'closed' : 'open' }
   }
 }

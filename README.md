@@ -36,7 +36,8 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 | `hooks/looks.ts` | The graphic styles: color remaps, pixel treatments, textures and frames |
 | `hooks/clawd3d.ts` | The 3D Claude: the box model, its motions and its projection (ported from the gallery) |
 | `hooks/hero3d.ts` | Bakes the posed 3D model into SVG frames that SMIL plays in turn |
-| `hooks/scenery.ts` | The layered, shaded backdrops drawn with the 3D Claude |
+| `hooks/scenery.ts` | The nine authored scenes drawn with the 3D Claude |
+| `hooks/voxel.ts` | Sprite stacking: voxel models as stacked SVG slices, for the story props |
 | `types/index.d.ts` | The scene types and the mod's `$.state` contract |
 
 ## Install (Claude Code desktop)
@@ -95,14 +96,23 @@ Eighteen graphic styles, after looks from the [Claude Mascot Style Gallery](http
 
 Most styles draw Claude as the gallery's 3D model rather than the pixel sprite: the same box body, arms, legs and pill eyes, lit and depth-sorted. The band's frame runs no script, so the model can't be drawn live. `hooks/clawd3d.ts` poses it 6 to 12 times per motion (walk, run, swim, fly, dig, inspect, celebrate, think, idle), `hooks/hero3d.ts` bakes each pose into flat SVG polygons, and the scene flips through them with SMIL. Walking and running end in an idle loop on arrival. The model can't follow the cursor or be dragged; those need the live engine.
 
-The scenery and props change to match (`hooks/scenery.ts`). Every backdrop is composed the same way, back to front:
+The scenery changes to match (`hooks/scenery.ts`). Each of the nine backdrops is an authored scene with one brief, one light source and a small palette:
 
-- **Sky:** a gradient, then the sun or moon with its glow, stars and clouds.
-- **Far band:** ridges, a skyline or a tree line, faded into the sky.
-- **Middle row:** trees, buildings, mesas or houses standing on their own baseline a little behind the front edge. They are packed left to right so no two overlap, then spread so the row ends exactly at the margins.
-- **Front edge:** where Claude and the props stand, with the details on the ground in front of it.
+| Backdrop | The scene |
+| --- | --- |
+| forest | Dawn in an old forest: a low sun behind two rows of firs, mist between them, light falling through in shafts, two great trunks framing the edges |
+| sea | A night crossing: a full moon and its path on the water, a lighthouse sweeping its beam from a headland, one far sail |
+| space | Earthrise over a lunar outpost: a blue world over the grey horizon, the Milky Way, a base keeping one light blinking |
+| city | Blue hour: three ranks of buildings in haze, a spire with a slow red light, an elevated train carrying its lit carriages home |
+| desert | Canyon sunset: mesas, buttes and spires fading into violet, rimmed by the low sun, a saguaro at the edge |
+| volcano | A night eruption: an ash plume lit from beneath, lava down the cone, rising embers, cracks still glowing in the cooled field |
+| rails | Golden hour on a mountain line: alpenglow on the peaks, mist in the valley, firs below, poles going by |
+| lab | Working late: rain on a tall window over the night city, an architect's lamp pooling light on the bench, two monitors, a server rack, the night's reasoning on a whiteboard |
+| night | A sleeping village: hills under a high moon, cottages with one lit window and a thread of smoke, a great oak framing the view, fireflies |
 
-Everything is clipped to the stage. Details sit on grids that divide their surfaces exactly (windows on their facades, panels on the lab wall, sleepers on the track), and every animation stays inside its own region. Boxes are lit from the same upper left as the model. Shading is drawn in neutral black and white, so it survives every style's palette. Props get a solid extruded side and a contact shadow. With the pixel Claude, the stage stays flat pixel art.
+Depth comes from atmospheric perspective: silhouettes further back are lighter and nearer the sky's color. Focal points sit off the middle, so the middle of the stage, where Claude and the caption are, stays calm. Silhouettes come from smooth noise rather than repeated tiles, so there is no seam at any width. Everything is clipped to the stage, and motion is slow and belongs to the story. Styles with narrow palettes map scenery onto tonal ramps of their own colors, so the depth survives every style.
+
+Story props are sprite-stacked (`hooks/voxel.ts`): the pixel art is extruded three voxels deep and drawn as a stack of slices, darkened walls under a lit top, turned a little to show its side. A prop that spins swings round and back instead. Props are scaled so a 16-pixel prop stands about as tall as Claude. With the pixel Claude, the stage stays flat pixel art.
 
 The speech bubble picks the spot beside or above Claude that covers the least of Claude, the props, their labels, the chapter tag and the sun or moon. Prop labels take the style's caption colors, so they stay readable in every style.
 

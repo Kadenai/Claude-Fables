@@ -206,7 +206,7 @@ export const LOOKS: Record<string, Look> = {
     cell: 'draft',
     figure: '3d',
     facePaint: 'draft',
-    color: (hex, layer) => (layer === 'sky' ? '#1f4fa0' : layer === 'ground' ? '#1a4590' : layer === 'back' ? '#3b6cbc' : '#e8f0ff'),
+    color: (hex, layer) => (layer === 'sky' ? '#1f4fa0' : layer === 'ground' ? '#1a4590' : layer === 'back' ? ramp(hex, ['#173e84', '#1f4fa0', '#2c60b4', '#4a7cc8', '#7aa2dc']) : '#e8f0ff'),
     inset: 5,
     font: MONO,
     charW: 5.7,
@@ -232,7 +232,7 @@ export const LOOKS: Record<string, Look> = {
     color: (hex, layer) => {
       if (layer === 'sky') return '#2a1512'
       if (layer === 'ground') return '#1c0f0d'
-      if (layer === 'back') return lightness(hex) > 0.72 ? '#ffe9c8' : '#3a1d18'
+      if (layer === 'back') return lightness(hex) > 0.72 ? '#ffe9c8' : ramp(hex, ['#160a08', '#24110e', '#341a16', '#4a2620', '#6a3a30'])
       const { sat } = hueSat(hex)
       if (sat < 0.25) return lightness(hex) < 0.3 ? '#1c0f0d' : '#fff1e8'
       return nearest(hex, NEON)
@@ -258,7 +258,7 @@ export const LOOKS: Record<string, Look> = {
     voice: 'an elegant 18th-century portrait card',
     cell: 'solid',
     figure: '3d',
-    color: (hex, layer) => (layer === 'sky' ? '#efe6d2' : layer === 'ground' ? '#2a2420' : layer === 'back' ? '#d8ccb2' : lightness(hex) > 0.85 ? '#efe6d2' : '#1a1714'),
+    color: (hex, layer) => (layer === 'sky' ? '#efe6d2' : layer === 'ground' ? '#2a2420' : layer === 'back' ? ramp(hex, ['#8a7e6a', '#a89a80', '#c2b498', '#d8ccb2', '#e8dec8']) : lightness(hex) > 0.85 ? '#efe6d2' : '#1a1714'),
     inset: 7,
     font: SERIF,
     charW: 4.9,
@@ -298,7 +298,7 @@ export const LOOKS: Record<string, Look> = {
     voice: 'a solemn hieroglyph inscription',
     cell: 'solid',
     figure: '3d',
-    color: (hex, layer) => (layer === 'sky' ? '#e3cfa0' : layer === 'ground' ? '#c58a3a' : layer === 'back' ? nearest(hex, ['#d6bd88', '#c9ab72']) : isWarm(hex) ? ramp(hex, ['#7a3220', '#a8462a', '#c86a44']) : nearest(hex, EARTH)),
+    color: (hex, layer) => (layer === 'sky' ? '#e3cfa0' : layer === 'ground' ? '#c58a3a' : layer === 'back' ? ramp(hex, ['#8a6a3e', '#a8844f', '#c9ab72', '#d6bd88', '#e3cfa0']) : isWarm(hex) ? ramp(hex, ['#7a3220', '#a8462a', '#c86a44']) : nearest(hex, EARTH)),
     inset: 4,
     font: SERIF,
     charW: 4.9,
@@ -319,7 +319,7 @@ export const LOOKS: Record<string, Look> = {
     figure: '3d',
     facePaint: 'lead',
     color: (hex, layer) =>
-      layer === 'sky' ? '#1d2c5a' : layer === 'ground' ? '#1a1414' : layer === 'back' ? nearest(hex, ['#24386e', '#2c4a7f', '#3a2a5a']) : nearest(hex, JEWELS),
+      layer === 'sky' ? '#1d2c5a' : layer === 'ground' ? '#1a1414' : layer === 'back' ? ramp(hex, ['#141c3a', '#1d2c5a', '#24386e', '#3a2a5a', '#2c4a7f', '#5a6aa8']) : nearest(hex, JEWELS),
     inset: 4,
     font: SERIF,
     charW: 4.9,
@@ -428,7 +428,7 @@ export const LOOKS: Record<string, Look> = {
     figure: '3d',
     color: (hex, layer) => {
       if (layer === 'sky' || layer === 'ground') return '#efe7d6'
-      if (layer === 'back') return nearest(hex, ['#e6d9bc', '#dccdb0'])
+      if (layer === 'back') return ramp(hex, ['#b9a888', '#cdbd9c', '#dccdb0', '#e6d9bc', '#efe7d6'])
       if (isWarm(hex)) return ramp(hex, ['#9c2a1c', '#c8372a', '#e04a35'])
       return nearest(hex, ['#1d4f9c', '#f2b81c', '#141414', '#efe7d6', '#c8372a'])
     },

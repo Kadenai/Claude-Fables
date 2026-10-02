@@ -2,6 +2,7 @@ import type { FablesProp, FablesScene } from '../types'
 
 import { type FacePaint, motionSvg } from './hero3d'
 import { richBackdrop } from './scenery'
+import { place, stack, Vox } from './voxel'
 import { type Cell, type Layer, type Look, lightness, lookFor, remapColors } from './looks'
 import { HERO_FRAMES, PALETTE, SPRITES, type SpriteName } from './sprites'
 
@@ -19,7 +20,7 @@ export const U = 4
 const GROUND_Y = 104
 /** The desktop's Svg element takes at most this many characters. */
 export const MAX_SVG = 131072
-const BUDGET = 120000
+const BUDGET = 126000
 
 const FONT = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
 const INK = '#1f1e1d'
@@ -352,22 +353,48 @@ function label(text: string, cx: number, y: number, tag: TagStyle, sw: number): 
  * copies behind it, offset up and right as the scenery's boxes are, and a
  * contact shadow under it when it stands on the ground.
  */
+/**
+ * Stage units per art pixel of a stacked prop: smaller than the flat sprite's,
+ * so a 16-pixel prop stands about as tall as the 3D Claude, not over the scenery.
+ */
+const PROP_UNIT = 2.6
+
+/** How many voxels deep a stacked prop's pixel art is extruded. */
+const PROP_DEPTH = 3
+
+/**
+ * A prop as a sprite stack: its pixel art extruded PROP_DEPTH voxels deep, each
+ * row of the art one layer, turned a little to show its side; a spinning prop
+ * swings well round and back instead, so it never shows its thin edge.
+ * Its bottom edge sits on `bottom`, centered on `cx`.
+ */
+function stackedProp(art: Art, id: string, cx: number, bottom: number, motion: FablesProp['motion']): string {
+  const rows = art.rows.length
+  const cols = widthOf(art.rows)
+  const v = new Vox(cols, PROP_DEPTH, rows)
+  art.rows.forEach((row, r) => {
+    for (let x = 0; x < row.length; x++) {
+      const key = row[x] ?? '.'
+      const color = key === '.' ? undefined : art.colorOf(key)
+      if (color) for (let y = 0; y < PROP_DEPTH; y++) v.set(x, y, rows - 1 - r, color)
+    }
+  })
+  // A prop sliding across the stage faces it squarely; the rest turn a little to show their side.
+  const s = stack(id, v, { s: PROP_UNIT, lift: PROP_UNIT * 0.85, yaw: motion === 'scroll' ? 0 : -16, sway: motion === 'spin' ? 40 : undefined, swayDur: 3.2 })
+  return s.defs + place(id, cx, bottom - s.down * 0.6)
+}
+
 function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cell: Cell, solid: boolean, look: Look): string {
   const art = artFor(prop)
-  const w = widthOf(art.rows) * U
-  const h = art.rows.length * U
+  const unit = solid ? PROP_UNIT : U
+  const w = widthOf(art.rows) * unit
+  const h = art.rows.length * unit
   const x = Math.round(((sw - w) * prop.x) / 100)
   const y = prop.y === 'ground' ? floor - h : prop.y === 'air' ? 58 - h / 2 : 8
   const cx = x + w / 2
   const cy = y + h / 2
-  const id = `fp${index}`
-  const sprite = `<g${solid ? ` id="${id}"` : ''} transform="translate(${x} ${n(y)}) scale(${U})">${pixelPaths(art.rows, art.colorOf, cell)}</g>`
-  const depth = solid
-    ? [2, 1].map(k => `<use href="#${id}" transform="translate(${n(k * 1.6)} ${n(-k * 0.9)})" filter="url(#sc-deep)"/>`).join('')
-    : ''
-  const shade = solid && prop.y === 'ground' ? `<ellipse cx="${n(cx + 2)}" cy="${n(floor)}" rx="${n(w * 0.55)}" ry="2.6" fill="black" opacity=".28"/>` : ''
-  // The sprite is defined first so the copies behind it can refer to it, then drawn again on top.
-  const body = solid ? `<defs>${sprite}</defs>${depth}<use href="#${id}"/>` : sprite
+  const shade = solid && prop.y === 'ground' ? `<ellipse cx="${n(cx + 1)}" cy="${n(floor)}" rx="${n(w * 0.55)}" ry="2.6" fill="black" opacity=".28"/>` : ''
+  const body = solid ? stackedProp(art, `fp${index}`, cx, y + h, prop.motion) : `<g transform="translate(${x} ${n(y)}) scale(${U})">${pixelPaths(art.rows, art.colorOf, cell)}</g>`
   const slow = n(2 + (index % 3) * 0.7)
   let motion = ''
   switch (prop.motion) {
@@ -384,7 +411,8 @@ function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cel
       motion = `<animateTransform attributeName="transform" type="translate" values="0 -${n(y + h)};0 0;0 0" keyTimes="0;.4;1" dur="3s" repeatCount="indefinite"/>`
       break
     case 'spin':
-      motion = `<animateTransform attributeName="transform" type="rotate" values="0 ${n(cx)} ${n(cy)};360 ${n(cx)} ${n(cy)}" dur="${slow}s" repeatCount="indefinite"/>`
+      // A stacked prop turns about its own axis instead; a flat one spins in the picture plane.
+      if (!solid) motion = `<animateTransform attributeName="transform" type="rotate" values="0 ${n(cx)} ${n(cy)};360 ${n(cx)} ${n(cy)}" dur="${slow}s" repeatCount="indefinite"/>`
       break
     case 'blink':
       motion = `<animate attributeName="opacity" values="1;.25;1" dur="1s" repeatCount="indefinite"/>`
@@ -527,11 +555,11 @@ const overlap = (a: Rect, b: Rect) =>
   Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))
 
 /** Where a prop and its label sit while it stays put; a scrolling prop crosses the whole stage and blocks nothing. */
-function propRects(prop: FablesProp, floor: number, sw: number): Rect[] {
+function propRects(prop: FablesProp, floor: number, sw: number, unit: number): Rect[] {
   if (prop.motion === 'scroll') return []
   const art = artFor(prop)
-  const w = widthOf(art.rows) * U
-  const h = art.rows.length * U
+  const w = widthOf(art.rows) * unit
+  const h = art.rows.length * unit
   const x = Math.round(((sw - w) * prop.x) / 100)
   const y = prop.y === 'ground' ? floor - h : prop.y === 'air' ? 58 - h / 2 : 8
   const reach = prop.motion === 'drift' ? 24 : prop.motion === 'bob' ? 0 : 2
@@ -630,7 +658,8 @@ export function sceneToSvg(
   const figure: Figure = wants === '3d' ? { kind: '3d', paint: look.facePaint ?? 'solid' } : { kind: 'pixel', cell: look.cell }
   // The 3D Claude gets scenery and props with depth to match; the pixel sprite keeps the flat pixel stage.
   const rich = figure.kind === '3d'
-  const stage = rich ? richBackdrop(scene, rand, sw, GROUND_Y, W) : flatStage(backdrop(scene, rand, sw))
+  const stageAt = (lean: boolean) => (rich ? richBackdrop(scene, rng(`${scene.backdrop}|${scene.caption}|stage`), sw, GROUND_Y, W, lean) : flatStage(backdrop(scene, rand, sw)))
+  let stage = stageAt(false)
   const groundTop = stage.groundTop
   const dust = particles(scene, rand, sw)
   const props = scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell, rich, look))
@@ -641,7 +670,7 @@ export function sceneToSvg(
   const ground = tint('ground', stage.ground)
   // What the speech bubble keeps clear of: the props still drawn, their labels, the chapter tag.
   const avoid = (propCount: number): Rect[] => [
-    ...scene.props.slice(0, propCount).flatMap(p => propRects(p, stage.floor, sw)),
+    ...scene.props.slice(0, propCount).flatMap(p => propRects(p, stage.floor, sw, rich ? PROP_UNIT : U)),
     ...(scene.title ? [{ x: 0, y: 0, w: scene.title.length * look.charW + 34 + (look.inset ?? 0), h: 16 + (look.inset ?? 0) }] : []),
     ...stage.keep,
   ]
@@ -667,6 +696,11 @@ export function sceneToSvg(
     `</svg>`
 
   let svg = build(true, props.length)
+  // Over the limit, the scenery thins out first, then the particles, and only then the props.
+  if (svg.length > BUDGET && rich) {
+    stage = stageAt(true)
+    svg = build(true, props.length)
+  }
   if (svg.length > BUDGET) svg = build(false, props.length)
   for (let count = props.length - 1; svg.length > BUDGET && count >= 0; count--) svg = build(false, count)
   return svg

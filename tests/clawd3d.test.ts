@@ -21,6 +21,13 @@ describe('the 3D Clawd', () => {
     expect(build({ yaw: Math.PI }, 1).eyes).toHaveLength(0)
   })
 
+  test('idling and thinking blink once a loop', () => {
+    for (const motion of ['idle', 'think'] as const) {
+      const { frames } = MOTION_TIMING[motion]
+      expect(Array.from({ length: frames }, (_, k) => poseAt(motion, k / frames, 0).eyes).filter(e => e === 'closed')).toHaveLength(1)
+    }
+  })
+
   test('every motion poses every frame without a broken number', () => {
     for (const motion of Object.keys(MOTION_TIMING) as Motion[]) {
       for (let k = 0; k < MOTION_TIMING[motion].frames; k++) {
@@ -33,8 +40,8 @@ describe('the 3D Clawd', () => {
 
   test('a loop bakes one frame per pose, each shown in its own slot', () => {
     const { svg, frames } = motionSvg('walk', { height: 40, cx: 26, floor: 36, yaw: 0.55, paint: 'solid' })
-    expect(frames).toBe(8)
-    expect(svg.match(/<g visibility="hidden">/g)).toHaveLength(8)
+    expect(frames).toBe(MOTION_TIMING.walk.frames)
+    expect(svg.match(/<g visibility="hidden">/g)).toHaveLength(frames)
     expect(svg).not.toContain('NaN')
   })
 })
@@ -76,18 +83,31 @@ describe('layering', () => {
     if (!scene) throw new Error('expected a scene')
     for (const figure of ['pixel', '3d'] as const) {
       const svg = sceneToSvg(scene, { figure })
-      const grass = svg.indexOf(figure === 'pixel' ? 'fill="#5e9c4a"' : 'fill="#6bab55"')
-      const prop = svg.indexOf('scale(4)')
+      const grass = svg.indexOf(figure === 'pixel' ? 'fill="#5e9c4a"' : 'fill="url(#sc-floor)"')
+      const prop = svg.indexOf(figure === 'pixel' ? 'scale(4)' : 'href="#fp0"')
       expect(grass).toBeGreaterThan(-1)
       expect(grass).toBeLessThan(prop)
     }
   })
 
-  test('3D stages give props a depth and a contact shadow', () => {
+  test('3D stages draw props as sprite stacks: a slice per row of the art, walls darkened', () => {
     const scene = parseScene({ backdrop: 'city', hero: { action: 'walk', from: 0, to: 20 }, props: [{ sprite: 'trophy', x: 70 }], caption: 'Solid gold.' })
     if (!scene) throw new Error('expected a scene')
-    expect(sceneToSvg(scene, { figure: '3d' })).toContain('filter="url(#sc-deep)"')
+    const svg = sceneToSvg(scene, { figure: '3d' })
+    expect(svg).toContain('<g id="fp0-0"')
+    expect(svg).toContain('href="#fp0-0" y="0" filter="url(#sc-deep)"')
     expect(sceneToSvg(scene, { figure: 'pixel' })).not.toContain('sc-deep')
+  })
+
+  test('a scene too rich for the limit thins its scenery before it drops a prop', () => {
+    const sprites = ['server', 'trophy', 'rocket', 'file', 'bug', 'train', 'planet', 'beaker']
+    for (const backdrop of ['city', 'forest', 'night', 'rails']) {
+      const scene = parseScene({ backdrop, hero: { action: 'walk', from: 0, to: 40 }, props: sprites.map((sprite, i) => ({ sprite, x: 4 + i * 13, label: sprite })), caption: 'Crowded.' })
+      if (!scene) throw new Error('expected a scene')
+      const svg = sceneToSvg(scene, { figure: '3d', width: 2400, height: 192 })
+      expect(svg.length).toBeLessThan(MAX_SVG)
+      for (let i = 0; i < sprites.length; i++) expect(svg).toContain(`href="#fp${i}"`)
+    }
   })
 })
 
