@@ -1,52 +1,47 @@
-# Claude Fables
+<p align="center">
+  <img src="assets/styles.gif" alt="Claude, the little orange critter, playing out coding moments in all eleven styles: Pixel Art, the Original, Cave Painting, Blueprint, Mosaic, Frutiger Aero, Copperplate Engraving, Millefleur Tapestry, Golden Age Comic, Ukiyo-e and Kamon" width="960">
+</p>
 
-A Claude Code mod for the **desktop app**. It turns whatever Claude is doing into a small animated pixel-art cartoon, played in the band above the prompt.
+<h1 align="center">Claude Fables</h1>
+
+<p align="center">
+  <b>Your work, told as a cartoon while Claude codes.</b><br>
+  A Claude Code mod for the desktop app that plays a small animated story in the band above the prompt.
+</p>
+
+<p align="center">
+  <img alt="Claude Code mod" src="https://img.shields.io/badge/Claude_Code-mod-d97757">
+  <img alt="Desktop app" src="https://img.shields.io/badge/runs_in-the_desktop_app-3b3a36">
+  <img alt="11 styles" src="https://img.shields.io/badge/styles-11-6a5acd">
+  <img alt="20 actions" src="https://img.shields.io/badge/actions-20-2e8b57">
+  <img alt="7 scenes" src="https://img.shields.io/badge/scenes-7-c46a2a">
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#use">Use</a> ·
+  <a href="#the-scenes">The scenes</a> ·
+  <a href="#captions">Captions</a> ·
+  <a href="#styles">Styles</a> ·
+  <a href="#develop">Develop</a>
+</p>
+
+> [!NOTE]
+> Claude Fables was developed entirely in Claude Code cloud environments, so there may be bugs and rough edges. [Issues](https://github.com/henrik-thevibe/Claude-Fables/issues) and pull requests are very welcome.
 
 While Claude works, Fables watches each tool call it makes and each line it says. Every few seconds it asks Sonnet (or Haiku, if you prefer) to retell the latest moment as a scene. Bug hunts turn into nature documentaries and bad regexes get pulled over by the train police. Claude appears as a small orange critter walking, sneaking or flying through the story. When the turn ends there is a closing scene, and it stays up for 30 seconds.
 
-## How it works
+- **A scene every few seconds:** each tool call and line Claude says becomes a moment in a story.
+- **20 actions:** Claude walks, sneaks, digs, trips, shrugs, sleeps and celebrates, matched to the work.
+- **7 hand-lit scenes:** forest, space, city, desert, volcano, lab and night village.
+- **11 styles:** from pixel art to ukiyo-e, every element redrawn in the medium.
+- **Captions that read like a terminal:** files, functions, numbers, failures and successes each set apart.
+- **Safe by design:** the model writes data, never code, and a bad reply is simply skipped.
 
-```
-tool calls, Claude's own words ──► activity log (last 14 lines)
-                                         │  as each scene is read, ≥5s apart
-                                         ▼
-        Sonnet or Haiku ($.model.complete) ──► JSON scene ──► parseScene (validate + clamp)
-                                                                  │
-                                                                  ▼
-                                    sceneToSvg ──► one self-animating SVG (SMIL)
-                                                                  │
-                                                                  ▼
-                                        <Svg isInteractive/> in the AbovePrompt band
-```
+## Quick start
 
-- **The model writes data, not code.** Each scene is a small declarative JSON object: a backdrop, Claude's action, particles, a caption and its tone. `hooks/scene.ts` validates it strictly: unknown fields are dropped, numbers clamped, strings flattened and cut, and colors must be 3- or 6-digit hex. A bad reply can't break anything; it just doesn't show.
-- **The animation runs inside the SVG.** `hooks/svg.ts` compiles a scene into one SVG document that animates itself with SMIL: walk cycles, bobbing, scrolling trains, twinkling stars, and a speech bubble that types itself out. Once the scene is drawn, the desktop needs no redraws for it.
-- **Every line gets read.** Scenes play from a queue, one at a time. Each one stays up until its bubble has typed out and been on screen long enough to read, which takes longer for a longer caption. Nothing cuts in: not a failure, not the end of the turn, not the next prompt. The narrator asks for the next scene a little before the current one is read, timed to how quickly the model has been answering, so it is ready on time. A scene that comes back early waits in the queue. News (a failure, the turn ending) is asked for straight away and joins the queue behind the current scene. The narrator is told what the hero has just said, so the news breaks in within the story ("Wait-", "Oh!") rather than on screen. When a new prompt comes in, the scene that is up is still read through, and a closing scene still on its way plays before the new story starts. Once a turn is over, its last scene stays up for 30 seconds, then the band clears.
-- **Changes are smooth.** A scene in a new setting fades in from the last one; one in the same setting carries straight on. Each scene is drawn once and kept, so the desktop plays it through. The desktop draws the band again whenever its props change, and the end of a turn always changes them. So every redraw of a scene that is up (the turn ending, a resize, a new style) is set to the scene's own clock: the caption is exactly as far typed as it was, and Claude is exactly as far along.
-- **Captions fit the bubble.** The narrator is asked for at most 70 characters. The hard limit is 80, the most the bubble shows whole in four lines. A longer caption is cut after its last full sentence, or else after a whole word with an ellipsis, never mid-word. The bubble always shows every word it is given.
-- **It has limits.** Only one model request runs at a time, scenes come at least 5 seconds apart, and after errors it backs off exponentially, up to 60 seconds. The prompt is always bounded (the last 14 activity lines and the last 4 scenes), so a long session can't outgrow the context window.
-- **It fits the window.** The band always gets a cartoon as wide as it is and 192 px tall. A wider window shows more of the scene, not a bigger one, so the art and the text stay the same size. Resizing the window redraws it.
-- **Desktop only.** In the terminal the band is left exactly as the engine draws it.
-
-| File | What it does |
-| --- | --- |
-| `hooks/register.tsx` | The hooks: watches tool calls, replies and turns; draws the band; handles `/fables` |
-| `hooks/narrator.ts` | The narrator's system prompt, prompt building, reply parsing, backoff |
-| `hooks/director.ts` | The narrator's loop: what it remembers, when it asks, what it does with a reply. The plugin and the viewer run the same one |
-| `hooks/activity.ts` | Boils each tool call down to one readable line |
-| `hooks/scene.ts` | The scene format and its validator |
-| `hooks/sprites.ts` | The pixel-art library: Claude in two walk frames, plus 30+ props |
-| `hooks/svg.ts` | Scene → animated SVG: backdrops, particles, props, hero, caption |
-| `hooks/looks.ts` | The looks: Pixel Art, the Original, and the registry of styles |
-| `hooks/styles/*.ts` | The nine gallery styles, each an art bible: inks, how each kind of element is drawn, Claude, caption, tag, frame |
-| `hooks/art/roles.ts`, `hooks/art/painter.ts`, `hooks/art/ink.ts` | The roles scenes paint their elements under, and the painter a style redraws them with |
-| `hooks/grade.ts` | The medium a grid style sets the drawn stage into: tesserae or a weave |
-| `hooks/clawd3d.ts` | The 3D Claude: the box model, its motions and its projection (ported from the gallery) |
-| `hooks/hero3d.ts` | Bakes the posed 3D model into SVG frames that SMIL plays in turn |
-| `hooks/scenery.ts` | The seven authored scenes: light maps, materials, reflections |
-| `types/index.d.ts` | The scene types and the mod's `$.state` contract |
-
-## Install (Claude Code desktop)
+<p align="center"><img src="assets/install.gif" alt="Claude carrying a box across the desert: Moving into ~/code/Claude-Fables..." width="960"></p>
 
 1. Clone this repo somewhere permanent, for example `~/code/Claude-Fables`.
 2. Add it to the `env` block in `~/.claude/settings.json`:
@@ -64,7 +59,64 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 
 To try it from the terminal for one session instead, run `claude --plugin-dir ~/code/Claude-Fables`. Note that in the terminal the mod only watches and draws nothing.
 
+## How it works
+
+<p align="center"><img src="assets/how-it-works.gif" alt="Claude inspecting the activity log in a late-night lab" width="960"></p>
+
+```
+tool calls, Claude's own words ──► activity log (last 14 lines)
+                                         │  as each scene is read, ≥5s apart
+                                         ▼
+        Sonnet or Haiku ($.model.complete) ──► JSON scene ──► parseScene (validate + clamp)
+                                                                  │
+                                                                  ▼
+                                    sceneToSvg ──► one self-animating SVG (SMIL)
+                                                                  │
+                                                                  ▼
+                                        <Svg isInteractive/> in the AbovePrompt band
+```
+
+
+- **The model writes data, not code.** Each scene is a small declarative JSON object: a backdrop, Claude's action, particles, a caption and its tone. `hooks/scene.ts` validates it strictly: unknown fields are dropped, numbers clamped, strings flattened and cut, and colors must be 3- or 6-digit hex. A bad reply can't break anything; it just doesn't show.
+- **The animation runs inside the SVG.** `hooks/svg.ts` compiles a scene into one SVG document that animates itself with SMIL: walk cycles, bobbing, scrolling trains, twinkling stars, and a speech bubble that types itself out. Once the scene is drawn, the desktop needs no redraws for it.
+- **Every line gets read.** Scenes play from a queue, one at a time. Each one stays up until its bubble has typed out and been on screen long enough to read, which takes longer for a longer caption. Nothing cuts in: not a failure, not the end of the turn, not the next prompt. The narrator asks for the next scene a little before the current one is read, timed to how quickly the model has been answering, so it is ready on time. A scene that comes back early waits in the queue. News (a failure, the turn ending) is asked for straight away and joins the queue behind the current scene. The narrator is told what the hero has just said, so the news breaks in within the story ("Wait-", "Oh!") rather than on screen. When a new prompt comes in, the scene that is up is still read through, and a closing scene still on its way plays before the new story starts. Once a turn is over, its last scene stays up for 30 seconds, then the band clears.
+
+<details>
+<summary><b>Under the hood:</b> queueing, smooth changes, caption fit, limits, sizing</summary>
+
+- **Changes are smooth.** A scene in a new setting fades in from the last one; one in the same setting carries straight on. Each scene is drawn once and kept, so the desktop plays it through. The desktop draws the band again whenever its props change, and the end of a turn always changes them. So every redraw of a scene that is up (the turn ending, a resize, a new style) is set to the scene's own clock: the caption is exactly as far typed as it was, and Claude is exactly as far along.
+- **Captions fit the bubble.** The narrator is asked for at most 70 characters. The hard limit is 80, the most the bubble shows whole in four lines. A longer caption is cut after its last full sentence, or else after a whole word with an ellipsis, never mid-word. The bubble always shows every word it is given.
+- **It has limits.** Only one model request runs at a time, scenes come at least 5 seconds apart, and after errors it backs off exponentially, up to 60 seconds. The prompt is always bounded (the last 14 activity lines and the last 4 scenes), so a long session can't outgrow the context window.
+- **It fits the window.** The band always gets a cartoon as wide as it is and 192 px tall. A wider window shows more of the scene, not a bigger one, so the art and the text stay the same size. Resizing the window redraws it.
+- **Desktop only.** In the terminal the band is left exactly as the engine draws it.
+
+</details>
+
+<details>
+<summary><b>The files</b></summary>
+
+| File | What it does || --- | --- |
+| `hooks/register.tsx` | The hooks: watches tool calls, replies and turns; draws the band; handles `/fables` |
+| `hooks/narrator.ts` | The narrator's system prompt, prompt building, reply parsing, backoff |
+| `hooks/director.ts` | The narrator's loop: what it remembers, when it asks, what it does with a reply. The plugin and the viewer run the same one |
+| `hooks/activity.ts` | Boils each tool call down to one readable line |
+| `hooks/scene.ts` | The scene format and its validator |
+| `hooks/sprites.ts` | The pixel-art library: Claude in two walk frames, plus 30+ props |
+| `hooks/svg.ts` | Scene → animated SVG: backdrops, particles, props, hero, caption |
+| `hooks/looks.ts` | The looks: Pixel Art, the Original, and the registry of styles |
+| `hooks/styles/*.ts` | The nine gallery styles, each an art bible: inks, how each kind of element is drawn, Claude, caption, tag, frame |
+| `hooks/art/roles.ts`, `hooks/art/painter.ts`, `hooks/art/ink.ts` | The roles scenes paint their elements under, and the painter a style redraws them with |
+| `hooks/grade.ts` | The medium a grid style sets the drawn stage into: tesserae or a weave |
+| `hooks/clawd3d.ts` | The 3D Claude: the box model, its motions and its projection (ported from the gallery) |
+| `hooks/hero3d.ts` | Bakes the posed 3D model into SVG frames that SMIL plays in turn |
+| `hooks/scenery.ts` | The seven authored scenes: light maps, materials, reflections |
+| `types/index.d.ts` | The scene types and the mod's `$.state` contract |
+
+</details>
+
 ## Use
+
+<p align="center"><img src="assets/use.gif" alt="Claude waving in the forest: /fables on, and hello!" width="960"></p>
 
 - `/fables`: toggle the mod on or off. `/fables on` and `/fables off` also work. The setting is remembered across sessions.
 - `/fables style <name>`: draw every scene in one of the styles below, for example `/fables style ukiyo-e` or `/fables style golden age`. `/fables style` lists them, and `/fables style off` goes back to the default, Pixel Art. It is remembered across sessions.
@@ -74,6 +126,8 @@ To try it from the terminal for one session instead, run `claude --plugin-dir ~/
 Every scene is one small model request, so this costs a few requests per minute while Claude is working.
 
 ## The scenes
+
+<p align="center"><img src="assets/scenes.gif" alt="A tour of the seven scenes: forest, space, city, desert, volcano, lab and night village" width="960"></p>
 
 Claude is drawn as the gallery's 3D model: the same box body, arms, legs and pill eyes, lit and depth-sorted. The band's frame runs no script, so the model can't be drawn live. `hooks/clawd3d.ts` poses it 6 to 12 times per motion, `hooks/hero3d.ts` bakes each pose into flat SVG polygons, and the scene flips through them with SMIL. The model can't follow the cursor or be dragged; those need the live engine.
 
@@ -99,7 +153,8 @@ Each of the seven backdrops in `hooks/scenery.ts` is an authored scene with one 
 | lab | Working late: an architect's lamp warms the board-formed concrete and the bench, dust turns in its cone, rain beads on the window over a city opened into bokeh, and the polished floor mirrors the room |
 | night | A sleeping village: hills under a high moon, cottages with one lit window and a thread of smoke, a great oak framing the view, fireflies |
 
-### How they are lit
+<details>
+<summary><b>How they are lit</b></summary>
 
 Every surface is painted twice. First as light: a warm key where the light source reaches, cool shade facing away, deep tones where surfaces meet. Then that light map is multiplied by a material, built in an SVG filter from seeded noise cut into a small palette of related colors: needles, bark, grass, basalt, sandstone, sand, regolith, concrete, wood, asphalt. Light that has to brighten a dark material (shafts, lava glow, lamp pools) is added on top with a screen blend instead. Glows bloom, far layers sit slightly out of focus, rims of light appear only where the light can actually reach, and a lens pass adds fine grain and a vignette over the whole frame, Claude included.
 
@@ -109,11 +164,13 @@ Depth comes from atmospheric perspective: further layers are lighter and nearer 
 
 The band's frame takes at most 131,072 characters, so repeated things are drawn once and placed many times: the firs, the grass clumps and the furthest tree line are templates. A scene that would still run over is redrawn leaner, then without particles, and as a last resort on the flat stage.
 
-### Captions
+</details>
+
+## Captions
+
+<p align="center"><img src="assets/captions.gif" alt="Claude pointing at a caption that reads: npm test on dates.ts: 42/42 passed, 0 failed" width="960"></p>
 
 The story is told in words. Props aren't drawn on the scene, so nothing competes with Claude and the caption.
-
-In the Pixel Art look (the default), the whole stage, scenery and Claude together, goes through a pixelizer: one SVG filter that samples the drawing at the middle of every two-unit square and spreads each sample over its square, so everything reads as pixel art without any of it being redrawn, and no blur washes the colors out. The grid starts at the stage's corner, so the pixels line up. Claude gets a sprite filter of its own on the same grid: its body sampled crisp, its eyes (finer than a pixel) found by their darkness and thickened just enough to land on whole pixels, and a one-pixel dark outline round it, as a pixel-art character would have. The caption sits above it all, already in pixel type, so it stays sharp. In the Original look, scenes are drawn smooth and the scenery takes a slight blur instead, so Claude and the caption read first.
 
 The caption is one standard bubble of cartoon paper with a tail pointing at Claude, set in [Monocraft](https://github.com/IdreesInc/Monocraft) by Idrees Hassan (SIL Open Font License, `fonts/Monocraft-OFL.txt`), embedded as a 5 KB subset so it reads the same everywhere. It stays with Claude and never covers it: it takes a spot just beside, above or (for a flying Claude) below, checked against Claude's whole path, jumps and sways included. While Claude walks, the bubble walks along at the same distance, so its tail always points at Claude. Above Claude, it can sit anywhere along Claude's head, and a narrower wrap is tried, to find a spot the stage's edges never hold back. When a walk is too long for any spot, the bubble waits unseen until Claude is far enough in, then appears beside Claude and walks on with it. That wait is added to the scene's reading time. Inside it, kinds of words are set apart, so a caption reads like a terminal:
 
@@ -129,9 +186,16 @@ The caption is one standard bubble of cartoon paper with a tail pointing at Clau
 
 The narrator also picks a tone for the moment. Trouble leads the caption with a red ✗ and a milestone with a green ✓; a celebration is a milestone unless it says otherwise. The narrator is asked to write like a developer, with backticks around code and the odd ASCII face.
 
-The model and its projection are ported from the gallery's engine by [ChetasLua](https://github.com/ChetasLua), under the MIT License.
+<details>
+<summary><b>The pixel-art pass</b></summary>
+
+In the Pixel Art look (the default), the whole stage, scenery and Claude together, goes through a pixelizer: one SVG filter that samples the drawing at the middle of every two-unit square and spreads each sample over its square, so everything reads as pixel art without any of it being redrawn, and no blur washes the colors out. The grid starts at the stage's corner, so the pixels line up. Claude gets a sprite filter of its own on the same grid: its body sampled crisp, its eyes (finer than a pixel) found by their darkness and thickened just enough to land on whole pixels, and a one-pixel dark outline round it, as a pixel-art character would have. The caption sits above it all, already in pixel type, so it stays sharp. In the Original look, scenes are drawn smooth and the scenery takes a slight blur instead, so Claude and the caption read first.
+
+</details>
 
 ## Styles
+
+<p align="center"><img src="assets/styles-grid.png" alt="One still of each of the eleven styles, each labelled with its /fables style command" width="960"></p>
 
 Two looks draw the authored scenes as they are: **Pixel Art** (`pixel`, the default) and the **Original** (`original`), the same scenes drawn smooth.
 
@@ -149,7 +213,8 @@ Nine more styles, from the [Claude Mascot Style Gallery](https://github.com/henr
 | Ukiyo-e | `ukiyoe` | Flat woodblock inks over a key line, bokashi skies, kasumi mist, a vermilion sun; a cartouche and seal |
 | Kamon | `kamon` | Cream planes on black silk parted by cuts of one width; Claude as a crest; the vermilion hanko |
 
-### How a style redraws a scene
+<details>
+<summary><b>How a style redraws a scene</b></summary>
 
 Every element of a scene is handed to a painter under a *role* that says what it is and how deep it stands (`hooks/art/roles.ts`): a fir, a mist bank, a mesa, the lamp's cone, the wet street. The original looks keep the lit, photographic painting. A style's painter (`hooks/art/painter.ts`, `hooks/styles/*.ts`) reads that painting for its shapes and tones and draws it again:
 - the lit look's blooms, materials and lens are left out;
@@ -161,7 +226,11 @@ Claude is drawn by each style's hero painter, from the 3D model's faces, its par
 
 The styles draw as fast as the original look or faster, since they leave out the lit look's material filters, and every one fits the band's size limit at every width.
 
+</details>
+
 ## Develop
+
+<p align="center"><img src="assets/develop.gif" alt="Claude digging by an erupting volcano: Digging through scripts/rehearse.ts" width="960"></p>
 
 ```sh
 claude plugin validate .              # manifest, hooks and state contract
@@ -173,3 +242,17 @@ bun scripts/preview.ts --look all > styles.html # every look
 `scripts/scenarios.ts` holds seven whole sessions: the prompt, each tool call and its result, Claude's words, and what Sonnet and what Haiku write back each time the narrator asks, as raw text, quirks included (code fences, a word of chatter, a missing caption, an empty answer). `scripts/rehearse.ts` plays a session through the narrator's own loop on a clock of its own, so the asks land when the plugin would make them, see exactly the prompt it would send, and bad replies are skipped and backed off from the same way. The viewer's **Sessions** tab shows it side by side: Claude Code's activity, the narrator's asks (with each prompt) and the model's replies (with each raw reply and the validator's verdict), the band, and a box to paste a reply of your own and see what the plugin would make of it. A test rehearses every session with both models. `bun scripts/preview.ts my-scenes.json` renders your own scenes, which is handy for tuning sprites or trying out what Sonnet sent back.
 
 The mod API is early access and may change between Claude Code releases. This mod was built against Claude Code 2.1.287. If something stops drawing, run `claude --debug`: the log line will name what the engine refused.
+
+The images in this README are drawn by the mod itself: `bun scripts/readme-gifs.ts` renders them to `assets/`. The launch video is made the same way; see [`video/`](video/README.md).
+
+## Built in the cloud
+
+<p align="center"><img src="assets/cloud.gif" alt="Claude flying over the moon: Built entirely in the cloud. Bugs may lurk." width="960"></p>
+
+Claude Fables was developed entirely in Claude Code cloud environments: the mod, its tests, the scenes and styles, this README's images and the launch video. So there may be bugs, and some may only show up in real use on your machine. If something looks off, run `claude --debug` and [open an issue](https://github.com/henrik-thevibe/Claude-Fables/issues) with what the log says.
+
+## Credits
+
+- Claude's 3D model and its projection are ported from the gallery's engine by [ChetasLua](https://github.com/ChetasLua), under the MIT License.
+- The nine gallery styles come from the [Claude Mascot Style Gallery](https://github.com/henrik-thevibe/Claude-Mascot-Style-Gallery).
+- Captions are set in [Monocraft](https://github.com/IdreesInc/Monocraft) by Idrees Hassan, under the SIL Open Font License (`fonts/Monocraft-OFL.txt`).
