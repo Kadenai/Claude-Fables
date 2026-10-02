@@ -34,6 +34,8 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 | `hooks/sprites.ts` | The pixel-art library: Claude in two walk frames, plus 30+ props |
 | `hooks/svg.ts` | Scene → animated SVG: backdrops, particles, props, hero, caption |
 | `hooks/looks.ts` | The graphic styles: color remaps, pixel treatments, textures and frames |
+| `hooks/clawd3d.ts` | The 3D Claude: the box model, its motions and its projection (ported from the gallery) |
+| `hooks/hero3d.ts` | Bakes the posed 3D model into SVG frames that SMIL plays in turn |
 | `types/index.d.ts` | The scene types and the mod's `$.state` contract |
 
 ## Install (Claude Code desktop)
@@ -57,6 +59,7 @@ To try it from the terminal for one session instead, run `claude --plugin-dir ~/
 ## Use
 
 - `/fables`: toggle the mod on or off. `/fables on` and `/fables off` also work. The setting is remembered across sessions.
+- `/fables figure auto|pixel|3d`: draw Claude as each style chooses, or always as the pixel sprite or the 3D model.
 - `/fables style`: list the graphic styles. `/fables style <name>` picks one, and `/fables style shuffle` draws each turn in a different style. The choice is remembered across sessions.
 - **Scene model:** Sonnet by default. You can switch to `haiku` (cheaper, faster) or `opus` in the config menu, or under `pluginConfigs.fables.model` in settings.
 
@@ -64,23 +67,36 @@ Every scene is one small Sonnet request, so this costs a few requests per minute
 
 ## Styles
 
-Thirteen graphic styles, after looks from the [Claude Mascot Style Gallery](https://github.com/henrik-thevibe/Claude-Mascot-Style-Gallery). A style changes how a scene is painted, never what happens in it. It remaps every color, chooses how one art pixel is drawn (a solid block, a mosaic tile, a pane of leaded glass, a cross stitch, a printed character, a drafted square) and adds its own textures and frames. The narrator hears which style it is writing for, so the caption's voice can suit it.
+Eighteen graphic styles, after looks from the [Claude Mascot Style Gallery](https://github.com/henrik-thevibe/Claude-Mascot-Style-Gallery). A style changes how a scene is painted, never what happens in it. It remaps every color, chooses how one art pixel is drawn (a solid block, a mosaic tile, a pane of leaded glass, a cross stitch, a printed character, a drafted square) and adds its own textures and frames. The narrator hears which style it is writing for, so the caption's voice can suit it.
 
-| Name | Style | What it looks like |
-| --- | --- | --- |
-| `pixel` | Pixel Art | the original: solid 16-bit pixels (the default) |
-| `handheld` | Handheld | four shades of green on a dotted LCD |
-| `teletext` | Teletext Page | eight broadcast colors, blocky cells, scanlines |
-| `blueprint` | Blueprint | white drafting lines on a blue grid, with a title block |
-| `neon` | Neon | glowing tubes on a brick wall that flickers now and then |
-| `silhouette` | Silhouette | black cut paper on cream, in a gilt frame |
-| `ukiyoe` | Ukiyo-e | indigo and vermilion woodblock print on grainy paper |
-| `tomb` | Tomb Painting | earth pigments with a painted frieze |
-| `glass` | Stained Glass | jewel-toned panes with leading |
-| `mosaic` | Mosaic | tesserae and grout with a meander border |
-| `sampler` | Sampler | cross stitches on linen |
-| `printer` | Line Printer | ASCII characters on greenbar paper |
-| `comic` | Golden Age Comic | primary colors, ink outlines and halftone dots |
+| Name | Style | Claude | What it looks like |
+| --- | --- | --- | --- |
+| `pixel` | Pixel Art | pixel | the original: solid 16-bit pixels (the default) |
+| `handheld` | Handheld | pixel | four shades of green on a dotted LCD |
+| `teletext` | Teletext Page | pixel | eight broadcast colors, blocky cells, scanlines |
+| `mosaic` | Mosaic | pixel | tesserae and grout with a meander border |
+| `sampler` | Sampler | pixel | cross stitches on linen |
+| `printer` | Line Printer | pixel | ASCII characters on greenbar paper |
+| `blueprint` | Blueprint | 3D | white drafting lines on a blue grid, with a title block |
+| `neon` | Neon | 3D | glowing tubes on a brick wall that flickers now and then |
+| `silhouette` | Silhouette | 3D | black cut paper on cream, in a gilt frame |
+| `ukiyoe` | Ukiyo-e | 3D | indigo and vermilion woodblock print on grainy paper |
+| `tomb` | Tomb Painting | 3D | earth pigments with a painted frieze |
+| `glass` | Stained Glass | 3D | jewel-toned panes with leading |
+| `comic` | Golden Age Comic | 3D | primary colors, ink outlines and halftone dots |
+| `bauhaus` | Bauhaus | 3D | primary red, blue and yellow shapes on cream |
+| `midcentury` | Mid-Century Modern | 3D | teal sky, half-lit sun, mustard ground |
+| `lowpoly` | Low Poly | 3D | a late-90s 3D platformer with a gradient sky and a HUD |
+| `deco` | Art Deco | 3D | gold sunbeams over a navy skyline, in a double gold frame |
+| `pin` | Enamel Pin | 3D | gold-rimmed enamel on pink, with sparkles |
+
+### The 3D Claude
+
+Most styles draw Claude as the gallery's 3D model rather than the pixel sprite: the same box body, arms, legs and pill eyes, lit and depth-sorted. The band's frame runs no script, so the model can't be drawn live. `hooks/clawd3d.ts` poses it 6 to 12 times per motion (walk, run, swim, fly, dig, inspect, celebrate, think, idle), `hooks/hero3d.ts` bakes each pose into flat SVG polygons, and the scene flips through them with SMIL. Walking and running end in an idle loop on arrival. The model can't follow the cursor or be dragged; those need the live engine.
+
+`/fables figure 3d` or `/fables figure pixel` draws Claude the same way in every style. `/fables figure auto`, the default, lets each style choose.
+
+The model and its projection are ported from the gallery's engine by [ChetasLua](https://github.com/ChetasLua), under the MIT License.
 
 The styles live in `hooks/looks.ts`. Adding one means adding one entry there.
 

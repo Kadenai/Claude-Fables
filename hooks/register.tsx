@@ -11,9 +11,14 @@ import { H, sceneToSvg, W } from './svg'
 const scene = atom({ plugin: 'fables', key: 'scene' } as const, null)
 const enabled = atom({ plugin: 'fables', key: 'enabled' } as const, true)
 const look = atom({ plugin: 'fables', key: 'look' } as const, DEFAULT_LOOK)
+const figure = atom({ plugin: 'fables', key: 'figure' } as const, 'auto')
 
 const STORE_ENABLED = 'enabled'
 const STORE_STYLE = 'style'
+const STORE_FIGURE = 'figure'
+const FIGURES = ['auto', 'pixel', '3d'] as const
+type FigureSetting = (typeof FIGURES)[number]
+const isFigure = (v: unknown): v is FigureSetting => FIGURES.some(f => f === v)
 /** The style setting that draws each turn in the next look. */
 const SHUFFLE = 'shuffle'
 /** How long the closing scene of a turn stays up. */
@@ -138,7 +143,10 @@ async function setStyle($: EngineInterface, n: Narrator, style: string) {
 }
 
 function styleList(n: Narrator): string {
-  const rows = LOOK_NAMES.map(name => `${name === n.style ? '*' : ' '} ${name.padEnd(11)} ${LOOKS[name]?.label ?? ''}`)
+  const rows = LOOK_NAMES.map(name => {
+    const look = LOOKS[name]
+    return `${name === n.style ? '*' : ' '} ${name.padEnd(11)} ${(look?.label ?? '').padEnd(19)} ${look?.figure === '3d' ? '3D Claude' : 'pixel Claude'}`
+  })
   rows.push(`${n.style === SHUFFLE ? '*' : ' '} ${SHUFFLE.padEnd(11)} a different look each turn`)
   return `Claude Fables styles (\`/fables style <name>\`):\n${rows.join('\n')}`
 }
@@ -169,10 +177,12 @@ export const register: Register = (on, options) => {
     n.style = typeof stored === 'string' && (stored === SHUFFLE || stored in LOOKS) ? stored : DEFAULT_LOOK
     n.look = lookOfTurn(n.style, n.turn)
     await update($, look, () => n.look)
+    const storedFigure = await $.store.get(STORE_FIGURE)
+    await update($, figure, () => (isFigure(storedFigure) ? storedFigure : 'auto'))
     await $.command.register({
       name: 'fables',
       description: 'Claude Fables: turn the cartoons above the prompt on or off, or pick their style',
-      argumentHint: '[on|off|style <name>]',
+      argumentHint: '[on|off|style <name>|figure auto|pixel|3d]',
     })
     $.clock.every(1000, () => void tick($, n))
     return next(e)
@@ -181,6 +191,19 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'fables' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
     const [word, name] = arg.split(/\s+/)
+    if (word === 'figure') {
+      if (!isFigure(name)) {
+        return { text: `fables: Claude is drawn ${await read($, figure)}. Use \`/fables figure auto|pixel|3d\`: auto lets each style choose.` }
+      }
+      await $.store.set(STORE_FIGURE, name)
+      await update($, figure, () => name)
+      return {
+        text:
+          name === 'auto'
+            ? 'Claude Fables lets each style choose between the pixel and the 3D Claude.'
+            : `Claude Fables draws Claude ${name === '3d' ? 'as the 3D model' : 'as the pixel sprite'} in every style.`,
+      }
+    }
     if (word === 'style' || word === 'styles') {
       if (!name) return { text: styleList(n) }
       if (name !== SHUFFLE && !(name in LOOKS)) return { text: `fables: no style "${name}". ${styleList(n)}` }
@@ -248,13 +271,14 @@ export const register: Register = (on, options) => {
     const current = await read($, scene)
     if (!current || !(await read($, enabled))) return next(e)
     const drawnIn = await read($, look)
+    const drawnAs = await read($, figure)
     const { Svg } = $.ui.resolve(e)
     // The interactive frame does not size itself from the markup (left alone it
     // is a 300x150 box), so give it the band's box; a new width draws anew.
     const { width, height } = bandBox(e.props.bodyColumns)
     return (
       <Svg
-        source={sceneToSvg(current, { width, height, look: drawnIn })}
+        source={sceneToSvg(current, { width, height, look: drawnIn, figure: drawnAs })}
         alt={current.caption}
         width={width}
         height={height}

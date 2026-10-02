@@ -51,6 +51,8 @@ declare module 'claude-code' {
       enabled: boolean
       /** The look the band draws in: a name from hooks/looks.ts. */
       look: string
+      /** How Claude is drawn: as each look says (auto), always the pixel sprite, or always the 3D model. */
+      figure: 'auto' | 'pixel' | '3d'
     }
   }
 }

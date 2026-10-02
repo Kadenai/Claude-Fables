@@ -8,6 +8,7 @@
  * they keep the colors they name.
  */
 
+import type { FacePaint } from './hero3d'
 import { parseHex } from './scene'
 
 /** How one art pixel of a sprite is drawn. */
@@ -37,6 +38,10 @@ export type Look = {
   /** A few words for the narrator, so the caption's voice can suit the look. */
   voice: string
   cell: Cell
+  /** How the hero is drawn here unless the person says otherwise: the pixel sprite or the 3D model. */
+  figure: 'pixel' | '3d'
+  /** How the 3D model's faces are painted; absent, solid. */
+  facePaint?: FacePaint
   /** Every color the stage draws, by layer; absent, colors stay as they are. */
   color?: (hex: string, layer: Layer) => string
   font: string
@@ -157,6 +162,7 @@ export const LOOKS: Record<string, Look> = {
     label: 'Pixel Art',
     voice: 'a cheerful 16-bit game',
     cell: 'solid',
+    figure: 'pixel',
     font: MONO,
     charW: 5.7,
     caption: { fill: '#2b1c1a', stroke: '#cfc8b8', ink: '#ece9df', radius: 2 },
@@ -167,6 +173,7 @@ export const LOOKS: Record<string, Look> = {
     label: 'Handheld',
     voice: 'a four-shade handheld console game',
     cell: 'tile',
+    figure: 'pixel',
     color: (hex, layer) =>
       layer === 'sky' ? LCD[3]! : layer === 'ground' ? LCD[2]! : layer === 'back' ? (lightness(hex) > 0.5 ? LCD[1]! : LCD[2]!) : ramp(hex, LCD.slice(0, 3)),
     inset: 3,
@@ -183,6 +190,7 @@ export const LOOKS: Record<string, Look> = {
     label: 'Teletext Page',
     voice: 'a terse teletext news page',
     cell: 'tile',
+    figure: 'pixel',
     color: (hex, layer) => (layer === 'sky' ? '#000000' : layer === 'ground' ? '#0000ff' : nearest(hex, lightness(hex) < 0.18 ? TELETEXT : TELETEXT.slice(1))),
     font: MONO,
     charW: 5.7,
@@ -196,6 +204,8 @@ export const LOOKS: Record<string, Look> = {
     label: 'Blueprint',
     voice: 'an engineer annotating a technical drawing',
     cell: 'draft',
+    figure: '3d',
+    facePaint: 'draft',
     color: (hex, layer) => (layer === 'sky' ? '#1f4fa0' : layer === 'ground' ? '#1a4590' : layer === 'back' ? '#3b6cbc' : '#e8f0ff'),
     inset: 5,
     font: MONO,
@@ -218,6 +228,7 @@ export const LOOKS: Record<string, Look> = {
     label: 'Neon',
     voice: 'a buzzing 1950s diner sign',
     cell: 'solid',
+    figure: '3d',
     color: (hex, layer) => {
       if (layer === 'sky') return '#2a1512'
       if (layer === 'ground') return '#1c0f0d'
@@ -246,6 +257,7 @@ export const LOOKS: Record<string, Look> = {
     label: 'Silhouette',
     voice: 'an elegant 18th-century portrait card',
     cell: 'solid',
+    figure: '3d',
     color: (hex, layer) => (layer === 'sky' ? '#efe6d2' : layer === 'ground' ? '#2a2420' : layer === 'back' ? '#d8ccb2' : lightness(hex) > 0.85 ? '#efe6d2' : '#1a1714'),
     inset: 7,
     font: SERIF,
@@ -260,10 +272,11 @@ export const LOOKS: Record<string, Look> = {
     label: 'Ukiyo-e',
     voice: 'a calm Edo-period woodblock print',
     cell: 'solid',
+    figure: '3d',
     color: (hex, layer) => {
       if (layer === 'sky') return '#efe3c8'
       if (layer === 'ground') return '#1b2a4a'
-      if (isWarm(hex)) return lightness(hex) < 0.4 ? '#9c3b26' : '#cf5a3c'
+      if (isWarm(hex)) return ramp(hex, ['#9c3b26', '#cf5a3c', '#e48a66'])
       return ramp(hex, layer === 'back' ? INDIGO.slice(2) : INDIGO)
     },
     font: SERIF,
@@ -284,7 +297,8 @@ export const LOOKS: Record<string, Look> = {
     label: 'Tomb Painting',
     voice: 'a solemn hieroglyph inscription',
     cell: 'solid',
-    color: (hex, layer) => (layer === 'sky' ? '#e3cfa0' : layer === 'ground' ? '#c58a3a' : layer === 'back' ? nearest(hex, ['#d6bd88', '#c9ab72']) : isWarm(hex) ? '#a8462a' : nearest(hex, EARTH)),
+    figure: '3d',
+    color: (hex, layer) => (layer === 'sky' ? '#e3cfa0' : layer === 'ground' ? '#c58a3a' : layer === 'back' ? nearest(hex, ['#d6bd88', '#c9ab72']) : isWarm(hex) ? ramp(hex, ['#7a3220', '#a8462a', '#c86a44']) : nearest(hex, EARTH)),
     inset: 4,
     font: SERIF,
     charW: 4.9,
@@ -302,6 +316,8 @@ export const LOOKS: Record<string, Look> = {
     label: 'Stained Glass',
     voice: 'a solemn cathedral window legend',
     cell: 'lead',
+    figure: '3d',
+    facePaint: 'lead',
     color: (hex, layer) =>
       layer === 'sky' ? '#1d2c5a' : layer === 'ground' ? '#1a1414' : layer === 'back' ? nearest(hex, ['#24386e', '#2c4a7f', '#3a2a5a']) : nearest(hex, JEWELS),
     inset: 4,
@@ -321,6 +337,7 @@ export const LOOKS: Record<string, Look> = {
     label: 'Mosaic',
     voice: 'a Roman floor inscription',
     cell: 'tile',
+    figure: 'pixel',
     color: (hex, layer) => (layer === 'sky' ? '#e6dcc4' : layer === 'ground' ? '#7a5a3a' : layer === 'back' ? nearest(hex, ['#d4c6a6', '#c8b896', '#b9c0b0']) : nearest(hex, TESSERAE)),
     inset: 8,
     font: SERIF,
@@ -343,6 +360,7 @@ export const LOOKS: Record<string, Look> = {
     label: 'Sampler',
     voice: 'a sweet Victorian embroidered motto',
     cell: 'stitch',
+    figure: 'pixel',
     color: (hex, layer) => (layer === 'sky' ? '#e8dcc0' : layer === 'ground' ? '#d9caa6' : layer === 'back' ? nearest(hex, ['#cfdcc0', '#d6c8a8', '#c9b9a0']) : nearest(hex, THREADS)),
     inset: 6,
     font: SERIF,
@@ -359,6 +377,7 @@ export const LOOKS: Record<string, Look> = {
     label: 'Line Printer',
     voice: 'a dry mainframe printout',
     cell: 'glyph',
+    figure: 'pixel',
     color: (hex, layer) => (layer === 'sky' ? '#fbfbf6' : layer === 'ground' ? '#fbfbf6' : layer === 'back' ? '#e0eedd' : '#2a2a2a'),
     inset: 6,
     font: MONO,
@@ -378,6 +397,7 @@ export const LOOKS: Record<string, Look> = {
     label: 'Golden Age Comic',
     voice: 'a punchy 1938 comic book',
     cell: 'solid',
+    figure: '3d',
     color: (hex, layer) => (layer === 'sky' ? '#f3c623' : layer === 'ground' ? '#e8312a' : layer === 'back' ? nearest(hex, ['#f08a3a', '#e8a33a', '#f3d65a']) : nearest(hex, COMIC)),
     inset: 4,
     font: "'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif",
@@ -391,6 +411,136 @@ export const LOOKS: Record<string, Look> = {
     foreFilter: 'lk-ink',
     under: (sw, h) => patternRect('lk-dots', sw, h, 0.16),
     over: (sw, h) => frame(sw, h, '#141414', 4),
+  },
+
+  bauhaus: {
+    name: 'bauhaus',
+    label: 'Bauhaus',
+    voice: 'a crisp Bauhaus poster: form, colour, function',
+    cell: 'solid',
+    figure: '3d',
+    color: (hex, layer) => {
+      if (layer === 'sky' || layer === 'ground') return '#efe7d6'
+      if (layer === 'back') return nearest(hex, ['#e6d9bc', '#dccdb0'])
+      if (isWarm(hex)) return ramp(hex, ['#9c2a1c', '#c8372a', '#e04a35'])
+      return nearest(hex, ['#1d4f9c', '#f2b81c', '#141414', '#efe7d6', '#c8372a'])
+    },
+    inset: 0,
+    font: "Futura, 'Century Gothic', 'Avenir Next', sans-serif",
+    charW: 5.2,
+    caption: { fill: '#efe7d6', stroke: '#141414', ink: '#141414', radius: 0 },
+    titleColor: '#c8372a',
+    under: (sw, h, ground) =>
+      `<circle cx="${sw * 0.62}" cy="${ground - 30}" r="52" fill="#e9d8ae"/>` +
+      `<rect x="${sw * 0.08}" y="12" width="14" height="14" fill="#c8372a"/>` +
+      `<circle cx="${sw * 0.11}" cy="40" r="5" fill="#1d4f9c"/>` +
+      `<rect x="${sw * 0.86}" y="${ground - 26}" width="10" height="10" fill="#f2b81c"/>`,
+    over: (sw, h, ground) => `<rect x="${-sw}" y="${ground}" width="${sw * 3}" height="3" fill="#141414"/>`,
+  },
+
+  midcentury: {
+    name: 'midcentury',
+    label: 'Mid-Century Modern',
+    voice: 'a sunny 1950s storybook narrator',
+    cell: 'solid',
+    figure: '3d',
+    color: (hex, layer) => {
+      if (layer === 'sky') return '#1f4a4c'
+      if (layer === 'ground') return '#d9a53a'
+      if (layer === 'back') return nearest(hex, ['#2f6a5a', '#5f8a4a', '#3a7a6a', '#24585a'])
+      if (isWarm(hex)) return ramp(hex, ['#b85c3e', '#e08a64', '#f0b090'])
+      return nearest(hex, ['#e8dcc0', '#2a2a2a', '#c0392b', '#5f8a4a', '#d9a53a', '#3a7a6a'])
+    },
+    font: "Futura, 'Century Gothic', 'Avenir Next', sans-serif",
+    charW: 5.2,
+    caption: { fill: '#f3e6c4', stroke: '#2a2a2a', ink: '#2a2a2a', radius: 4 },
+    titleColor: '#f3e6c4',
+    under: (sw, h, ground) =>
+      stripes(sw, ground, 12, 6, '#24585a', 0.5) +
+      `<circle cx="${sw * 0.82}" cy="30" r="22" fill="#f0deb0"/><path d="M${sw * 0.82} 8v44a22 22 0 0 0 0-44z" fill="#e6c89a"/>`,
+    over: (sw, h, ground) =>
+      Array.from({ length: Math.ceil(sw / 26) }, (_, i) => `<path d="M${i * 26 + 9} ${ground + 9}l2 -4l2 4" fill="none" stroke="#b8862a" stroke-width="1"/>`).join(''),
+  },
+
+  lowpoly: {
+    name: 'lowpoly',
+    label: 'Low Poly',
+    voice: 'a late-90s 3D platformer announcer',
+    cell: 'solid',
+    figure: '3d',
+    color: (hex, layer) => {
+      if (layer === 'sky') return '#8fc4ec'
+      if (layer === 'ground') return '#6f777d'
+      if (layer === 'back') return ramp(hex, ['#5e7896', '#7d93ad', '#a3b4c6'])
+      return hex
+    },
+    font: "'Arial Black', 'Helvetica Neue', Arial, sans-serif",
+    charW: 5.6,
+    caption: { fill: '#1e2a4a', stroke: '#e8edf5', ink: '#ffffff', radius: 3 },
+    titleColor: '#ffd23f',
+    defs: `<linearGradient id="lk-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4f8fd0"/><stop offset="1" stop-color="#d6ecfa"/></linearGradient>`,
+    under: (sw, h, ground) => `<rect x="${-sw}" y="${-h}" width="${sw * 3}" height="${h + ground}" fill="url(#lk-sky)"/>`,
+    over: (sw, h, ground) =>
+      `<path d="M${sw / 2 - 2} ${ground + 4}h4v8h-4z" fill="#ffd23f"/>` +
+      `<text x="${sw - 10}" y="16" text-anchor="end" font-family="'Arial Black', Arial, sans-serif" font-style="italic" font-size="10" fill="#ffd23f" stroke="#7a4a00" stroke-width=".4">TIME 0:46</text>` +
+      `<circle cx="${sw - 92}" cy="12.5" r="4" fill="none" stroke="#ffd23f" stroke-width="2"/>`,
+  },
+
+  deco: {
+    name: 'deco',
+    label: 'Art Deco',
+    voice: 'a grand 1930s streamline poster',
+    cell: 'solid',
+    figure: '3d',
+    color: (hex, layer) => {
+      if (layer === 'sky') return '#12223a'
+      if (layer === 'ground') return '#0d1828'
+      if (layer === 'back') return lightness(hex) > 0.6 ? '#e3b341' : nearest(hex, ['#1f5a6a', '#2a6a7a', '#17485a'])
+      if (isWarm(hex)) return hex
+      return nearest(hex, ['#e3b341', '#f3e2b0', '#12223a', '#2a6a7a', '#c0392b'])
+    },
+    inset: 5,
+    font: "Copperplate, 'Copperplate Gothic Light', 'Didot', serif",
+    charW: 5.6,
+    caption: { fill: '#12223a', stroke: '#e3b341', ink: '#f3e2b0', radius: 0 },
+    titleColor: '#e3b341',
+    under: (sw, h, ground) =>
+      Array.from({ length: 9 }, (_, i) => {
+        const a = Math.PI * (0.12 + (0.76 * i) / 8)
+        const x = sw / 2 - Math.cos(a) * sw
+        const y = ground - Math.sin(a) * sw
+        const a2 = a + 0.03
+        return `<path d="M${sw / 2} ${ground}L${x.toFixed(1)} ${y.toFixed(1)}L${(sw / 2 - Math.cos(a2) * sw).toFixed(1)} ${(ground - Math.sin(a2) * sw).toFixed(1)}z" fill="#e3b341" opacity=".09"/>`
+      }).join(''),
+    over: (sw, h) => frame(sw, h, '#e3b341', 1.5, 2) + frame(sw, h, '#e3b341', 0.6, 5),
+  },
+
+  pin: {
+    name: 'pin',
+    label: 'Enamel Pin',
+    voice: 'a cheerful pin-shop product card',
+    cell: 'solid',
+    figure: '3d',
+    facePaint: 'enamel',
+    color: (hex, layer) => {
+      if (layer === 'sky') return '#f2c4cc'
+      if (layer === 'ground') return '#e8aeb9'
+      if (layer === 'back') return ramp(hex, ['#e7aab5', '#efbcc5', '#f6d3d9'])
+      if (isWarm(hex)) return hex
+      return nearest(hex, ['#c9a227', '#fbf3ea', '#3a2a2a', '#d65a5a', '#5a8ac6'])
+    },
+    font: SERIF,
+    charW: 4.9,
+    caption: { fill: '#fbf3ea', stroke: '#c9a227', ink: '#6a3a3a', radius: 6 },
+    titleColor: '#8a5a2a',
+    over: (sw, h) =>
+      [0.07, 0.31, 0.58, 0.93]
+        .map((k, i) => {
+          const x = sw * k
+          const y = 14 + (i % 2) * 18
+          return `<path d="M${x} ${y - 5}l1.5 3.5l3.5 1.5l-3.5 1.5l-1.5 3.5l-1.5-3.5l-3.5-1.5l3.5-1.5z" fill="#e3b341" stroke="#a8841c" stroke-width=".5"/>`
+        })
+        .join(''),
   },
 }
 

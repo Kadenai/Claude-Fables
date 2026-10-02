@@ -1,5 +1,6 @@
 import type { FablesProp, FablesScene } from '../types'
 
+import { type FacePaint, motionSvg } from './hero3d'
 import { type Cell, type Layer, type Look, lightness, lookFor, remapColors } from './looks'
 import { HERO_FRAMES, PALETTE, SPRITES, type SpriteName } from './sprites'
 
@@ -372,7 +373,14 @@ const heroColor = (k: string) => PALETTE[k]
 
 type HeroPlan = { svg: string; endX: number; endY: number }
 
-function hero(scene: FablesScene, floor: number, sw: number, cell: Cell): HeroPlan {
+/** How the hero is drawn: the pixel sprite in a cell style, or the 3D model painted one way. */
+export type Figure = { kind: 'pixel'; cell: Cell } | { kind: '3d'; paint: FacePaint }
+
+/** The 3D model stands a little taller than the sprite, arms reaching past its box. */
+const MODEL_STAGE_H = 40
+
+function hero(scene: FablesScene, floor: number, sw: number, figure: Figure): HeroPlan {
+  const cell = figure.kind === 'pixel' ? figure.cell : 'solid'
   const { action } = scene.hero
   const isMoving = action === 'walk' || action === 'run' || action === 'swim' || action === 'fly'
   const span = sw - HERO_W
@@ -391,10 +399,22 @@ function hero(scene: FablesScene, floor: number, sw: number, cell: Cell): HeroPl
       ? `<animate attributeName="opacity" values="${values}" dur="${step * 2}s" calcMode="discrete" repeatCount="${steps / 2}"/>`
       : '') +
     `</g>`
-  const frames = legs(0, '1;0') + legs(1, '0;1')
+  const model = (motion: Parameters<typeof motionSvg>[0], when: { until?: number; from?: number } = {}) =>
+    figure.kind === '3d'
+      ? motionSvg(motion, { height: MODEL_STAGE_H, cx: HERO_W / 2, floor: HERO_H, yaw: 0.55, paint: figure.paint, ...when }).svg
+      : ''
+  // Walking and running stop on arrival and stand idle; swimming and flying keep going.
+  const frames =
+    figure.kind === 'pixel'
+      ? legs(0, '1;0') + legs(1, '0;1')
+      : action === 'walk' || action === 'run'
+        ? model(action, { until: moveDur }) + model('idle', { from: moveDur })
+        : model(action)
 
   let inner = ''
-  switch (action) {
+  // The 3D model bakes its own hops, digging and steps into its frames.
+  const baked = figure.kind === '3d'
+  switch (baked && (action === 'dig' || action === 'celebrate' || action === 'walk' || action === 'run') ? 'baked' : action) {
     case 'swim':
     case 'fly':
       inner = `<animateTransform attributeName="transform" type="translate" values="0 0;0 -${U};0 0" dur="1.2s" repeatCount="indefinite" additive="sum"/>`
@@ -524,7 +544,10 @@ export function stageWidth(width: number, height: number): number {
  * Stays under the Svg element's limit by shedding particles, then props, if a
  * scene is too rich.
  */
-export function sceneToSvg(scene: FablesScene, options: { width?: number; height?: number; look?: string } = {}): string {
+export function sceneToSvg(
+  scene: FablesScene,
+  options: { width?: number; height?: number; look?: string; figure?: 'auto' | 'pixel' | '3d' } = {},
+): string {
   const sw = options.width && options.height ? stageWidth(options.width, options.height) : W
   const width = options.width ?? sw
   const height = options.height ?? Math.round((width * H) / sw)
@@ -535,7 +558,9 @@ export function sceneToSvg(scene: FablesScene, options: { width?: number; height
   const stage = backdrop(scene, rand, sw)
   const dust = particles(scene, rand, sw)
   const props = scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell))
-  const plan = hero(scene, stage.floor, sw, look.cell)
+  const wants = options.figure && options.figure !== 'auto' ? options.figure : look.figure
+  const figure: Figure = wants === '3d' ? { kind: '3d', paint: look.facePaint ?? 'solid' } : { kind: 'pixel', cell: look.cell }
+  const plan = hero(scene, stage.floor, sw, figure)
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
   const sky = tint('sky', stage.sky)
