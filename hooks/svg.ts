@@ -473,7 +473,7 @@ function title(text: string, color: string): string {
  * the desktop plays it with no redraws. Stays under the Svg element's limit by
  * shedding particles, then props, if a scene is too rich.
  */
-export function sceneToSvg(scene: FablesScene, options: { width?: number } = {}): string {
+export function sceneToSvg(scene: FablesScene, options: { width?: number; height?: number } = {}): string {
   const rand = rng(`${scene.backdrop}|${scene.caption}`)
   const stage = backdrop(scene, rand)
   const dust = particles(scene, rand)
@@ -482,12 +482,16 @@ export function sceneToSvg(scene: FablesScene, options: { width?: number } = {})
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
 
+  const width = options.width ?? W
+  const height = options.height ?? Math.round((width * H) / W)
+  // Sky and ground run far past the stage, so a box of another shape than the
+  // stage shows more sky and ground around it instead of the frame's empty page.
   const build = (withDust: boolean, propCount: number) =>
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${options.width ?? W}" ` +
-    `height="${Math.round(((options.width ?? W) * H) / W)}" shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet">` +
-    `<rect width="${W}" height="${H}" fill="${stage.sky}"/>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${width}" height="${height}" ` +
+    `shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" style="display:block;background:${stage.ground}">` +
+    `<rect x="${-W * 4}" y="${-H * 4}" width="${W * 9}" height="${H * 4 + GROUND_Y}" fill="${stage.sky}"/>` +
     stage.back +
-    `<rect y="${GROUND_Y}" width="${W}" height="${H - GROUND_Y}" fill="${stage.ground}"/>` +
+    `<rect x="${-W * 4}" y="${GROUND_Y}" width="${W * 9}" height="${H * 4}" fill="${stage.ground}"/>` +
     (withDust ? dust : '') +
     props.slice(0, propCount).join('') +
     plan.svg +

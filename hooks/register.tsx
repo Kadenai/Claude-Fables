@@ -5,7 +5,7 @@ import type { FablesScene } from '../types'
 
 import { type Activity, pushActivity, summarizeSpeech, summarizeTool } from './activity'
 import { backoffMs, buildPrompt, remember, sceneFromReply, type StoryBeat, SYSTEM } from './narrator'
-import { sceneToSvg } from './svg'
+import { H, sceneToSvg, W } from './svg'
 
 const scene = atom({ plugin: 'fables', key: 'scene' } as const, null)
 const enabled = atom({ plugin: 'fables', key: 'enabled' } as const, true)
@@ -15,6 +15,15 @@ const STORE_ENABLED = 'enabled'
 const LINGER_MS = 30000
 /** This plugin's own tools, if it ever registers any, are not part of the story. */
 const OWN_TOOLS = 'mcp__fables__'
+
+/** CSS pixels per cell of the band, to turn its width in cells into pixels. */
+const PX_PER_COLUMN = 8
+
+/** The band's width in CSS pixels, kept between the stage's size and twice it so text stays legible. */
+function bandWidth(columns: number): number {
+  const px = Number.isFinite(columns) && columns > 0 ? columns * PX_PER_COLUMN : W
+  return Math.round(Math.min(W * 2, Math.max(W / 2, px)))
+}
 
 type Ending = 'answer' | 'aborted' | 'error' | 'refusal'
 
@@ -180,6 +189,18 @@ export const register: Register = (on, options) => {
     const current = await read($, scene)
     if (!current || !(await read($, enabled))) return next(e)
     const { Svg } = $.ui.resolve(e)
-    return <Svg source={sceneToSvg(current)} alt={current.caption} isInteractive />
+    // The interactive frame does not size itself from the markup (left alone it
+    // is a 300x150 box), so give it the band's whole width at the stage's shape.
+    const width = bandWidth(e.props.bodyColumns)
+    const height = Math.round((width * H) / W)
+    return (
+      <Svg
+        source={sceneToSvg(current, { width, height })}
+        alt={current.caption}
+        width={width}
+        height={height}
+        isInteractive
+      />
+    )
   })
 }
