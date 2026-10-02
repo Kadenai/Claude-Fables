@@ -9,7 +9,7 @@ import { readMs } from '../hooks/narrator'
 type Script = { caption: string; backdrop?: string; after: number }[]
 
 /** The narrator's loop on a clock of its own, a tenth of a second at a time, ticking every second. */
-function stage(script: Script) {
+function stage(script: Script, waits: Record<string, number> = {}) {
   let now = 0
   const replies = [...script]
   const timers: { due: number; run: () => void }[] = []
@@ -25,6 +25,7 @@ function stage(script: Script) {
         timers.push({ due: now + (r?.after ?? 1000), run: () => resolve({ isAnswered: Boolean(r), text }) })
       }),
     show: scene => void band.push({ at: now, scene }),
+    speaksAfter: scene => waits[scene.caption] ?? 0,
   }
   const n = new Director()
   const settle = async () => {
@@ -124,5 +125,23 @@ describe('the band plays scenes from a queue', () => {
     await run(25000)
     expect(band.map(b => b.scene?.caption)).toEqual(['First', 'Second, after a long think'])
     expect(isGraceful()).toBe(true)
+  })
+
+  test('a bubble that waits for Claude to walk into reach gets its full reading time after it appears', async () => {
+    const { n, run, band } = stage(
+      [
+        { caption: 'A long walk first', after: 1000 },
+        { caption: 'Then the next thing', after: 1000 },
+      ],
+      { 'A long walk first': 4000 },
+    )
+    n.submit('go')
+    n.tool('Read', { file_path: 'a.ts' })
+    await run(4000, { 3000: () => n.tool('Grep', { pattern: 'x' }) })
+    await run(30000)
+    const [first, second] = band
+    expect(second?.scene?.caption).toBe('Then the next thing')
+    if (!first?.scene) throw new Error('expected the first scene')
+    expect((second?.at ?? 0) - first.at).toBeGreaterThanOrEqual(readMs(first.scene) + 4000)
   })
 })

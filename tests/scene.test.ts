@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'claude-code/testing'
 
+import type { FablesScene } from '../types'
+
 import { summarizeTool } from '../hooks/activity'
 import { buildPrompt, readMs, sceneFromReply } from '../hooks/narrator'
 import { cleanCaption, extractJson, MAX_CAPTION, parseHex, parseScene } from '../hooks/scene'
-import { H, MAX_SVG, MAX_W, MIN_W, sceneToSvg, stageWidth } from '../hooks/svg'
+import { H, MAX_SVG, MAX_W, MIN_W, resumeAt, sceneToSvg, speaksAfter, stageWidth } from '../hooks/svg'
 import { NARRATOR_MODELS } from '../hooks/director'
 import { rehearse } from '../scripts/rehearse'
 import { SCENARIOS } from '../scripts/scenarios'
@@ -155,6 +157,57 @@ describe('sceneToSvg', () => {
     expect(stageWidth(100, 192)).toBe(MIN_W)
     expect(stageWidth(99999, 192)).toBe(MAX_W)
     expect(stageWidth(0, 0)).toBe(640)
+  })
+})
+
+describe('the speech bubble', () => {
+  /** Where Claude and the bubble are at a moment of the walk, each as an offset from where they end up. */
+  function track(svg: string) {
+    const walk = /<animateTransform attributeName="transform" type="translate" values="(-?[\d.]+) [\d.-]+;(-?[\d.]+) [\d.-]+" dur="([\d.]+)s" fill="freeze"\/>/.exec(svg)
+    const speech = svg.slice(svg.indexOf('data-part="speech"'))
+    const follow = /^[^>]*><animateTransform attributeName="transform" type="translate" values="([^"]+)" keyTimes="([^"]+)" dur="([\d.]+)s"/.exec(speech)
+    if (!walk || !follow) return undefined
+    const [from, to] = [Number(walk[1]), Number(walk[2])]
+    const values = (follow[1] ?? '').split(';').map(v => Number(v.split(' ')[0]))
+    const keys = (follow[2] ?? '').split(';').map(Number)
+    const bubbleAt = (k: number) => {
+      const i = Math.max(0, keys.findIndex((t, j) => k >= t && k <= (keys[j + 1] ?? 1)))
+      const [k0, k1, v0, v1] = [keys[i] ?? 0, keys[i + 1] ?? 1, values[i] ?? 0, values[i + 1] ?? values[i] ?? 0]
+      return k1 > k0 ? v0 + ((v1 - v0) * (k - k0)) / (k1 - k0) : v0
+    }
+    return { claudeAt: (k: number) => from + (to - from) * k - to, bubbleAt, arrive: Number(walk[3]) }
+  }
+
+  test('from the moment it shows, the bubble keeps beside Claude the whole walk, so its tail always points at Claude', () => {
+    const captions = ['Short one', 'Searching for the largest railway operators', 'A long caption, the longest the bubble takes whole: four lines of it, read slowly']
+    let walks = 0
+    for (const action of ['walk', 'sneak', 'fly', 'run']) {
+      for (const [from, to] of [[5, 40], [10, 60], [80, 30], [0, 95], [95, 5], [0, 100], [50, 55]]) {
+        for (const width of [480, 960, 1800]) {
+          for (const caption of captions) {
+            const svg = sceneToSvg(parseScene({ ...GOOD, hero: { action, from, to }, caption }) as FablesScene, { width, height: 192 })
+            const t = track(svg)
+            if (!t) continue
+            walks++
+            const shows = speaksAfter(svg) / t.arrive
+            for (let k = Math.ceil(shows * 100) / 100; k <= 1; k += 0.05) {
+              expect([action, from, to, width, caption, k, Math.abs(t.bubbleAt(k) - t.claudeAt(k)) < 1]).toEqual([action, from, to, width, caption, k, true])
+            }
+          }
+        }
+      }
+    }
+    expect(walks).toBeGreaterThan(100)
+  })
+
+  test('a bubble that waits for Claude stays unseen until then, and says how long it waits', () => {
+    const svg = sceneToSvg(parseScene({ ...GOOD, hero: { action: 'sneak', from: 100, to: 10 }, caption: 'A long caption, the longest the bubble takes whole: four lines of it, read slowly' }) as FablesScene, { width: 800, height: 192 })
+    const wait = speaksAfter(svg)
+    expect(wait).toBeGreaterThan(0)
+    expect(svg).toContain(`opacity="0" data-speaks="${wait}"`)
+    expect(svg).toContain(`values="0;1" dur=".2s" begin="${wait}s" fill="freeze"`)
+    // Drawn again long after, it is there with its caption, not lost before the drawing began.
+    expect(speaksAfter(resumeAt(svg, 120))).toBe(wait)
   })
 })
 

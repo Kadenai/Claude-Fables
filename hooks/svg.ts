@@ -651,14 +651,30 @@ function caption(
   // its pixels land on whole device pixels in the band. Elsewhere the look's own type.
   const type = onPaper ? (look.bubble ?? { font: MONO_FONT, size: 9, charW: 6, line: 12, base: 13 }) : { font: look.font, size: 9.5, charW: look.charW, line: 11, base: 12 }
   // Claude's path while it walks: the bubble must stay clear of Claude at every point of it.
-  const KEYS = [0, 0.2, 0.4, 0.6, 0.8, 1]
+  const KEYS = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
   const heroAt = (k: number) => hero.startX + (heroX - hero.startX) * k
   const boxAt = (k: number): Rect => ({ ...heroBox, x: heroAt(k) - 4 - hero.sway })
   const clampX = (v: number, w: number) => Math.min(sw - w - 2, Math.max(2, v))
+  // How far the stage's edge holds the bubble back from Claude at a point of the path: while it
+  // does, the bubble stands still as Claude walks on, and its tail no longer points at Claude.
+  const slipAt = (k: number, ox: number, w: number) => Math.abs(clampX(heroAt(k) + ox, w) - (heroAt(k) + ox))
+  // The point of the walk from which the bubble travels with Claude to the end; before it the
+  // bubble waits, unseen, so it never stands about with its tail pointing away from Claude.
+  const FINE = Array.from({ length: 101 }, (_, i) => i / 100)
+  const joinsAt = (ox: number, w: number) => {
+    if (!hero.arrive) return 0
+    let k = 1
+    while (k > 0 && slipAt(Math.round((k - 0.01) * 100) / 100, ox, w) < 1) k = Math.round((k - 0.01) * 100) / 100
+    return FINE.includes(k) && slipAt(k, ox, w) < 1 ? k : 1
+  }
+  // The bubble's offsets that keep it on stage the whole way, so it travels with Claude as one.
+  const lo = 2 - Math.min(hero.startX, heroX)
+  const hi = (w: number) => sw - w - 2 - Math.max(hero.startX, heroX)
+  const isRightward = heroX > hero.startX
   // A narrower wrap, taller, is tried when the wide one finds no clear place; one that
   // would need more than four lines is not, as every word of the caption is shown.
   let best = { x: 2, y: 4, ox: 0, score: Infinity, lines: [] as Word[][], w: 0, h: 0 }
-  const wraps = [32, 25, 19].map(width => wrapWords(list, width))
+  const wraps = [32, 25, 19, 15].map(width => wrapWords(list, width))
   const fits = wraps.filter(lines => lines.length <= MAX_LINES)
   for (const [wi, lines] of (fits.length ? fits : wraps.slice(0, 1)).entries()) {
     const w = Math.ceil(Math.max(...lines.map(lineLen)) * type.charW + 14)
@@ -676,17 +692,32 @@ function caption(
       // Under Claude, for when it flies and there is no room above it.
       [HERO_W / 2 - w / 2, below],
     ]
-    for (const [si, [ox, y0]] of spots.entries()) {
+    for (const [si, [ox0, y0]] of spots.entries()) {
       const y = y0 === below ? Math.min(H - h - 3, y0) : Math.min(GROUND_Y - h - 4, Math.max(4, y0))
+      // Over or under Claude the bubble may sit anywhere along it, its tail still on Claude:
+      // slid along, it can often travel the whole walk without meeting an edge.
+      // When no offset keeps it on stage the whole way, it keeps clear of the edge Claude walks
+      // towards, so the edge can only hold it back at the start, and it joins Claude early.
+      const isOver = si >= 2
+      const [a, b] = [Math.max(lo, -w + 14), Math.min(hi(w), HERO_W - 14)]
+      const along = Math.min(HERO_W - 14, Math.max(-w + 14, ox0))
+      const ox = !isOver ? ox0 : a <= b ? Math.min(b, Math.max(a, ox0)) : isRightward ? Math.max(-w + 14, Math.min(along, hi(w))) : Math.min(HERO_W - 14, Math.max(along, lo))
       const x = clampX(heroX + ox, w)
-      // Covering Claude at any moment is ruled out in all but name; the rest is preference.
+      // Covering Claude at any moment is ruled out in all but name; being held back by an edge
+      // while Claude walks on nearly so; the rest is preference.
       const covers = KEYS.reduce((t, k) => t + overlap({ x: clampX(heroAt(k) + ox, w), y, w, h }, boxAt(k)), 0)
-      const score = covers * 50 + avoid.reduce((t, a) => t + overlap({ x, y, w, h }, a) * 3, 0) + si * 6 + wi * 40
+      // Every second the bubble would wait for Claude counts against it.
+      const waits = joinsAt(ox, w) * hero.arrive
+      const score = covers * 50 + waits * 3000 + avoid.reduce((t, a) => t + overlap({ x, y, w, h }, a) * 3, 0) + si * 6 + wi * 40
       if (score < best.score) best = { x, y, ox, score, lines, w, h }
     }
   }
   const { lines, w, h, x, y, ox } = best
-  let delay = start
+  // A walk too long for any bubble to travel with Claude the whole way: the bubble waits until
+  // Claude is far enough in, then appears beside it and travels on with it, tail on Claude.
+  const joins = joinsAt(ox, w)
+  const appear = joins * hero.arrive
+  let delay = start + appear
   const rows = lines
     .map((line, i) => {
       const dur = Math.max(0.2, lineLen(line) * TYPE_SECONDS_PER_CHAR)
@@ -698,12 +729,16 @@ function caption(
       return reveal + `<text clip-path="url(#${id})" x="${n(x + 7)}" y="${n(y + type.base + i * type.line)}" font-family="${type.font}" font-size="${type.size}" fill="${ink}">${lineSvg(line, skin)}</text>`
     })
     .join('')
-  // While Claude walks, the bubble walks with it along the same path, held inside the stage.
+  // While Claude walks, the bubble walks with it along the same path, held inside the stage;
+  // from the moment it joins Claude it moves as one with it, so that moment is a key of its own.
+  const follows = [...new Set([0, joins, ...KEYS.filter(k => k > joins)])].sort((p, q) => p - q)
   const follow =
     hero.arrive && hero.startX !== heroX
-      ? ` transform="translate(${n(clampX(heroAt(0) + ox, w) - x)} 0)"><animateTransform attributeName="transform" type="translate" values="${KEYS.map(k => `${n(clampX(heroAt(k) + ox, w) - x)} 0`).join(';')}" keyTimes="${KEYS.join(';')}" dur="${n(hero.arrive)}s" fill="freeze"/`
+      ? ` transform="translate(${n(clampX(heroAt(0) + ox, w) - x)} 0)"><animateTransform attributeName="transform" type="translate" values="${follows.map(k => `${n(clampX(heroAt(k) + ox, w) - x)} 0`).join(';')}" keyTimes="${follows.join(';')}" dur="${n(hero.arrive)}s" fill="freeze"/`
       : ''
-  const fade = `<animate attributeName="opacity" values="0;1" dur=".2s" fill="freeze"/>`
+  const fade = `<animate attributeName="opacity" values="0;1" dur=".2s"${appear ? ` begin="${n(appear)}s"` : ''} fill="freeze"/>`
+  // The wait is written on the bubble, so the narrator's loop can give the caption its full reading time after it.
+  const hidden = appear ? ` opacity="0" data-speaks="${n(appear)}"` : ''
   if (onPaper) {
     const hx = heroX + HERO_W / 2
     const hy = top + 10
@@ -719,13 +754,13 @@ function caption(
     const len = Math.hypot(hx - mx, hy - my) || 1
     const reach = Math.min(10, len * 0.6)
     const tip: P = [mx + ((hx - mx) / len) * reach, my + ((hy - my) / len) * reach]
-    if (look.bubble) return `<g data-part="speech" data-tone="${tone}"${follow || ''}>${look.bubble.font.includes('Monocraft') ? MONO_FACE : ''}${look.bubble.draw({ x, y, w, h }, { base, tip })}${rows}${fade}</g>`
+    if (look.bubble) return `<g data-part="speech" data-tone="${tone}"${hidden}${follow || ''}>${look.bubble.font.includes('Monocraft') ? MONO_FACE : ''}${look.bubble.draw({ x, y, w, h }, { base, tip })}${rows}${fade}</g>`
     const shape =
       `<rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="6"/>` +
       `<path d="M${n(base[0][0])} ${n(base[0][1])}L${n(tip[0])} ${n(tip[1])}L${n(base[1][0])} ${n(base[1][1])}z"/>`
-    return `<g data-part="speech" data-tone="${tone}"${follow || ''}>${MONO_FACE}${paper(shape, skin)}${rows}${fade}</g>`
+    return `<g data-part="speech" data-tone="${tone}"${hidden}${follow || ''}>${MONO_FACE}${paper(shape, skin)}${rows}${fade}</g>`
   }
-  return `<g data-part="speech"${follow || ''}><rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>${rows}${fade}</g>`
+  return `<g data-part="speech"${hidden}${follow || ''}><rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>${rows}${fade}</g>`
 }
 
 function title(text: string, color: string, look: Look): string {
@@ -938,12 +973,30 @@ export function sceneToSvg(
  * when the turn ends, a new width, a new style) carries on from where it was:
  * the caption as far typed as it was, Claude as far along. Every begin in a
  * scene is a plain offset in seconds, and an animation without one begins at 0.
+ *
+ * An animation whose whole run would fall before the drawing starts is never
+ * played at all, its frozen last frame included (SMIL drops an interval that
+ * ends before its parent begins), so the caption would vanish: one that holds
+ * its last frame is moved back only so far that it ends just after the start.
  */
 export function resumeAt(svg: string, seconds: number): string {
   if (!(seconds > 0)) return svg
+  const secs = (attrs: string, name: 'dur' | 'repeatDur') => {
+    const m = (name === 'dur' ? /\sdur="([\d.]+)s"/ : /\srepeatDur="([\d.]+)s"/).exec(attrs)
+    return m ? Number(m[1]) : undefined
+  }
   return svg.replace(/<(animate|animateTransform|animateMotion|set)\b([^>]*?)(\/?)>/g, (_, tag: string, attrs: string, close: string) => {
     const at = /\sbegin="(-?[\d.]+)s"/.exec(attrs)
-    const moved = at ? attrs.replace(at[0], ` begin="${n(Number(at[1]) - seconds)}s"`) : `${attrs} begin="${n(-seconds)}s"`
+    let begin = (at ? Number(at[1]) : 0) - seconds
+    if (/\sfill="freeze"/.test(attrs)) {
+      const count = /\srepeatCount="([\d.]+)"/.exec(attrs)
+      const run = secs(attrs, 'repeatDur') ?? (secs(attrs, 'dur') ?? 0) * (count ? Number(count[1]) : 1)
+      begin = Math.max(begin, 0.01 - run)
+    }
+    const moved = at ? attrs.replace(at[0], ` begin="${n(begin)}s"`) : `${attrs} begin="${n(begin)}s"`
     return `<${tag}${moved}${close}>`
   })
 }
+
+/** How long a drawn scene's bubble waits for Claude before it appears, in seconds (0 when it appears at once). */
+export const speaksAfter = (svg: string) => Number(/data-part="speech"[^>]*\sdata-speaks="([\d.]+)"/.exec(svg)?.[1] ?? 0)

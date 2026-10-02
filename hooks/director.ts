@@ -49,6 +49,8 @@ export type Host = {
   now(): number | Promise<number>
   complete(ask: Ask): Promise<Answer>
   show(scene: FablesScene | null): void | Promise<void>
+  /** How long the scene's bubble waits for Claude to walk into reach before it appears, in ms, as the band draws it. */
+  speaksAfter?(scene: FablesScene): number | Promise<number>
   trace?(event: Trace): void
 }
 
@@ -226,7 +228,7 @@ export class Director {
     this.story = remember(this.story, next.scene)
     this.shown = scene
     this.shownAt = now
-    this.readUntil = now + readMs(scene)
+    this.readUntil = now + readMs(scene) + ((await host.speaksAfter?.(scene)) ?? 0)
     await host.show(scene)
   }
 

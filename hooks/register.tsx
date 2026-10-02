@@ -3,7 +3,9 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { DEFAULT_MODEL, Director, findModel, type Host, MODEL_LABELS, NARRATOR_MODELS, type NarratorModel } from './director'
 import { DEFAULT_LOOK, findLook, LOOK_NAMES, LOOKS, lookFor } from './looks'
-import { H, MAX_SVG, resumeAt, sceneToSvg, W } from './svg'
+import type { FablesScene } from '../types'
+
+import { H, MAX_SVG, resumeAt, sceneToSvg, speaksAfter, W } from './svg'
 
 const scene = atom({ plugin: 'fables', key: 'scene' } as const, null)
 const enabled = atom({ plugin: 'fables', key: 'enabled' } as const, true)
@@ -35,12 +37,13 @@ function bandBox(columns: number): { width: number; height: number } {
   return { width, height: Math.round(H * SCALE) }
 }
 
-/** The narrator's host in a session: Claude Code's clock, its model, and the band. */
-function host($: EngineInterface): Host {
+/** The narrator's host in a session: Claude Code's clock, its model, the band, and how the band draws a scene. */
+function host($: EngineInterface, band: Band): Host {
   return {
     now: () => $.clock.now(),
     complete: ask => $.model.complete(ask),
     show: drawn => update($, scene, () => drawn),
+    speaksAfter: async next => speaksAfter((await draw($, band, next)).base) * 1000,
   }
 }
 
@@ -58,8 +61,8 @@ async function chooseModel($: EngineInterface, n: Director, model: NarratorModel
   return { text: `${MODEL_LABELS[model]} now writes the story.` }
 }
 
-async function setOn($: EngineInterface, n: Director, value: boolean) {
-  await n.setOn(host($), value)
+async function setOn($: EngineInterface, n: Director, at: Host, value: boolean) {
+  await n.setOn(at, value)
   await $.store.set(STORE_ENABLED, value)
   await update($, enabled, () => value)
 }
@@ -72,10 +75,24 @@ async function setOn($: EngineInterface, n: Director, value: boolean) {
  * clock, and it carries on where it was instead of typing its caption again.
  */
 type Drawn = { scene: string; at: number; key: string; base: string }
+/** The drawing kept, and the band's box as last drawn, so a scene can be drawn the moment it goes up. */
+type Band = { drawn?: Drawn; box: { width: number; height: number } }
+
+/** The scene in the band's box and style, drawn once and kept: a scene going up starts its clock. */
+async function draw($: EngineInterface, band: Band, next: FablesScene): Promise<Drawn> {
+  const look = await read($, style)
+  const key = `${band.box.width}x${band.box.height}|${look}`
+  const same = JSON.stringify(next)
+  const kept = band.drawn
+  if (kept?.scene === same && kept.key === key) return kept
+  const at = kept?.scene === same ? kept.at : await $.clock.now()
+  band.drawn = { scene: same, at, key, base: sceneToSvg(next, { ...band.box, look, figure: FIGURE }) }
+  return band.drawn
+}
 
 export const register: Register = (on, options) => {
   const n = new Director()
-  let drawn: Drawn | undefined
+  const band: Band = { box: bandBox(NaN) }
   // The config menu's choice is the default; /fables model overrides it.
   const configured = findModel(options.model) ?? DEFAULT_MODEL
   n.model = configured
@@ -95,7 +112,7 @@ export const register: Register = (on, options) => {
       description: 'Claude Fables: turn the cartoons above the prompt on or off, pick a style, or pick the model that writes them',
       argumentHint: '[on|off|style [name|off]|model [sonnet|haiku]]',
     })
-    $.clock.every(1000, () => void n.tick(host($)))
+    $.clock.every(1000, () => void n.tick(host($, band)))
     return next(e)
   })
 
@@ -127,7 +144,7 @@ export const register: Register = (on, options) => {
     const px = /^pixel(?:\s+(on|off))?$/.exec(arg)
     if (px) return chooseLook($, n, px[1] === 'off' || (!px[1] && n.look === 'pixel') ? 'original' : 'pixel')
     const value = arg === 'on' ? true : arg === 'off' ? false : !n.isOn
-    await setOn($, n, value)
+    await setOn($, n, host($, band), value)
     return {
       text: value
         ? `Claude Fables is on: cartoons written by ${MODEL_LABELS[n.model]} play above the prompt while Claude works.`
@@ -172,19 +189,15 @@ export const register: Register = (on, options) => {
     const { Svg } = $.ui.resolve(e)
     // The interactive frame does not size itself from the markup (left alone it
     // is a 300x150 box), so give it the band's box; a new width draws anew.
-    const { width, height } = bandBox(e.props.bodyColumns)
-    const look = await read($, style)
-    const key = `${width}x${height}|${look}`
-    const now = await $.clock.now()
-    const same = JSON.stringify(current)
-    const at = drawn?.scene === same ? drawn.at : now
-    if (drawn?.scene !== same || drawn.key !== key) drawn = { scene: same, at, key, base: sceneToSvg(current, { width, height, look, figure: FIGURE }) }
+    band.box = bandBox(e.props.bodyColumns)
+    const { width, height } = band.box
+    const { base, at } = await draw($, band, current)
     // To a tenth of a second, so drawings in the same moment stay the same.
-    const along = Math.floor((now - at) / 100) / 10
-    const resumed = resumeAt(drawn.base, along)
+    const along = Math.floor(((await $.clock.now()) - at) / 100) / 10
+    const resumed = resumeAt(base, along)
     return (
       <Svg
-        source={resumed.length <= MAX_SVG ? resumed : drawn.base}
+        source={resumed.length <= MAX_SVG ? resumed : base}
         alt={current.caption}
         width={width}
         height={height}

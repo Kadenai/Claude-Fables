@@ -175,6 +175,7 @@ test('the band drawn again as the turn ends carries the scene on from where it w
   }
   // When the caption's first line starts typing, in the drawing's own seconds.
   const typingFrom = (svg: string) => Number(/<clipPath[^>]*><rect[^>]*><animate[^>]*begin="(-?[\d.]+)s"/.exec(svg)?.[1])
+  const typingFor = (svg: string) => Number(/<clipPath[^>]*><rect[^>]*><animate[^>]*dur="([\d.]+)s"/.exec(svg)?.[1])
 
   await $.session.start({ cwd: '/work', surface: 'desktop', isInteractive: true })
   await $.prompt.submit({ text: 'look for bugs', wait: false, origin: { kind: 'composer' } })
@@ -188,7 +189,10 @@ test('the band drawn again as the turn ends carries the scene on from where it w
   await clock.advance(2000)
   for (const props of [{ isWorking: false }, { isWorking: false, bodyColumns: 140 }]) {
     const again = await source(props)
-    expect(typingFrom(again)).toBe(-1.8)
+    // Carried on, not started over: typed as far as it was (the first line is done by now),
+    // and still ending after the drawing starts, or it would never be drawn at all.
+    expect(typingFrom(again)).toBeLessThan(0)
+    expect(typingFrom(again) + typingFor(again)).toBeGreaterThan(0)
     expect(again).not.toBe(first)
   }
 })
@@ -197,4 +201,10 @@ test('resumeAt moves every animation back by the time already played', () => {
   const svg = '<svg><animate attributeName="x" dur="1s" begin="0.5s"/><animateTransform dur="2s" begin="-1s" repeatCount="indefinite"/><set to="1"/></svg>'
   expect(resumeAt(svg, 2)).toBe('<svg><animate attributeName="x" dur="1s" begin="-1.5s"/><animateTransform dur="2s" begin="-3s" repeatCount="indefinite"/><set to="1" begin="-2s"/></svg>')
   expect(resumeAt(svg, 0)).toBe(svg)
+})
+
+test('resumed long after, a frozen animation still ends just after the start, so the caption is not lost', () => {
+  // SMIL never plays an interval that ends before the drawing begins, frozen last frame and all.
+  const svg = '<svg><animate attributeName="width" from="0" to="90" dur="1.2s" begin="0.2s" fill="freeze"/><animateTransform values="0 0;9 0" dur="2s" repeatCount="2" fill="freeze"/></svg>'
+  expect(resumeAt(svg, 30)).toBe('<svg><animate attributeName="width" from="0" to="90" dur="1.2s" begin="-1.19s" fill="freeze"/><animateTransform values="0 0;9 0" dur="2s" repeatCount="2" fill="freeze" begin="-3.99s"/></svg>')
 })
