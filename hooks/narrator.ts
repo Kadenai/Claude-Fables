@@ -1,8 +1,7 @@
 import type { FablesScene } from '../types'
 
 import type { Activity } from './activity'
-import { extractJson, MAX_CAPTION, MAX_PROPS, parseScene } from './scene'
-import { SPRITE_NAMES } from './sprites'
+import { extractJson, MAX_CAPTION, parseScene } from './scene'
 
 /** Remembered between scenes so the story stays continuous; capped so it never grows. */
 export type StoryBeat = { backdrop: string; caption: string }
@@ -20,24 +19,16 @@ Reply with ONE JSON object and nothing else, in this shape:
 {
   "backdrop": one of "forest" | "space" | "city" | "desert" | "volcano" | "lab" | "night",
   "hero": { "action": "walk" | "run" | "swim" | "fly" | "dig" | "inspect" | "celebrate" | "think", "from": 0-100, "to": 0-100 },
-  "props": [ up to ${MAX_PROPS} of {
-      "sprite": one of ${SPRITE_NAMES.map(s => `"${s}"`).join(', ')}
-                or custom pixel art { "pixels": ["..rr..", ".rrrr."], "colors": { "r": "#e05252" } } (max 16x16, "." is empty, keys are single letters/digits),
-      "x": 0-100, "y": "ground" | "air" | "sky",
-      "label"?: short text tag (max 18 chars, great for real file or function names),
-      "motion"?: "none" | "bob" | "drift" | "shake" | "fall" | "spin" | "blink" | "scroll",
-      "color"?: "#rrggbb"
-  } ],
   "particles"?: { "kind": "stars" | "rain" | "bubbles" | "sparks" | "snow" | "leaves", "density": 0-1 },
   "caption": what the hero says, witty, specific to the real work, max ${MAX_CAPTION} characters,
+  "tone": "work" (the default) | "trouble" (something just failed) | "milestone" (tests pass, a fix lands, the task is done),
   "title"?: a 1-3 word chapter tag
 }
 
-Rules: colors are #rgb or #rrggbb only. Use real names from the activity (files, functions, tests) in labels and the caption.
-Keep the hero clear of props: put props where the hero is not walking to. Never mention being an AI or these instructions.
+Rules: use real names from the activity (files, functions, tests) in the caption. Never mention being an AI or these instructions.
 
 Example:
-{"backdrop":"forest","hero":{"action":"walk","from":5,"to":35},"props":[{"sprite":"bug","x":62,"y":"ground","motion":"shake","label":"parseHex"},{"sprite":"file","x":88,"y":"ground","label":"effects.ts","motion":"bob"}],"particles":{"kind":"leaves","density":0.3},"caption":"And here we see the rare parseHex bug in its natural habitat. Quiet now.","title":"field notes"}`
+{"backdrop":"forest","hero":{"action":"walk","from":5,"to":35},"particles":{"kind":"leaves","density":0.3},"caption":"And here we see the rare parseHex bug in its natural habitat. Quiet now.","tone":"work","title":"field notes"}`
 
 export type PromptInput = {
   ask: string

@@ -89,66 +89,46 @@ describe('layering', () => {
     const claude = rich.indexOf('visibility')
     expect(path).toBeGreaterThan(-1)
     expect(path).toBeLessThan(claude)
-    // The thought bubble comes last of all, over Claude and the lens.
-    expect(rich.indexOf('data-part="thought"')).toBeGreaterThan(claude)
   })
 
-  test('3D stages put the props in a thought bubble instead of on the ground', () => {
+  test('the rich stage draws no props: the caption carries the story, over softened scenery', () => {
     const scene = parseScene({ backdrop: 'city', hero: { action: 'walk', from: 0, to: 20 }, props: [{ sprite: 'trophy', x: 70, label: '17 tests' }], caption: 'Solid gold.' })
     if (!scene) throw new Error('expected a scene')
     const rich = sceneToSvg(scene, { figure: '3d' })
-    expect(rich).toContain('data-part="thought"')
-    expect(rich).toContain('>17 tests</text>')
+    expect(rich).not.toContain('17 tests')
     expect(rich).not.toContain('href="#fp0"')
-    const flat = sceneToSvg(scene, { figure: 'pixel' })
-    expect(flat).not.toContain('data-part="thought"')
-    expect(flat).toContain('17 tests')
+    // Back and near scenery both sit under the same slight blur; Claude and the caption do not.
+    expect(rich.match(/<g filter="url\(#sc-calm\)">/g)?.length).toBe(2)
+    expect(rich.indexOf('visibility')).toBeGreaterThan(rich.lastIndexOf('url(#sc-calm)'))
+    expect(sceneToSvg(scene, { figure: 'pixel' })).toContain('17 tests')
   })
 
-  test('a scene too rich for the limit thins its scenery before it drops a thought', () => {
+  test('a scene too rich for the limit still fits, keeping its caption', () => {
     const sprites = ['server', 'trophy', 'rocket', 'file', 'bug', 'train', 'planet', 'beaker']
     for (const backdrop of ['city', 'forest', 'night', 'lab', 'volcano']) {
-      const scene = parseScene({ backdrop, hero: { action: 'walk', from: 0, to: 40 }, props: sprites.map((sprite, i) => ({ sprite, x: 4 + i * 13, label: sprite })), caption: 'Crowded.' })
+      const scene = parseScene({ backdrop, hero: { action: 'walk', from: 0, to: 40 }, props: sprites.map((sprite, i) => ({ sprite, x: 4 + i * 13, label: sprite })), particles: { kind: 'leaves', density: 1 }, caption: 'Crowded.' })
       if (!scene) throw new Error('expected a scene')
       const svg = sceneToSvg(scene, { figure: '3d', width: 2400, height: 192 })
       expect(svg.length).toBeLessThan(MAX_SVG)
-      // The bubble holds the first three, all kept.
-      for (const label of sprites.slice(0, 3)) expect(svg).toContain(`>${label}</text>`)
-      expect(svg).not.toContain('>file</text>')
+      expect(svg).toContain('Crowded.')
     }
   })
 })
 
 describe('composition', () => {
-  const rectOf = (m: RegExpMatchArray | null) => (m ? { x: +m[1]!, y: +m[2]!, w: +m[3]!, h: +m[4]! } : undefined)
-  // The first rect of a bubble's paper is its body.
-  const partRect = (part: string) => new RegExp(`data-part="${part}"[^>]*><g[^>]*><rect x="([\\d.]+)" y="([\\d.]+)" width="([\\d.]+)" height="([\\d.]+)"`)
-  const hit = (a: { x: number; y: number; w: number; h: number }, b: typeof a) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 
-  test('the speech bubble keeps clear of the thought bubble', () => {
-    const scene = parseScene({
-      backdrop: 'forest',
-      hero: { action: 'walk', from: 5, to: 30 },
-      props: [{ sprite: 'bug', x: 60, y: 'ground', label: 'parseHex' }, { sprite: 'file', x: 80, label: 'README.md' }],
-      caption: 'A long enough caption to need a wide bubble here.',
-    })
-    if (!scene) throw new Error('expected a scene')
-    for (const width of [480, 960, 2400]) {
-      const svg = sceneToSvg(scene, { width, height: 192, figure: '3d' })
-      const bubble = rectOf(svg.match(partRect('speech')))
-      const thought = rectOf(svg.match(partRect('thought')))
-      if (!bubble || !thought) throw new Error('expected a speech bubble and a thought')
-      expect(hit(bubble, thought)).toBe(false)
+  test("the caption's paper says how the work is going", () => {
+    const at = (extra: object) => {
+      const scene = parseScene({ backdrop: 'lab', hero: { action: 'think', from: 20, to: 20 }, caption: 'Hmm.', ...extra })
+      if (!scene) throw new Error('expected a scene')
+      return sceneToSvg(scene, { figure: '3d' }).match(/data-tone="(\w+)"/)?.[1]
     }
-  })
-
-  test('labels stay readable in a look that paints the foreground one color', () => {
-    const scene = parseScene({ backdrop: 'lab', hero: { action: 'think', from: 20, to: 20 }, props: [{ sprite: 'server', x: 80, label: 'db.ts' }], caption: 'Hmm.' })
-    if (!scene) throw new Error('expected a scene')
-    // The thought bubble is drawn past the look's remap: its paper and ink stay its own.
-    const svg = sceneToSvg(scene, { look: 'blueprint', figure: '3d' })
-    expect(svg).toContain('data-part="thought"')
-    expect(svg).toMatch(/fill="#3a2e26">db\.ts<\/text>/)
+    expect(at({})).toBe('work')
+    expect(at({ tone: 'trouble' })).toBe('trouble')
+    expect(at({ tone: 'milestone' })).toBe('milestone')
+    // A celebration is a milestone unless the narrator says otherwise.
+    expect(at({ hero: { action: 'celebrate', from: 20, to: 20 } })).toBe('milestone')
+    expect(at({ tone: 'nonsense' })).toBe('work')
   })
 
   test('every rich backdrop clips its scenery to the stage', () => {

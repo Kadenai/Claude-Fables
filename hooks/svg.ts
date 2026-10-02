@@ -2,7 +2,6 @@ import type { FablesProp, FablesScene } from '../types'
 
 import { type FacePaint, motionSvg } from './hero3d'
 import { richBackdrop } from './scenery'
-import { place, stack, Vox } from './voxel'
 import { type Cell, type Layer, type Look, lightness, lookFor, remapColors } from './looks'
 import { HERO_FRAMES, PALETTE, SPRITES, type SpriteName } from './sprites'
 
@@ -325,56 +324,16 @@ function label(text: string, cx: number, y: number, tag: TagStyle, sw: number): 
   )
 }
 
-/**
- * One prop. `solid` gives it depth to stand beside the 3D Claude: two darkened
- * copies behind it, offset up and right as the scenery's boxes are, and a
- * contact shadow under it when it stands on the ground.
- */
-/**
- * Stage units per art pixel of a stacked prop: smaller than the flat sprite's,
- * so a 16-pixel prop stands about as tall as the 3D Claude, not over the scenery.
- */
-const PROP_UNIT = 2.6
-/** Props drawn at their own size beside Claude: a train stands about as tall as Claude does. */
-const PROP_UNITS: Partial<Record<string, number>> = { train: 5.2 }
-const unitFor = (prop: FablesProp) => (typeof prop.sprite === 'string' ? (PROP_UNITS[prop.sprite] ?? PROP_UNIT) : PROP_UNIT)
-
-/** How many voxels deep a stacked prop's pixel art is extruded. */
-const PROP_DEPTH = 3
-
-/**
- * A prop as a sprite stack: its pixel art extruded PROP_DEPTH voxels deep, each
- * row of the art one layer, turned a little to show its side; a spinning prop
- * swings well round and back instead, so it never shows its thin edge.
- * Its bottom edge sits on `bottom`, centered on `cx`.
- */
-function stackedProp(art: Art, id: string, cx: number, bottom: number, motion: FablesProp['motion'], unit: number): string {
-  const rows = art.rows.length
-  const cols = widthOf(art.rows)
-  const v = new Vox(cols, PROP_DEPTH, rows)
-  art.rows.forEach((row, r) => {
-    for (let x = 0; x < row.length; x++) {
-      const key = row[x] ?? '.'
-      const color = key === '.' ? undefined : art.colorOf(key)
-      if (color) for (let y = 0; y < PROP_DEPTH; y++) v.set(x, y, rows - 1 - r, color)
-    }
-  })
-  // A prop sliding across the stage faces it squarely; the rest turn a little to show their side.
-  const s = stack(id, v, { s: unit, lift: unit * 0.85, yaw: motion === 'scroll' ? 0 : -16, sway: motion === 'spin' ? 40 : undefined, swayDur: 3.2 })
-  return s.defs + place(id, cx, bottom - s.down * 0.6)
-}
-
-function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cell: Cell, solid: boolean, look: Look): string {
+/** One prop, drawn flat on the pixel stage, with its label tag above it. */
+function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cell: Cell, look: Look): string {
   const art = artFor(prop)
-  const unit = solid ? unitFor(prop) : U
-  const w = widthOf(art.rows) * unit
-  const h = art.rows.length * unit
+  const w = widthOf(art.rows) * U
+  const h = art.rows.length * U
   const x = Math.round(((sw - w) * prop.x) / 100)
   const y = prop.y === 'ground' ? floor - h : prop.y === 'air' ? 58 - h / 2 : 8
   const cx = x + w / 2
   const cy = y + h / 2
-  const shade = solid && prop.y === 'ground' ? `<ellipse cx="${n(cx + 1)}" cy="${n(floor)}" rx="${n(w * 0.55)}" ry="2.6" fill="black" opacity=".28"/>` : ''
-  const body = solid ? stackedProp(art, `fp${index}`, cx, y + h, prop.motion, unit) : `<g transform="translate(${x} ${n(y)}) scale(${U})">${pixelPaths(art.rows, art.colorOf, cell)}</g>`
+  const body = `<g transform="translate(${x} ${n(y)}) scale(${U})">${pixelPaths(art.rows, art.colorOf, cell)}</g>`
   const slow = n(2 + (index % 3) * 0.7)
   let motion = ''
   switch (prop.motion) {
@@ -391,8 +350,7 @@ function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cel
       motion = `<animateTransform attributeName="transform" type="translate" values="0 -${n(y + h)};0 0;0 0" keyTimes="0;.4;1" dur="3s" repeatCount="indefinite"/>`
       break
     case 'spin':
-      // A stacked prop turns about its own axis instead; a flat one spins in the picture plane.
-      if (!solid) motion = `<animateTransform attributeName="transform" type="rotate" values="0 ${n(cx)} ${n(cy)};360 ${n(cx)} ${n(cy)}" dur="${slow}s" repeatCount="indefinite"/>`
+      motion = `<animateTransform attributeName="transform" type="rotate" values="0 ${n(cx)} ${n(cy)};360 ${n(cx)} ${n(cy)}" dur="${slow}s" repeatCount="indefinite"/>`
       break
     case 'blink':
       motion = `<animate attributeName="opacity" values="1;.25;1" dur="1s" repeatCount="indefinite"/>`
@@ -404,7 +362,7 @@ function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cel
   const tint = prop.color ?? '#d9d4c7'
   const style: TagStyle = look.color ? { fill: look.caption.fill, ink: look.caption.ink, stroke: look.caption.stroke } : { fill: INK, ink: tint, stroke: tint }
   const tag = prop.label ? label(prop.label, cx, y, style, sw) : ''
-  return `${shade}<g>${body}${tag}${motion}</g>`
+  return `<g>${body}${tag}${motion}</g>`
 }
 
 // ---------------------------------------------------------------- hero
@@ -513,93 +471,21 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure): He
   return { svg, endX: toX, endY: baseY, arrive: isMoving ? moveDur : 0 }
 }
 
-// ---------------------------------------------------------------- thought
+// ---------------------------------------------------------------- caption
 
 type P = [number, number]
 
-/** The cartoon paper both bubbles are cut from: a soft drop shadow, an ink outline, cream paper. */
-const CARD = '#f6f1e7'
-const CARD_INK = '#2b2420'
-const paper = (shape: string) =>
-  `<g transform="translate(1.2 1.8)" fill="black" opacity=".22">${shape}</g>` +
-  `<g fill="${CARD_INK}" stroke="${CARD_INK}" stroke-width="2.2" stroke-linejoin="round">${shape}</g><g fill="${CARD}">${shape}</g>`
-
-/** How many of the scene's props Claude thinks about at once. */
-const THOUGHTS = 3
-
-/**
- * What Claude is thinking about: up to THOUGHTS of the scene's props as small
- * crisp icons with their labels, in a cloud above its head joined to it by a
- * trail of bubbles. It appears once Claude has arrived, and bobs gently.
- */
-function thought(props: readonly FablesProp[], plan: HeroPlan, sw: number): { svg: string; rect?: Rect } {
-  const items = props.slice(0, THOUGHTS)
-  if (items.length === 0) return { svg: '' }
-  // Labels are set large enough to read at the band's size: about 11 px on screen.
-  const SIZE = 7.6
-  const CHAR = SIZE * 0.6
-  const slots = items.map(p => {
-    const art = artFor(p)
-    const rows = art.rows.length
-    const cols = widthOf(art.rows)
-    const unit = Math.min(1.7, 15 / rows, 24 / cols)
-    const label = (p.label ?? '').slice(0, 12)
-    return { art, unit, iw: cols * unit, ih: rows * unit, label, w: Math.max(cols * unit, label.length * CHAR) + 4 }
-  })
-  const pad = 6
-  const gap = 7
-  const hasLabel = slots.some(sl => sl.label)
-  const w = slots.reduce((t, sl) => t + sl.w, 0) + gap * (slots.length - 1) + pad * 2
-  const h = 16 + (hasLabel ? 11 : 0) + pad * 2
-  const headX = plan.endX + HERO_W / 2
-  const headY = plan.endY + HERO_H - MODEL_STAGE_H
-  let x = Math.min(sw - w - 3, Math.max(3, headX - w / 2 + 10))
-  let y = headY - 14 - h
-  let trailFrom: [number, number] = [headX + 6, headY - 3]
-  if (y < 3) {
-    // No room above: the cloud sits beside Claude, on whichever side has room.
-    y = Math.max(3, headY - h / 2)
-    x = headX + HERO_W / 2 + 14 + w <= sw - 3 ? headX + HERO_W / 2 + 14 : Math.max(3, headX - HERO_W / 2 - 14 - w)
-    trailFrom = [x < headX ? headX - HERO_W / 2 : headX + HERO_W / 2, headY + 6]
-  }
-  // The cloud: a rounded body with scallops along its top and bottom. The outline comes
-  // from drawing every part thick in ink first, then every part again in paper on top.
-  const parts: string[] = [`<rect x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}" rx="${n(h * 0.42)}"/>`]
-  const bumps = Math.max(2, Math.round(w / 12))
-  for (let i = 0; i < bumps; i++) {
-    const bx = x + h * 0.4 + ((w - h * 0.8) * (i + 0.5)) / bumps
-    parts.push(`<circle cx="${n(bx)}" cy="${n(y + 1.5)}" r="${n(4.6 + (i % 2) * 1.2)}"/>`, `<circle cx="${n(bx + 3)}" cy="${n(y + h - 1.5)}" r="${n(4.2 + ((i + 1) % 2) * 1.1)}"/>`)
-  }
-  const tx = x + w / 2
-  const ty = y + h
-  const trail = [0.62, 0.3].map((k, i) => {
-    const px = trailFrom[0] + (tx - trailFrom[0]) * k
-    const py = trailFrom[1] + (ty + 3 - trailFrom[1]) * k
-    return `<circle cx="${n(px)}" cy="${n(py)}" r="${n(2.6 - i * 0.9)}"/>`
-  })
-  const shape = parts.join('') + trail.join('')
-  let cursor = x + pad
-  const icons = slots
-    .map(sl => {
-      const ix = cursor + (sl.w - sl.iw) / 2
-      const iy = y + pad + (16 - sl.ih) / 2
-      const icon = `<g transform="translate(${n(ix)} ${n(iy)}) scale(${n(sl.unit)})">${pixelPaths(sl.art.rows, sl.art.colorOf)}</g>`
-      const text = sl.label
-        ? `<text x="${n(cursor + sl.w / 2)}" y="${n(y + pad + 25.5)}" text-anchor="middle" font-family="${FONT}" font-size="${SIZE}" fill="#3a2e26">${escapeXml(sl.label)}</text>`
-        : ''
-      cursor += sl.w + gap
-      return icon + text
-    })
-    .join('')
-  const appear = n(plan.arrive + 0.2)
-  const svg =
-    `<g data-part="thought" opacity="0">${paper(shape)}${icons}` +
-    `<animate attributeName="opacity" values="0;1" dur=".35s" begin="${appear}s" fill="freeze"/>` +
-    `<animateTransform attributeName="transform" type="translate" values="0 0;0 -1.2;0 0" dur="3.4s" begin="${appear}s" repeatCount="indefinite"/></g>`
-  return { svg, rect: { x: x - 4, y: y - 6, w: w + 8, h: h + 12 } }
+/** The cartoon paper the caption is cut from: a soft drop shadow, an ink outline, then the paper. */
+export type Tone = 'work' | 'trouble' | 'milestone'
+const TONES: Record<Tone, { paper: string; ink: string; text: string }> = {
+  work: { paper: '#f6f1e7', ink: '#2b2420', text: '#2b2420' },
+  trouble: { paper: '#fbe3dc', ink: '#5a1d16', text: '#5a1d16' },
+  milestone: { paper: '#ffe7a8', ink: '#3d2a0c', text: '#3d2a0c' },
 }
+const paper = (shape: string, tone: Tone) =>
+  `<g transform="translate(1.2 1.8)" fill="black" opacity=".22">${shape}</g>` +
+  `<g fill="${TONES[tone].ink}" stroke="${TONES[tone].ink}" stroke-width="2.2" stroke-linejoin="round">${shape}</g><g fill="${TONES[tone].paper}">${shape}</g>`
 
-// ---------------------------------------------------------------- caption
 
 /** Greedy word wrap; a word longer than the line is cut. */
 export function wrap(text: string, width: number): string[] {
@@ -643,9 +529,9 @@ function propRects(prop: FablesProp, floor: number, sw: number, unit: number): R
  * that covers the least of Claude, the props, their labels and the chapter
  * tag, the nearest to Claude among equals.
  */
-function caption(text: string, heroX: number, heroY: number, idPrefix: string, sw: number, look: Look, avoid: readonly Rect[], onPaper = false): string {
+function caption(text: string, heroX: number, heroY: number, idPrefix: string, sw: number, look: Look, avoid: readonly Rect[], tone?: Tone): string {
   const { fill, stroke, radius } = look.caption
-  const ink = onPaper ? CARD_INK : look.caption.ink
+  const ink = tone ? TONES[tone].text : look.caption.ink
   const heroBox: Rect = { x: heroX - 4, y: heroY - 8, w: HERO_W + 8, h: HERO_H + 8 }
   // A narrower wrap, taller, is tried when the wide one finds no clear place.
   let best = { x: 2, y: 4, score: Infinity, lines: [] as string[], w: 0, h: 0 }
@@ -683,8 +569,8 @@ function caption(text: string, heroX: number, heroY: number, idPrefix: string, s
       )
     })
     .join('')
-  if (onPaper) {
-    // Cut from the same paper as the thought bubble, with a tail pointing back at Claude.
+  if (tone) {
+    // Cut from cartoon paper, with a tail pointing back at Claude; its color says how the work is going.
     const hx = heroX + HERO_W / 2
     const hy = heroY + HERO_H - MODEL_STAGE_H + 10
     let base: [P, P]
@@ -702,7 +588,9 @@ function caption(text: string, heroX: number, heroY: number, idPrefix: string, s
     const shape =
       `<rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="6"/>` +
       `<path d="M${n(base[0][0])} ${n(base[0][1])}L${n(tip[0])} ${n(tip[1])}L${n(base[1][0])} ${n(base[1][1])}z"/>`
-    return `<g data-part="speech">${paper(shape)}${rows}<animate attributeName="opacity" values="0;1" dur=".2s" fill="freeze"/></g>`
+    // A milestone carries a small star on its corner.
+    const star = tone === 'milestone' ? `<path transform="translate(${n(x + w - 3)} ${n(y + 3)})" fill="#f0a020" stroke="${TONES.milestone.ink}" stroke-width=".9" stroke-linejoin="round" d="M0 -5.5L1.6 -1.7L5.5 -1.5L2.5 1.1L3.4 5L0 2.9L-3.4 5L-2.5 1.1L-5.5 -1.5L-1.6 -1.7z"/>` : ''
+    return `<g data-part="speech" data-tone="${tone}">${paper(shape, tone)}${rows}${star}<animate attributeName="opacity" values="0;1" dur=".2s" fill="freeze"/></g>`
   }
   return (
     `<g data-part="speech"><rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>${rows}` +
@@ -754,17 +642,16 @@ export function sceneToSvg(
   const stageAt = (lean: boolean) => (rich ? richBackdrop(scene, rng(`${scene.backdrop}|${scene.caption}|stage`), sw, GROUND_Y, W, lean) : flatStage(backdrop(scene, rand, sw)))
   let stage = stageAt(false)
   const dust = particles(scene, rand, sw)
-  // On the rich stage the props are what Claude is thinking about, not things lying about the scene.
-  const props = rich ? [] : scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell, rich, look))
+  // The rich stage tells the story in words alone: no props stand about the scene.
+  const props = rich ? [] : scene.props.map((p, i) => propSvg(p, stage.floor, i, sw, look.cell, look))
   const plan = hero(scene, stage.floor, sw, figure)
-  const thinks = (count: number) => (rich ? thought(scene.props.slice(0, count), plan, sw) : { svg: '' })
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
   const sky = tint('sky', stage.sky)
   const ground = tint('ground', stage.ground)
   // What the speech bubble keeps clear of: the props still drawn, their labels, the chapter tag.
   const avoid = (propCount: number): Rect[] => [
-    ...(rich ? [thinks(propCount).rect].filter((r): r is Rect => !!r) : scene.props.slice(0, propCount).flatMap(p => propRects(p, stage.floor, sw, U))),
+    ...scene.props.slice(0, propCount).flatMap(p => propRects(p, stage.floor, sw, U)),
     ...(scene.title ? [{ x: 0, y: 0, w: scene.title.length * look.charW + 34 + (look.inset ?? 0), h: 16 + (look.inset ?? 0) }] : []),
     ...stage.keep,
   ]
@@ -785,13 +672,12 @@ export function sceneToSvg(
     paint('back', stage.near) +
     (look.foreFilter ? `<g filter="url(#${look.foreFilter})">${fore(withDust, propCount)}</g>` : fore(withDust, propCount)) +
     stage.lens +
-    thinks(propCount).svg +
     (look.over?.(sw, H, GROUND_Y) ?? '') +
     (scene.title ? title(scene.title, look.titleColor ?? (rich ? '#efe6d2' : accent), look) : '') +
-    caption(scene.caption, plan.endX, plan.endY, idPrefix, sw, look, avoid(propCount), rich) +
+    caption(scene.caption, plan.endX, plan.endY, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined) +
     `</svg>`
 
-  const propsShown = rich ? Math.min(THOUGHTS, scene.props.length) : props.length
+  const propsShown = props.length
   let svg = build(true, propsShown)
   // Over the limit, the scenery thins out first, then the particles, and only then the props.
   if (svg.length > BUDGET && rich) {

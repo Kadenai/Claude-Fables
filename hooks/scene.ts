@@ -163,6 +163,7 @@ export function parseScene(raw: unknown): FablesScene | null {
       density: clampNumber(raw.particles.density, 0, 1, 0.4),
     }
   }
+  if (raw.tone === 'trouble' || raw.tone === 'milestone' || raw.tone === 'work') scene.tone = raw.tone
   const title = cleanText(raw.title, MAX_TITLE)
   if (title) scene.title = title
   return scene

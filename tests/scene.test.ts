@@ -152,9 +152,9 @@ describe('viewer scenarios', () => {
       for (const scene of [...s.beats.map(b => b.scene), s.closing]) {
         const parsed = parseScene(scene)
         expect(parsed).not.toBeNull()
-        // Nothing was cut: the caption and every prop came through as written.
+        // Nothing was cut: the caption and the tone came through as written.
         expect(parsed?.caption).toBe((scene as { caption: string }).caption)
-        expect(parsed?.props.length).toBe((scene as { props: unknown[] }).props.length)
+        expect(parsed?.tone).toBe((scene as { tone?: string }).tone)
       }
       const times = [...s.steps.map(st => st.at), s.end]
       expect(times).toEqual([...times].sort((a, b) => a - b))

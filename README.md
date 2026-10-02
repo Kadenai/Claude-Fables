@@ -19,7 +19,7 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
                                         <Svg isInteractive/> in the AbovePrompt band
 ```
 
-- **Sonnet writes data, not code.** Each scene is a small declarative JSON object: a backdrop, Claude's action, up to 8 props from a sprite library (custom pixel art up to 16×16 is also allowed), particles and a caption. `hooks/scene.ts` validates it strictly: unknown fields are dropped, numbers clamped, strings flattened and cut, and colors must be 3- or 6-digit hex. A bad reply can't break anything; it just doesn't show.
+- **Sonnet writes data, not code.** Each scene is a small declarative JSON object: a backdrop, Claude's action, particles, a caption and its tone. `hooks/scene.ts` validates it strictly: unknown fields are dropped, numbers clamped, strings flattened and cut, and colors must be 3- or 6-digit hex. A bad reply can't break anything; it just doesn't show.
 - **The animation runs inside the SVG.** `hooks/svg.ts` compiles a scene into one SVG document that animates itself with SMIL: walk cycles, bobbing, scrolling trains, twinkling stars, and a speech bubble that types itself out. Once the scene is drawn, the desktop needs no redraws for it.
 - **It has limits.** Only one Sonnet request runs at a time, scenes come at least 5 seconds apart, and after errors it backs off exponentially, up to 60 seconds. The prompt is always bounded (the last 14 activity lines and the last 4 scenes), so a long session can't outgrow the context window.
 - **It fits the window.** The band always gets a cartoon as wide as it is and 192 px tall. A wider window shows more of the scene, not a bigger one, so the art and the text stay the same size. Resizing the window redraws it.
@@ -37,7 +37,6 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 | `hooks/clawd3d.ts` | The 3D Claude: the box model, its motions and its projection (ported from the gallery) |
 | `hooks/hero3d.ts` | Bakes the posed 3D model into SVG frames that SMIL plays in turn |
 | `hooks/scenery.ts` | The seven authored scenes: light maps, materials, reflections |
-| `hooks/voxel.ts` | Sprite stacking: voxel models as stacked SVG slices (unused while props live in thoughts) |
 | `types/index.d.ts` | The scene types and the mod's `$.state` contract |
 
 ## Install (Claude Code desktop)
@@ -89,11 +88,11 @@ Wet and polished floors reflect: the city's skyline and the lab's room are drawn
 
 Depth comes from atmospheric perspective: further layers are lighter and nearer the sky's color. Focal points sit off the middle, so the middle of the stage, where Claude and the caption are, stays calm. Silhouettes come from smooth noise rather than repeated tiles, so there is no seam at any width. Everything is clipped to the stage, and motion is slow and belongs to the story.
 
-The band's frame takes at most 131,072 characters, so repeated things are drawn once and placed many times: the firs, the grass clumps and the furthest tree line are templates. A scene that would still run over is redrawn leaner, then without particles; only after that does a thought go.
+The band's frame takes at most 131,072 characters, so repeated things are drawn once and placed many times: the firs, the grass clumps and the furthest tree line are templates. A scene that would still run over is redrawn leaner, then without particles, and as a last resort on the flat stage.
 
-### Thoughts
+### Captions
 
-Props aren't scattered on the ground. They are what Claude is thinking about: up to three of them appear in a thought bubble above Claude once it arrives, each icon with its label. The speech bubble is cut from the same paper as the thought, with a tail pointing back at Claude. It picks the spot beside or above Claude that covers the least of Claude, the thought, the chapter tag and the scene's focal points, wrapping its caption narrower when a band is too tight.
+The story is told in words. Props aren't drawn on the scene, so nothing competes with Claude and the caption, and a slight blur over the scenery keeps both reading first against any backdrop. The caption is cut from cartoon paper with a tail pointing back at Claude, and its paper says how the work is going: cream while Claude works, rose with red ink when something has just failed, and gold with a small star for a milestone, such as tests passing or the task done. The narrator picks the tone; a celebration is a milestone unless it says otherwise. The bubble takes the spot beside or above Claude that covers the least of Claude, the chapter tag and the scene's focal points, wrapping narrower when a band is tight.
 
 The model and its projection are ported from the gallery's engine by [ChetasLua](https://github.com/ChetasLua), under the MIT License.
 

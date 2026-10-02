@@ -3,7 +3,7 @@
  * the person asked, each tool call and what came back, what Claude said in
  * between, and the scene the narrator draws at each moment. Times are seconds
  * from the prompt. The scenes are written the way the narrator is asked to
- * write them; the viewer can also ask Claude for them live from the same
+ * write them, without props: the rich stage tells the story in words; the viewer can also ask Claude for them live from the same
  * activity, through the mod's own prompt.
  */
 export type Step =
@@ -47,13 +47,13 @@ export const SCENARIOS: Scenario[] = [
       { at: 31.5, said: 'Fixed: daysInMonth() asks isLeapYear() about February again, and all 42 tests pass.' },
     ],
     beats: [
-      { at: 3.5, scene: { backdrop: 'lab', hero: { action: 'think', from: 10, to: 10 }, props: [{ sprite: 'bug', x: 70, label: 'Feb 29', motion: 'shake' }, { sprite: 'file', x: 85, label: 'dates.test.ts' }], caption: 'One red test out of 42. Something has a grudge against February 29th.', title: '1 failed' } },
-      { at: 11.5, scene: { backdrop: 'forest', hero: { action: 'walk', from: 5, to: 32 }, props: [{ sprite: 'magnifier', x: 60, label: 'daysInMonth' }, { sprite: 'bug', x: 80, label: 'Feb 29', motion: 'shake' }, { sprite: 'file', x: 90, label: 'dates.ts' }], caption: 'Tracking the leap-year bug through dates.ts. The prints lead to daysInMonth().' } },
-      { at: 18.5, scene: { backdrop: 'desert', hero: { action: 'inspect', from: 10, to: 30 }, props: [{ sprite: 'bug', x: 70, label: 'isLeapYear()' }, { sprite: 'book', x: 85, label: 'calendar.ts' }], caption: 'February has 28 days, says the code. Every fourth year the calendar disagrees.' } },
-      { at: 26, scene: { backdrop: 'lab', hero: { action: 'inspect', from: 15, to: 30 }, props: [{ sprite: 'gear', x: 70, label: 'isLeapYear()' }, { sprite: 'beaker', x: 85, label: '42 tests', motion: 'blink' }], caption: 'isLeapYear() is wired back into February. Running all 42 tests again.' } },
+      { at: 3.5, scene: { backdrop: 'lab', hero: { action: 'think', from: 10, to: 10 }, caption: 'One red test out of 42. Something has a grudge against February 29th.', tone: 'trouble', title: '1 failed' } },
+      { at: 11.5, scene: { backdrop: 'forest', hero: { action: 'walk', from: 5, to: 32 }, caption: 'Tracking the leap-year bug through dates.ts. The prints lead to daysInMonth().' } },
+      { at: 18.5, scene: { backdrop: 'desert', hero: { action: 'inspect', from: 10, to: 30 }, caption: 'February has 28 days, says the code. Every fourth year the calendar disagrees.' } },
+      { at: 26, scene: { backdrop: 'lab', hero: { action: 'inspect', from: 15, to: 30 }, caption: 'isLeapYear() is wired back into February. Running all 42 tests again.' } },
     ],
     end: 33,
-    closing: { backdrop: 'city', hero: { action: 'celebrate', from: 10, to: 30 }, props: [{ sprite: 'trophy', x: 80, label: '42 / 42' }, { sprite: 'flag', x: 90, label: 'tsc clean' }], caption: 'Leap day is back on the calendar! 42 of 42 green and the typecheck is clean.', title: 'fixed' },
+    closing: { backdrop: 'city', hero: { action: 'celebrate', from: 10, to: 30 }, caption: 'Leap day is back on the calendar! 42 of 42 green and the typecheck is clean.', tone: 'milestone', title: 'fixed' },
   },
   {
     id: 'dark',
@@ -74,13 +74,13 @@ export const SCENARIOS: Scenario[] = [
       { at: 32, said: 'Added a Dark mode switch under Appearance. It follows the system setting until you choose, then remembers it.' },
     ],
     beats: [
-      { at: 3, scene: { backdrop: 'city', hero: { action: 'walk', from: 5, to: 30 }, props: [{ sprite: 'folder', x: 70, label: 'src/pages' }, { sprite: 'file', x: 85, label: 'Settings.tsx' }], caption: 'Touring 37 components to find where the settings page lives.' } },
-      { at: 10.5, scene: { backdrop: 'night', hero: { action: 'think', from: 20, to: 20 }, props: [{ sprite: 'lamp', x: 70, label: 'tokens.css' }, { sprite: 'star', x: 85 }], caption: 'The colors are already variables. Dark mode is the same town, after sunset.' } },
-      { at: 18, scene: { backdrop: 'lab', hero: { action: 'inspect', from: 10, to: 28 }, props: [{ sprite: 'gear', x: 70, label: 'useTheme.ts' }, { sprite: 'key', x: 85, label: 'localStorage' }], caption: 'Building useTheme: it listens to the system, then remembers your choice.' } },
-      { at: 27, scene: { backdrop: 'night', hero: { action: 'walk', from: 5, to: 35 }, props: [{ sprite: 'house', x: 70, label: 'App.tsx' }, { sprite: 'lamp', x: 85, label: 'data-theme' }], caption: 'Flipping the switch in App.tsx. Lights on, lights off, lights remembered.' } },
+      { at: 3, scene: { backdrop: 'city', hero: { action: 'walk', from: 5, to: 30 }, caption: 'Touring 37 components to find where the settings page lives.' } },
+      { at: 10.5, scene: { backdrop: 'night', hero: { action: 'think', from: 20, to: 20 }, caption: 'The colors are already variables. Dark mode is the same town, after sunset.' } },
+      { at: 18, scene: { backdrop: 'lab', hero: { action: 'inspect', from: 10, to: 28 }, caption: 'Building useTheme: it listens to the system, then remembers your choice.' } },
+      { at: 27, scene: { backdrop: 'night', hero: { action: 'walk', from: 5, to: 35 }, caption: 'Flipping the switch in App.tsx. Lights on, lights off, lights remembered.' } },
     ],
     end: 34,
-    closing: { backdrop: 'night', hero: { action: 'celebrate', from: 15, to: 30 }, props: [{ sprite: 'trophy', x: 80, label: 'build ok' }, { sprite: 'lamp', x: 90, label: 'Appearance' }], caption: 'Dark mode ships: Settings, Appearance, and it remembers you.', title: 'shipped' },
+    closing: { backdrop: 'night', hero: { action: 'celebrate', from: 15, to: 30 }, caption: 'Dark mode ships: Settings, Appearance, and it remembers you.', tone: 'milestone', title: 'shipped' },
   },
   {
     id: 'slow',
@@ -101,13 +101,13 @@ export const SCENARIOS: Scenario[] = [
       { at: 33, said: 'Fixed the N+1 in OrderList: 312 queries down to 3, and the endpoint from 2.4s to 0.18s.' },
     ],
     beats: [
-      { at: 3.5, scene: { backdrop: 'desert', hero: { action: 'walk', from: 5, to: 30 }, props: [{ sprite: 'flag', x: 75, label: '2.41s' }, { sprite: 'file', x: 88, label: '/api/orders' }], caption: '2.41 seconds to cross /api/orders. Something is weighing down the caravan.' } },
-      { at: 11, scene: { backdrop: 'space', hero: { action: 'walk', from: 10, to: 35 }, props: [{ sprite: 'magnifier', x: 70, label: 'OrderList' }, { sprite: 'planet', x: 85, label: 'serializers.py' }], caption: 'Moonwalking through serializers.py, looking for the crater that eats time.' } },
-      { at: 19, scene: { backdrop: 'volcano', hero: { action: 'dig', from: 10, to: 22 }, props: [{ sprite: 'bomb', x: 60, label: '312 queries' }, { sprite: 'chest', x: 80, label: 'customer' }], caption: 'Found it: 312 queries erupting for 100 orders. A classic N+1.', title: 'N+1' } },
-      { at: 28, scene: { backdrop: 'space', hero: { action: 'fly', from: 15, to: 35 }, props: [{ sprite: 'rocket', x: 70, label: '0.18s' }, { sprite: 'gear', x: 85, label: 'select_related' }], caption: 'select_related and a prefetch: 312 queries down to 3. Liftoff.' } },
+      { at: 3.5, scene: { backdrop: 'desert', hero: { action: 'walk', from: 5, to: 30 }, caption: '2.41 seconds to cross /api/orders. Something is weighing down the caravan.' } },
+      { at: 11, scene: { backdrop: 'space', hero: { action: 'walk', from: 10, to: 35 }, caption: 'Moonwalking through serializers.py, looking for the crater that eats time.' } },
+      { at: 19, scene: { backdrop: 'volcano', hero: { action: 'dig', from: 10, to: 22 }, caption: 'Found it: 312 queries erupting for 100 orders. A classic N+1.', title: 'N+1' } },
+      { at: 28, scene: { backdrop: 'space', hero: { action: 'fly', from: 15, to: 35 }, caption: 'select_related and a prefetch: 312 queries down to 3. Liftoff.', tone: 'milestone' } },
     ],
     end: 35,
-    closing: { backdrop: 'space', hero: { action: 'celebrate', from: 15, to: 30 }, props: [{ sprite: 'trophy', x: 80, label: '13x faster' }, { sprite: 'star', x: 90 }], caption: 'From 2.41s to 0.18s. Orders now arrive at roughly the speed of light.', title: '13x' },
+    closing: { backdrop: 'space', hero: { action: 'celebrate', from: 15, to: 30 }, caption: 'From 2.41s to 0.18s. Orders now arrive at roughly the speed of light.', tone: 'milestone', title: '13x' },
   },
   {
     id: 'ci',
@@ -128,13 +128,13 @@ export const SCENARIOS: Scenario[] = [
       { at: 31, said: 'Lint is green: the config is now a flat eslint.config.js, and eslint-plugin-react-hooks is on v5 for ESLint 9.' },
     ],
     beats: [
-      { at: 3, scene: { backdrop: 'volcano', hero: { action: 'run', from: 40, to: 10 }, props: [{ sprite: 'bomb', x: 70, label: 'eslint 9' }, { sprite: 'file', x: 85, label: '.eslintrc.json' }], caption: "CI erupted the moment eslint 9 landed. It can't even find its config.", title: 'red' } },
-      { at: 11, scene: { backdrop: 'night', hero: { action: 'inspect', from: 10, to: 28 }, props: [{ sprite: 'book', x: 70, label: 'migration guide' }, { sprite: 'file', x: 85, label: 'eslint.config.js' }], caption: 'Reading the migration guide by moonlight: .eslintrc is history, flat config is in.' } },
-      { at: 18.5, scene: { backdrop: 'volcano', hero: { action: 'dig', from: 10, to: 22 }, props: [{ sprite: 'bug', x: 65, label: 'react-hooks', motion: 'shake' }, { sprite: 'bomb', x: 82, label: 'TypeError' }], caption: "Second eruption: react-hooks isn't flat-config ready. Digging for v5." } },
-      { at: 25, scene: { backdrop: 'lab', hero: { action: 'think', from: 15, to: 15 }, props: [{ sprite: 'gear', x: 70, label: 'eslint.config.js' }, { sprite: 'beaker', x: 85, label: '0 problems' }], caption: '0 problems. Running the 128 tests before calling it green.' } },
+      { at: 3, scene: { backdrop: 'volcano', hero: { action: 'run', from: 40, to: 10 }, caption: "CI erupted the moment eslint 9 landed. It can't even find its config.", tone: 'trouble', title: 'red' } },
+      { at: 11, scene: { backdrop: 'night', hero: { action: 'inspect', from: 10, to: 28 }, caption: 'Reading the migration guide by moonlight: .eslintrc is history, flat config is in.' } },
+      { at: 18.5, scene: { backdrop: 'volcano', hero: { action: 'dig', from: 10, to: 22 }, caption: "Second eruption: react-hooks isn't flat-config ready. Digging for v5.", tone: 'trouble' } },
+      { at: 25, scene: { backdrop: 'lab', hero: { action: 'think', from: 15, to: 15 }, caption: '0 problems. Running the 128 tests before calling it green.' } },
     ],
     end: 33,
-    closing: { backdrop: 'forest', hero: { action: 'celebrate', from: 10, to: 30 }, props: [{ sprite: 'flag', x: 80, label: 'CI green' }, { sprite: 'trophy', x: 90, label: '128 tests' }], caption: 'CI is green again: eslint 9, a flat config and 128 passing tests.', title: 'green' },
+    closing: { backdrop: 'forest', hero: { action: 'celebrate', from: 10, to: 30 }, caption: 'CI is green again: eslint 9, a flat config and 128 passing tests.', tone: 'milestone', title: 'green' },
   },
   {
     id: 'auth',
@@ -159,12 +159,12 @@ export const SCENARIOS: Scenario[] = [
       { at: 34, said: 'Auth now lives in src/auth (session, tokens, guard). 9 files updated with no behaviour change; types check and all 96 tests pass.' },
     ],
     beats: [
-      { at: 4.5, scene: { backdrop: 'forest', hero: { action: 'walk', from: 5, to: 30 }, props: [{ sprite: 'folder', x: 70, label: '9 files' }, { sprite: 'key', x: 85, label: 'tokens' }], caption: 'A scout reports back: auth is scattered across 9 files. Time to gather it.' } },
-      { at: 12, scene: { backdrop: 'lab', hero: { action: 'inspect', from: 10, to: 28 }, props: [{ sprite: 'file', x: 65, label: 'session.ts' }, { sprite: 'key', x: 78, label: 'tokens.ts' }, { sprite: 'gear', x: 90, label: 'guard.ts' }], caption: 'Three new modules on the bench: session, tokens and guard.' } },
-      { at: 20, scene: { backdrop: 'city', hero: { action: 'run', from: 5, to: 35 }, props: [{ sprite: 'train', x: 70, label: 'login, logout' }, { sprite: 'folder', x: 88, label: 'src/auth' }], caption: 'Moving login, logout and the middleware onto the new line. All aboard src/auth.' } },
-      { at: 26, scene: { backdrop: 'night', hero: { action: 'think', from: 20, to: 20 }, props: [{ sprite: 'bug', x: 70, label: 'refresh.ts', motion: 'shake' }, { sprite: 'file', x: 85, label: 'utils/jwt' }], caption: 'One straggler: refresh.ts still asks for the jwt helper I just retired.' } },
+      { at: 4.5, scene: { backdrop: 'forest', hero: { action: 'walk', from: 5, to: 30 }, caption: 'A scout reports back: auth is scattered across 9 files. Time to gather it.' } },
+      { at: 12, scene: { backdrop: 'lab', hero: { action: 'inspect', from: 10, to: 28 }, caption: 'Three new modules on the bench: session, tokens and guard.' } },
+      { at: 20, scene: { backdrop: 'city', hero: { action: 'run', from: 5, to: 35 }, caption: 'Moving login, logout and the middleware onto the new line. All aboard src/auth.' } },
+      { at: 26, scene: { backdrop: 'night', hero: { action: 'think', from: 20, to: 20 }, caption: 'One straggler: refresh.ts still asks for the jwt helper I just retired.', tone: 'trouble' } },
     ],
     end: 36,
-    closing: { backdrop: 'forest', hero: { action: 'celebrate', from: 10, to: 30 }, props: [{ sprite: 'folder', x: 80, label: 'src/auth' }, { sprite: 'trophy', x: 90, label: '96 tests' }], caption: 'Auth has a home now. Same behaviour, a cleaner map, 96 tests green.', title: 'refactored' },
+    closing: { backdrop: 'forest', hero: { action: 'celebrate', from: 10, to: 30 }, caption: 'Auth has a home now. Same behaviour, a cleaner map, 96 tests green.', tone: 'milestone', title: 'refactored' },
   },
 ]
