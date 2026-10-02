@@ -128,7 +128,7 @@ Nine more styles, from the [Claude Mascot Style Gallery](https://github.com/henr
 | Cave Painting | `cave` | Ochre, soot and pale earth rubbed thin on torch-lit limestone; no sky, only the wall; broken soot outlines; Claude in red ochre |
 | Blueprint | `blueprint` | White line work on a cyanotype sheet; shade section-hatched, air and light as phantom lines; Claude as a patent drawing with hidden edges dashed |
 | Mosaic | `mosaic` | Laid in the floor's stones and set as tesserae in grout, outlined in rows of dark stones; a meander border |
-| Frutiger Aero | `aero` | Saturated glossy gradients with a white rim on every surface: a deep azure sky with cumulus and a sun flare, Frutiger Aurora ribbons and bokeh at night; Claude as tangerine jelly |
+| Frutiger Aero | `aero` | Glossy gradients with a white rim on every surface, after the Vista and 7 wallpapers: an azure sky with a sun flare, Bliss-green grass, aqua glass towers, pearl rooms; Frutiger Aurora at night with teal meadows, moonlit clouds and bokeh stars; Claude as tangerine jelly |
 | Copperplate Engraving | `engraving` | One sepia ink on laid paper, every tone cut as hatching along the grain of what it is; a plate mark |
 | Millefleur Tapestry | `tapestry` | Woven in madder, woad, weld and walnut wool on the loom's grid; grass becomes the field of a thousand flowers |
 | Golden Age Comic | `golden` | Flat newsprint inks, shade in Ben-Day dots, heavy keylines; a lettered balloon |
