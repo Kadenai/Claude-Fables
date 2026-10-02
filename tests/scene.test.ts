@@ -4,6 +4,8 @@ import { summarizeTool } from '../hooks/activity'
 import { buildPrompt, sceneFromReply } from '../hooks/narrator'
 import { extractJson, parseHex, parseScene } from '../hooks/scene'
 import { H, MAX_SVG, MAX_W, MIN_W, sceneToSvg, stageWidth } from '../hooks/svg'
+import { NARRATOR_MODELS } from '../hooks/director'
+import { rehearse } from '../scripts/rehearse'
 import { SCENARIOS } from '../scripts/scenarios'
 
 const GOOD = {
@@ -147,19 +149,50 @@ describe('sceneToSvg', () => {
 })
 
 describe('viewer scenarios', () => {
-  test('every scripted scene passes the validator whole, in time order', () => {
+  test('every session is scripted in time order, with readable tool lines', () => {
     for (const s of SCENARIOS) {
-      for (const scene of [...s.beats.map(b => b.scene), s.closing]) {
-        const parsed = parseScene(scene)
-        expect(parsed).not.toBeNull()
-        // Nothing was cut: the caption and the tone came through as written.
-        expect(parsed?.caption).toBe((scene as { caption: string }).caption)
-        expect(parsed?.tone).toBe((scene as { tone?: string }).tone)
-      }
       const times = [...s.steps.map(st => st.at), s.end]
       expect(times).toEqual([...times].sort((a, b) => a - b))
-      expect(s.beats.every(b => b.at < s.end)).toBe(true)
       for (const st of s.steps) if ('tool' in st) expect(summarizeTool(st.tool, st.input).length).toBeGreaterThan(4)
+    }
+  })
+
+  test('rehearsed through the narrator, each model answers every ask and closes the story', async () => {
+    for (const s of SCENARIOS) {
+      for (const model of NARRATOR_MODELS) {
+        const { moments, unscripted, unused } = await rehearse(s, model)
+        // The script has exactly one reply for each time the narrator asks.
+        expect([s.id, model, unscripted, unused]).toEqual([s.id, model, 0, 0])
+        const asks = moments.filter(m => m.kind === 'ask')
+        expect(asks.length).toBe(s.replies[model].length)
+        expect(asks.every(m => m.kind === 'ask' && m.model === model && m.prompt.includes(s.ask))).toBe(true)
+        // A reply is drawn unless it was scripted to fail (no answer, or no caption).
+        for (const m of moments) {
+          if (m.kind !== 'reply') continue
+          const scripted = s.replies[model].find(r => 'text' in r && r.text === m.text)
+          if (scripted && !/"caption"/.test(m.text)) expect(m.scene).toBeNull()
+          else if (scripted) expect(m.scene?.caption).toBeDefined()
+        }
+        // The closing scene is asked for once the turn ends, and drawn.
+        const closing = asks.find(m => m.kind === 'ask' && m.closing)
+        expect(closing?.at).toBeGreaterThanOrEqual(s.end * 1000)
+        expect(moments.some(m => m.kind === 'show' && m.at > s.end * 1000)).toBe(true)
+      }
+    }
+  })
+
+  test('a scripted scene keeps its caption and tone whole through the validator', () => {
+    for (const s of SCENARIOS) {
+      for (const model of NARRATOR_MODELS) {
+        for (const r of s.replies[model]) {
+          if (!('text' in r)) continue
+          const raw = extractJson(r.text) as { caption?: string; tone?: string } | undefined
+          const scene = sceneFromReply(r.text)
+          if (!raw?.caption) continue
+          expect(scene?.caption).toBe(raw.caption)
+          expect(scene?.tone).toBe(raw.tone)
+        }
+      }
     }
   })
 })

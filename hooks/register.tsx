@@ -1,10 +1,7 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, Timer } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
-import type { FablesScene } from '../types'
-
-import { type Activity, pushActivity, summarizeSpeech, summarizeTool } from './activity'
-import { backoffMs, buildPrompt, remember, sceneFromReply, type StoryBeat, SYSTEM } from './narrator'
+import { DEFAULT_MODEL, Director, findModel, type Host, MODEL_LABELS, NARRATOR_MODELS, type NarratorModel } from './director'
 import { DEFAULT_LOOK, findLook, LOOK_NAMES, LOOKS, lookFor } from './looks'
 import { H, sceneToSvg, W } from './svg'
 
@@ -15,10 +12,9 @@ const style = atom({ plugin: 'fables', key: 'style' } as const, DEFAULT_LOOK)
 const STORE_ENABLED = 'enabled'
 const STORE_PIXEL = 'pixelArt'
 const STORE_STYLE = 'style'
+const STORE_MODEL = 'model'
 /** Every scene is drawn with the 3D Claude, in the style the person chose (looks.ts). */
 const FIGURE = '3d'
-/** How long the closing scene of a turn stays up. */
-const LINGER_MS = 30000
 /** This plugin's own tools, if it ever registers any, are not part of the story. */
 const OWN_TOOLS = 'mcp__fables__'
 
@@ -39,80 +35,17 @@ function bandBox(columns: number): { width: number; height: number } {
   return { width, height: Math.round(H * SCALE) }
 }
 
-type Ending = 'answer' | 'aborted' | 'error' | 'refusal'
-
-/** The narrator's working memory. A reload starts it over, which only costs continuity. */
-type Narrator = {
-  model: string
-  isOn: boolean
-  ask: string
-  log: Activity[]
-  story: StoryBeat[]
-  isTurnRunning: boolean
-  isDirty: boolean
-  isAsking: boolean
-  ending: Ending | undefined
-  nextAt: number
-  failures: number
-  turn: number
-  /** The style scenes are drawn in, so the narrator can write in its voice. */
-  look: string
-  linger: Timer | undefined
-}
-
-function note(n: Narrator, entry: Activity) {
-  n.log = pushActivity(n.log, entry)
-  n.isDirty = true
-}
-
-async function narrate($: EngineInterface, n: Narrator) {
-  n.isAsking = true
-  n.isDirty = false
-  const forTurn = n.turn
-  const closing = n.ending
-  n.ending = undefined
-  try {
-    const reply = await $.model.complete({
-      model: n.model,
-      system: SYSTEM,
-      prompt: buildPrompt({ ask: n.ask, log: n.log, story: n.story, ending: closing, look: lookFor(n.look).voice ? lookFor(n.look) : undefined }),
-      maxTokens: 2000,
-      effort: 'low',
-      timeoutMs: 30000,
-    })
-    const drawn: FablesScene | null = reply.isAnswered ? sceneFromReply(reply.text) : null
-    if (!drawn) {
-      n.failures++
-      return
-    }
-    n.failures = 0
-    // A reply that lands after a newer turn began belongs to a story nobody is watching.
-    if (forTurn !== n.turn) return
-    n.story = remember(n.story, drawn)
-    await update($, scene, () => drawn)
-    if (closing) {
-      n.linger?.cancel()
-      n.linger = $.clock.after(LINGER_MS, () => {
-        if (!n.isTurnRunning) void update($, scene, () => null)
-      })
-    }
-  } catch {
-    n.failures++
-  } finally {
-    n.isAsking = false
-    n.nextAt = (await $.clock.now()) + backoffMs(n.failures)
+/** The narrator's host in a session: Claude Code's clock, its model, and the band. */
+function host($: EngineInterface): Host {
+  return {
+    now: () => $.clock.now(),
+    complete: ask => $.model.complete(ask),
+    show: drawn => update($, scene, () => drawn),
+    after: (ms, run) => $.clock.after(ms, run),
   }
 }
 
-async function tick($: EngineInterface, n: Narrator) {
-  if (!n.isOn || n.isAsking) return
-  if (n.ending) return narrate($, n)
-  if (!n.isTurnRunning || !n.isDirty) return
-  if ((await $.clock.now()) < n.nextAt) return
-  return narrate($, n)
-}
-
-async function chooseLook($: EngineInterface, n: Narrator, name: string) {
+async function chooseLook($: EngineInterface, n: Director, name: string) {
   const look = lookFor(name)
   n.look = look.name
   await $.store.set(STORE_STYLE, look.name)
@@ -120,33 +53,28 @@ async function chooseLook($: EngineInterface, n: Narrator, name: string) {
   return { text: `Scenes are now drawn as ${look.label}.` }
 }
 
-async function setOn($: EngineInterface, n: Narrator, value: boolean) {
-  n.isOn = value
+async function chooseModel($: EngineInterface, n: Director, model: NarratorModel) {
+  n.model = model
+  await $.store.set(STORE_MODEL, model)
+  return { text: `${MODEL_LABELS[model]} now writes the story.` }
+}
+
+async function setOn($: EngineInterface, n: Director, value: boolean) {
+  await n.setOn(host($), value)
   await $.store.set(STORE_ENABLED, value)
   await update($, enabled, () => value)
-  if (!value) await update($, scene, () => null)
 }
 
 export const register: Register = (on, options) => {
-  const n: Narrator = {
-    model: typeof options.model === 'string' && options.model ? options.model : 'sonnet',
-    isOn: true,
-    ask: '',
-    log: [],
-    story: [],
-    isTurnRunning: false,
-    isDirty: false,
-    isAsking: false,
-    ending: undefined,
-    nextAt: 0,
-    failures: 0,
-    turn: 0,
-    look: DEFAULT_LOOK,
-    linger: undefined,
-  }
+  const n = new Director()
+  // The config menu's choice is the default; /fables model overrides it.
+  const configured = findModel(options.model) ?? DEFAULT_MODEL
+  n.model = configured
+  n.look = DEFAULT_LOOK
 
   on('session.start', async ($, e, next) => {
     n.isOn = (await $.store.get(STORE_ENABLED)) !== false
+    n.model = findModel(await $.store.get(STORE_MODEL)) ?? configured
     await update($, enabled, () => n.isOn)
     const saved = await $.store.get(STORE_STYLE)
     // Pixel art was once a switch of its own: someone who turned it off keeps the original look, drawn smooth.
@@ -155,15 +83,26 @@ export const register: Register = (on, options) => {
     await update($, style, () => n.look)
     await $.command.register({
       name: 'fables',
-      description: 'Claude Fables: turn the cartoons above the prompt on or off, or pick a style',
-      argumentHint: '[on|off|style [name|off]]',
+      description: 'Claude Fables: turn the cartoons above the prompt on or off, pick a style, or pick the model that writes them',
+      argumentHint: '[on|off|style [name|off]|model [sonnet|haiku]]',
     })
-    $.clock.every(1000, () => void tick($, n))
+    $.clock.every(1000, () => void n.tick(host($)))
     return next(e)
   })
 
   on('command.run', { command: 'fables' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
+    const md = /^(?:model|models|narrator)\b\s*(.*)$/.exec(arg)
+    if (md) {
+      const want = (md[1] ?? '').trim()
+      if (!want) {
+        const list = NARRATOR_MODELS.map(m => `${m === n.model ? '▸' : ' '} ${m} · ${MODEL_LABELS[m]}`).join('\n')
+        return { text: `${MODEL_LABELS[n.model]} writes the story. Pick another with /fables model <name>:\n${list}` }
+      }
+      const model = findModel(want)
+      if (!model) return { text: `No narrator called "${want}". Try /fables model sonnet or /fables model haiku.` }
+      return chooseModel($, n, model)
+    }
     const st = /^(?:style|styles|look)\b\s*(.*)$/.exec(arg)
     if (st) {
       const want = (st[1] ?? '').trim()
@@ -182,30 +121,22 @@ export const register: Register = (on, options) => {
     await setOn($, n, value)
     return {
       text: value
-        ? `Claude Fables is on: cartoons written by ${n.model} play above the prompt while Claude works.`
+        ? `Claude Fables is on: cartoons written by ${MODEL_LABELS[n.model]} play above the prompt while Claude works.`
         : 'Claude Fables is off.',
     }
   })
 
   on('prompt.submit', async ($, e, next) => {
-    n.turn++
-    n.ask = e.text.replace(/\s+/g, ' ').trim().slice(0, 300)
-    n.log = []
-    n.ending = undefined
-    n.isTurnRunning = true
-    n.isDirty = true
-    n.linger?.cancel()
+    n.submit(e.text)
     return next(e)
   })
 
   on('tool.call', async ($, e, next) => {
     const tool = String(e.tool)
     const isTold = e.agentId === undefined && !tool.startsWith(OWN_TOOLS)
-    if (isTold) note(n, { kind: 'tool', text: summarizeTool(tool, e) })
+    if (isTold) n.tool(tool, e)
     const ran = await next(e)
-    if (isTold && (ran.deny !== undefined || ran.isError === true)) {
-      note(n, { kind: 'failed', text: summarizeTool(tool, e) })
-    }
+    if (isTold && (ran.deny !== undefined || ran.isError === true)) n.failed(tool, e)
     return ran
   })
 
@@ -215,16 +146,13 @@ export const register: Register = (on, options) => {
         .map(block => (block.type === 'text' ? block.text : ''))
         .join(' ')
         .trim()
-      if (said) note(n, { kind: 'said', text: summarizeSpeech(said) })
+      n.said(said)
     }
     return next(e)
   })
 
   on('turn.complete', async ($, e, next) => {
-    if (e.agentId === undefined && n.isTurnRunning) {
-      n.isTurnRunning = false
-      if (n.isOn && n.log.length > 0) n.ending = e.reason
-    }
+    if (e.agentId === undefined) n.complete(e.reason)
     return next(e)
   })
 

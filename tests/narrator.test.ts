@@ -135,3 +135,28 @@ test('a style is chosen by name and draws the band, until it is turned off', asy
   expect(await band()).toContain('sc-pixelize')
   expect(await band()).not.toContain('data-look')
 })
+
+test('/fables model switches the storyteller between Sonnet and Haiku, and remembers it', async ($, on) => {
+  const clock = world(on)
+  const models: string[] = []
+  on('model.complete', (_, e) => {
+    models.push(String(e.model))
+    return answer(JSON.stringify(SCENE))
+  })
+  const run = (args: string) => $.command.run({ command: 'fables', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })
+
+  await $.session.start({ cwd: '/work', surface: 'desktop', isInteractive: true })
+  expect((await run('model')).text).toContain('Sonnet writes the story')
+  await $.prompt.submit({ text: 'one', wait: false, origin: { kind: 'composer' } })
+  await clock.advance(1000)
+
+  expect((await run('model haiku')).text).toContain('Haiku now writes the story')
+  expect((await run('model gpt')).text).toContain('No narrator')
+  await $.prompt.submit({ text: 'two', wait: false, origin: { kind: 'composer' } })
+  await clock.advance(6000)
+  expect(models).toEqual(['sonnet', 'haiku'])
+
+  // A new session starts with the model last chosen.
+  await $.session.start({ cwd: '/work', surface: 'desktop', isInteractive: true })
+  expect((await run('model')).text).toContain('Haiku writes the story')
+})

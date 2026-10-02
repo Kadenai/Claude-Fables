@@ -2,7 +2,7 @@
 
 A Claude Code mod for the **desktop app**. It turns whatever Claude is doing into a small animated pixel-art cartoon, played in the band above the prompt.
 
-While Claude works, Fables watches each tool call it makes and each line it says. Every few seconds it asks Sonnet to retell the latest moment as a scene. Bug hunts turn into nature documentaries and bad regexes get pulled over by the train police. Claude appears as a small orange critter walking, sneaking or flying through the story. When the turn ends there is a closing scene, and it stays up for 30 seconds.
+While Claude works, Fables watches each tool call it makes and each line it says. Every few seconds it asks Sonnet (or Haiku, if you prefer) to retell the latest moment as a scene. Bug hunts turn into nature documentaries and bad regexes get pulled over by the train police. Claude appears as a small orange critter walking, sneaking or flying through the story. When the turn ends there is a closing scene, and it stays up for 30 seconds.
 
 ## How it works
 
@@ -10,7 +10,7 @@ While Claude works, Fables watches each tool call it makes and each line it says
 tool calls, Claude's own words ──► activity log (last 14 lines)
                                          │  every ≥5s while a turn runs
                                          ▼
-               Sonnet ($.model.complete) ──► JSON scene ──► parseScene (validate + clamp)
+        Sonnet or Haiku ($.model.complete) ──► JSON scene ──► parseScene (validate + clamp)
                                                                   │
                                                                   ▼
                                     sceneToSvg ──► one self-animating SVG (SMIL)
@@ -19,16 +19,17 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
                                         <Svg isInteractive/> in the AbovePrompt band
 ```
 
-- **Sonnet writes data, not code.** Each scene is a small declarative JSON object: a backdrop, Claude's action, particles, a caption and its tone. `hooks/scene.ts` validates it strictly: unknown fields are dropped, numbers clamped, strings flattened and cut, and colors must be 3- or 6-digit hex. A bad reply can't break anything; it just doesn't show.
+- **The model writes data, not code.** Each scene is a small declarative JSON object: a backdrop, Claude's action, particles, a caption and its tone. `hooks/scene.ts` validates it strictly: unknown fields are dropped, numbers clamped, strings flattened and cut, and colors must be 3- or 6-digit hex. A bad reply can't break anything; it just doesn't show.
 - **The animation runs inside the SVG.** `hooks/svg.ts` compiles a scene into one SVG document that animates itself with SMIL: walk cycles, bobbing, scrolling trains, twinkling stars, and a speech bubble that types itself out. Once the scene is drawn, the desktop needs no redraws for it.
-- **It has limits.** Only one Sonnet request runs at a time, scenes come at least 5 seconds apart, and after errors it backs off exponentially, up to 60 seconds. The prompt is always bounded (the last 14 activity lines and the last 4 scenes), so a long session can't outgrow the context window.
+- **It has limits.** Only one model request runs at a time, scenes come at least 5 seconds apart, and after errors it backs off exponentially, up to 60 seconds. The prompt is always bounded (the last 14 activity lines and the last 4 scenes), so a long session can't outgrow the context window.
 - **It fits the window.** The band always gets a cartoon as wide as it is and 192 px tall. A wider window shows more of the scene, not a bigger one, so the art and the text stay the same size. Resizing the window redraws it.
 - **Desktop only.** In the terminal the band is left exactly as the engine draws it.
 
 | File | What it does |
 | --- | --- |
 | `hooks/register.tsx` | The hooks: watches tool calls, replies and turns; draws the band; handles `/fables` |
-| `hooks/narrator.ts` | Sonnet's system prompt, prompt building, reply parsing, backoff |
+| `hooks/narrator.ts` | The narrator's system prompt, prompt building, reply parsing, backoff |
+| `hooks/director.ts` | The narrator's loop: what it remembers, when it asks, what it does with a reply. The plugin and the viewer run the same one |
 | `hooks/activity.ts` | Boils each tool call down to one readable line |
 | `hooks/scene.ts` | The scene format and its validator |
 | `hooks/sprites.ts` | The pixel-art library: Claude in two walk frames, plus 30+ props |
@@ -65,9 +66,9 @@ To try it from the terminal for one session instead, run `claude --plugin-dir ~/
 - `/fables`: toggle the mod on or off. `/fables on` and `/fables off` also work. The setting is remembered across sessions.
 - `/fables style <name>`: draw every scene in one of the styles below, for example `/fables style ukiyo-e` or `/fables style golden age`. `/fables style` lists them, and `/fables style off` goes back to the default, Pixel Art. It is remembered across sessions.
 - `/fables pixel off` and `/fables pixel on` still work: they switch between the original look drawn smooth and its pixel art.
-- **Scene model:** Sonnet by default. You can switch to `haiku` (cheaper, faster) or `opus` in the config menu, or under `pluginConfigs.fables.model` in settings.
+- `/fables model haiku` and `/fables model sonnet`: pick who writes the story. Sonnet is the default and writes wittier scenes; Haiku answers in about a second and costs less, but writes plainer captions and slips a little more often (a bad reply is simply skipped). `/fables model` shows which one is on. The choice is remembered across sessions; the config menu's **Scene model** (`pluginConfigs.fables.model`) sets the default.
 
-Every scene is one small Sonnet request, so this costs a few requests per minute while Claude is working.
+Every scene is one small model request, so this costs a few requests per minute while Claude is working.
 
 ## The scenes
 
@@ -166,6 +167,6 @@ bun scripts/preview.ts > gallery.html # render sample scenes to a page in the br
 bun scripts/preview.ts --look all > styles.html # every look
 ```
 
-`scripts/scenarios.ts` holds five whole sessions (prompt, tool calls, Claude's words, and the scenes for each moment) that the viewer plays back on the mod's own narration loop; a test keeps every scripted scene valid. `bun scripts/preview.ts my-scenes.json` renders your own scenes, which is handy for tuning sprites or trying out what Sonnet sent back.
+`scripts/scenarios.ts` holds six whole sessions: the prompt, each tool call and its result, Claude's words, and what Sonnet and what Haiku write back each time the narrator asks, as raw text, quirks included (code fences, a word of chatter, a missing caption, an empty answer). `scripts/rehearse.ts` plays a session through the narrator's own loop on a clock of its own, so the asks land when the plugin would make them, see exactly the prompt it would send, and bad replies are skipped and backed off from the same way. The viewer's **Sessions** tab shows it side by side: Claude Code's activity, the narrator's asks (with each prompt) and the model's replies (with each raw reply and the validator's verdict), the band, and a box to paste a reply of your own and see what the plugin would make of it. A test rehearses every session with both models. `bun scripts/preview.ts my-scenes.json` renders your own scenes, which is handy for tuning sprites or trying out what Sonnet sent back.
 
 The mod API is early access and may change between Claude Code releases. This mod was built against Claude Code 2.1.287. If something stops drawing, run `claude --debug`: the log line will name what the engine refused.
