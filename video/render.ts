@@ -7,8 +7,10 @@
  *   bun video/render.ts                   # the whole video → video/out/claude-fables-launch.mp4
  *   bun video/render.ts --still 3.2,17    # single frames → video/out/still-<t>.png
  *   bun video/render.ts --workers 4       # browsers rendering in parallel (default: 4)
+ *   bun video/render.ts --resume          # keep the frames already rendered, render the rest
+ *   bun video/render.ts --encode          # only encode the frames there are
  */
-import { mkdirSync, existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, renameSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
@@ -30,6 +32,8 @@ const opt = (name: string) => {
 }
 const stills = opt('still')?.split(',').map(Number)
 const workers = Number(opt('workers') ?? 4)
+const resume = args.includes('--resume')
+const encodeOnly = args.includes('--encode')
 
 // ── the scenes, each checked by the validator the plugin uses ──
 const bandIds = new Set(S.BAND_QUEUE.map(q => q.id))
@@ -144,18 +148,23 @@ async function main() {
   }
 
   const total = Math.round(S.DURATION * S.FPS)
-  rmSync(FRAMES, { recursive: true, force: true })
+  const framePath = (f: number) => join(FRAMES, `${String(f).padStart(5, '0')}.png`)
+  if (!resume && !encodeOnly) rmSync(FRAMES, { recursive: true, force: true })
   mkdirSync(FRAMES, { recursive: true })
+  // A frame is written whole to a temporary name and then renamed, so one cut off mid-write is never kept.
+  const todo = encodeOnly ? [] : Array.from({ length: total }, (_, f) => f).filter(f => !existsSync(framePath(f)))
   const began = Date.now()
   let done = 0
   // Frames are dealt out in turn, so every worker gets light and heavy stretches alike.
   await Promise.all(
-    Array.from({ length: workers }, async (_, w) => {
+    Array.from({ length: Math.min(workers, todo.length) }, async (_, w) => {
       const { browser, p } = await open()
-      for (let f = w; f < total; f += workers) {
+      for (let i = w; i < todo.length; i += workers) {
+        const f = todo[i]!
         await p.evaluate((t: number) => (window as any).renderAt(t), f / S.FPS)
-        await p.screenshot({ path: join(FRAMES, `${String(f).padStart(5, '0')}.png`) })
-        if (++done % 60 === 0) console.log(`${done}/${total} frames, ${Math.round((Date.now() - began) / 1000)}s`)
+        await p.screenshot({ path: `${framePath(f)}.tmp.png` })
+        renameSync(`${framePath(f)}.tmp.png`, framePath(f))
+        if (++done % 60 === 0) console.log(`${done}/${todo.length} frames, ${Math.round((Date.now() - began) / 1000)}s`)
       }
       await browser.close()
     }),
