@@ -14,6 +14,8 @@
 
 import type { Painter } from './art/roles'
 import { BLUEPRINT } from './styles/blueprint'
+import { ENGRAVING } from './styles/engraving'
+import { GOLDEN } from './styles/golden'
 import { UKIYOE } from './styles/ukiyoe'
 import type { HeroPainter } from './hero3d'
 import { BAYER4, cells, edges, gray, hueMask, ink, lift, lumMask, posterize, ramp, screen, screened, screenGray, through } from './grade'
@@ -394,33 +396,7 @@ export const LOOKS: Record<string, Look> = {
     tag: (text, inset) => plaque(`▶ ${text.toUpperCase()}`, inset, { fill: '#9bbc0f', stroke: '#0f380f', ink: '#0f380f', size: 8 }),
   }),
 
-  engraving: style({
-    name: 'engraving',
-    label: 'Copperplate Engraving',
-    voice: 'a learned 18th-century natural-history plate',
-    paper: oneInk('#f3ead4', '#2a2018', '#6a2a1a'),
-    edge: '#efe6cf',
-    inset: 6,
-    titleColor: '#2a2018',
-    // Cut into copper and printed in sepia on cream: tone is carried by lines alone,
-    // swelling where it is darker, crossed by a second set in the shadows, contours cut over.
-    grade: (sw, h, pixel) =>
-      lift('SourceGraphic', 0.55, 'up') +
-      lumMask('up', 'lum') +
-      (pixel
-        ? screen([[0.18], [0.62]], 2, 'hatch') + screen([[0.08, 0.3]], 2, 'cross')
-        : screen([[0.1], [0.4], [0.72], [0.4]], 0.8, 'hatch') + screen([[0.04, 0.16, 0.3, 0.16]], 0.8, 'cross')) +
-      screened('lum', 'hatch', 'h1') +
-      screened('lum', 'cross', 'h2') +
-      edges('SourceGraphic', 'line', { reach: pixel ? 1.2 : 0.7, threshold: 0.09 }) +
-      `<feFlood flood-color="#f3ead4" result="paper"/>` +
-      `<feMerge result="cuts"><feMergeNode in="h1"/><feMergeNode in="h2"/><feMergeNode in="line"/></feMerge>` +
-      ink('#2a2018', 'cuts', 'paper', 'print'),
-    texture: (sw, h) => grain('lk-plate', sw, h, '.7', 0.1, '.35 .25 .12'),
-    frame: (sw, h) => frame(sw, h, '#2a2018', 1.2, 4) + frame(sw, h, '#2a2018', 0.4, 6.5),
-    tag: (text, inset) =>
-      plaque(`PL. I — ${text.toUpperCase()}`, inset, { fill: '#f3ead4', stroke: 'none', ink: '#2a2018', font: SERIF, size: 8, charW: 6.8, spacing: 0.8 }),
-  }),
+  engraving: ENGRAVING,
 
   tapestry: style({
     name: 'tapestry',
@@ -464,33 +440,7 @@ export const LOOKS: Record<string, Look> = {
     },
   }),
 
-  golden: style({
-    name: 'golden',
-    label: 'Golden Age Comic',
-    voice: 'a punchy 1938 comic book',
-    paper: { card: '#fff6d8', ink: '#141010', kinds: { code: '#1a4a9a', path: '#1a4a9a', fn: '#7a2a8a', num: '#d0201a', bad: '#d0201a', good: '#1a7a2a', face: '#d0201a' } },
-    edge: '#f3e6c0',
-    inset: 4,
-    titleColor: '#141010',
-    // Four-color newsprint: the colors pushed bold, every ink printed through a Ben-Day
-    // screen (so the tones are dots), the paper yellowed, and heavy black keylines over it.
-    grade: (sw, h, pixel) =>
-      lift('SourceGraphic', 0.75, 'up') +
-      `<feColorMatrix in="up" type="saturate" values="2.2" result="bold"/>` +
-      (pixel
-        ? screen([[0.125, 0.625], [0.875, 0.375]], 2, 'dots')
-        : screen([[0.85, 0.6, 0.55, 0.8], [0.5, 0.15, 0.1, 0.45], [0.55, 0.2, 0.05, 0.4], [0.8, 0.4, 0.35, 0.75]], 0.8, 'dots')) +
-      screenGray('dots', 'dg') +
-      `<feComposite in="bold" in2="dg" operator="arithmetic" k2="1" k3="${pixel ? -0.35 : -0.6}" k4="${pixel ? 0.175 : 0.3}" result="dotted"/>` +
-      posterize('dotted', 2, 'cmy') +
-      `<feComponentTransfer in="cmy" result="news"><feFuncR type="table" tableValues=".1 .96"/><feFuncG type="table" tableValues=".08 .91"/><feFuncB type="table" tableValues=".07 .76"/></feComponentTransfer>` +
-      edges('SourceGraphic', 'line', { reach: pixel ? 1.4 : 1.1, threshold: 0.1 }) +
-      ink('#141010', 'line', 'news', 'inked'),
-    texture: (sw, h) => grain('lk-pulp', sw, h, '.5', 0.12, '.4 .3 .1'),
-    frame: (sw, h) => frame(sw, h, '#141010', 4, 2) + frame(sw, h, '#fff6d8', 1, 4.5),
-    tag: (text, inset) =>
-      plaque(`${text.toUpperCase()}!`, inset, { fill: '#f3c623', stroke: '#d0201a', ink: '#141010', size: 8, weight: '700', strokeW: 1.6 }),
-  }),
+  golden: GOLDEN,
 
   ukiyoe: UKIYOE,
 

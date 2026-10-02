@@ -17,6 +17,8 @@ export type Ctx = {
   repaint: (svg: string) => string
   /** The element's own animation (a drift, a flicker), to keep on whatever replaces it. */
   motion: (svg: string) => string
+  /** The first gradient the element is filled with, if the scene defined it. */
+  gradient: (svg: string) => Gradient | undefined
 }
 
 export type Rules = {
@@ -31,7 +33,7 @@ export type Rules = {
   /** What becomes of those faint washes: kept unlined (the default), or left out, as a drawing would. */
   faint?: 'unlined' | 'hide'
   /** A gradient or pattern fill in the style's terms; absent, the gradient is carried over in the style's inks. */
-  url?: (id: string, family: Family, attr: PaintAttr) => string | undefined
+  url?: (id: string, family: Family, attr: PaintAttr, gradient?: Gradient) => string | undefined
   /** Roles or whole families drawn the style's own way. */
   redraw?: Partial<Record<Role | Family, (svg: string, c: Ctx) => string>>
   /** Ink for the shapes of the lit painting's templates (firs, clumps, ferns), drawn once in definitions. */
@@ -63,7 +65,7 @@ export function painter(rules: Rules, suffix: string): Painter {
     let out = stripLight(dropBlooms(svg))
     out = repaint(out, {
       ink: (color, attr) => rules.ink(color, family, depth, attr),
-      url: (id, attr) => (attr === 'stop-color' ? undefined : (rules.url?.(id, family, attr) ?? remapGradient(id, family, depth))),
+      url: (id, attr) => (attr === 'stop-color' ? undefined : (rules.url?.(id, family, attr, known.get(id)) ?? remapGradient(id, family, depth))),
     })
     if (rules.opacity) out = opacities(out, v => rules.opacity?.(family, v) ?? v)
     const line = rules.line?.(family, depth) ?? ''
@@ -92,6 +94,7 @@ export function painter(rules: Rules, suffix: string): Painter {
         meta,
         repaint: s => general(s, info.family, info.depth),
         motion: s => (s.match(ANIM) ?? []).join(''),
+        gradient: s => known.get(/url\(#([^)]+)\)/.exec(s)?.[1] ?? ''),
       }
       const own = rules.redraw?.[role] ?? rules.redraw?.[info.family]
       if (own) {
