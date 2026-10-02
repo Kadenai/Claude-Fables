@@ -92,7 +92,9 @@ The band's frame takes at most 131,072 characters, so repeated things are drawn 
 
 ### Captions
 
-The story is told in words. Props aren't drawn on the scene, so nothing competes with Claude and the caption, and a slight blur over the scenery keeps both reading first against any backdrop.
+The story is told in words. Props aren't drawn on the scene, so nothing competes with Claude and the caption.
+
+The whole stage, scenery and Claude together, goes through a pixelizer: one SVG filter that softens the drawing a touch, samples it once every two stage units and spreads each sample over its square, so everything reads as pixel art without any of it being redrawn. The grid starts at the stage's corner, so the pixels line up. The caption sits above it, already in pixel type, so it stays sharp.
 
 The caption is one standard bubble of cartoon paper with a tail pointing at Claude, set in [Monocraft](https://github.com/IdreesInc/Monocraft) by Idrees Hassan (SIL Open Font License, `fonts/Monocraft-OFL.txt`), embedded as a 5 KB subset so it reads the same everywhere. It stays with Claude and never covers it: it takes a spot just beside, above or (for a flying Claude) below, checked against Claude's whole path, jumps and sways included, and while Claude walks the bubble walks along. Inside it, kinds of words are set apart, so a caption reads like a terminal:
 

@@ -1845,11 +1845,9 @@ export function richBackdrop(scene: FablesScene, rand: Rand, sw: number, ground:
       `<filter id="sc-soft" x="-20%" y="-200%" width="140%" height="500%"><feGaussianBlur stdDeviation="1.4"/></filter>` +
       LIGHT +
       `<filter id="sc-glow" filterUnits="userSpaceOnUse" x="-20" y="-20" width="${sw + 40}" height="${H + 40}"><feGaussianBlur stdDeviation="2.4"/><feComponentTransfer><feFuncA type="linear" slope=".7"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
-      // A slight softness over all the scenery, so Claude and the caption always read first.
-      `<filter id="sc-calm" filterUnits="userSpaceOnUse" x="0" y="0" width="${sw}" height="${H}"><feGaussianBlur stdDeviation=".6" edgeMode="duplicate"/></filter>` +
       `</defs>` +
-      clip(`<g filter="url(#sc-calm)">${s.back}</g>`),
-    near: clip(`<g filter="url(#sc-calm)">${s.near}</g>`),
+      clip(s.back),
+    near: clip(s.near),
     keep: (s.keep ?? []).map(([x, y, r]) => ({ x: x - r, y: y - r, w: r * 2, h: r * 2 })),
     lens: clip(
       `<defs><filter id="sc-grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="11"/><feColorMatrix type="saturate" values="0"/></filter>` +

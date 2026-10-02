@@ -91,15 +91,17 @@ describe('layering', () => {
     expect(path).toBeLessThan(claude)
   })
 
-  test('the rich stage draws no props: the caption carries the story, over softened scenery', () => {
+  test('the rich stage draws no props, and pixelizes scenery and Claude but not the caption', () => {
     const scene = parseScene({ backdrop: 'city', hero: { action: 'walk', from: 0, to: 20 }, props: [{ sprite: 'trophy', x: 70, label: '17 tests' }], caption: 'Solid gold.' })
     if (!scene) throw new Error('expected a scene')
     const rich = sceneToSvg(scene, { figure: '3d' })
     expect(rich).not.toContain('17 tests')
     expect(rich).not.toContain('href="#fp0"')
-    // Back and near scenery both sit under the same slight blur; Claude and the caption do not.
-    expect(rich.match(/<g filter="url\(#sc-calm\)">/g)?.length).toBe(2)
-    expect(rich.indexOf('visibility')).toBeGreaterThan(rich.lastIndexOf('url(#sc-calm)'))
+    // Scenery and Claude are pixelized together; the caption, already pixel type, is not.
+    const start = rich.indexOf('<g filter="url(#sc-pixelize)">')
+    expect(start).toBeGreaterThan(-1)
+    expect(rich.indexOf('visibility')).toBeGreaterThan(start)
+    expect(rich.indexOf('data-part="speech"')).toBeGreaterThan(rich.indexOf('</g>', rich.lastIndexOf('url(#sc-grain)')))
     expect(sceneToSvg(scene, { figure: 'pixel' })).toContain('17 tests')
   })
 

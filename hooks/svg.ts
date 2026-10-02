@@ -720,6 +720,28 @@ export function stageWidth(width: number, height: number): number {
   return Math.round(Math.min(MAX_W, Math.max(MIN_W, fit)))
 }
 
+/** How many stage units one pixel of the pixelized stage takes. */
+const PIXEL = 2
+/**
+ * Turns everything drawn into pixel art, the scenery and Claude alike, without
+ * redrawing any of it: one sample is taken at the corner of every PIXEL square
+ * (a tiny dot of a tiled grid, cut out of the drawing) and spread over its whole
+ * square. The grid starts at the stage's corner, so pixels line up with it.
+ */
+const PIXELIZE = (sw: number) => {
+  const dot = 0.4
+  return (
+    `<filter id="sc-pixelize" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="0" y="0" width="${sw}" height="${H}" color-interpolation-filters="sRGB">` +
+    // A little softening first, so each sample stands for its whole square, as a real downscale would.
+    `<feGaussianBlur in="SourceGraphic" stdDeviation="${n(PIXEL * 0.32)}" edgeMode="duplicate" result="soft"/>` +
+    `<feFlood x="0" y="0" width="${dot}" height="${dot}" flood-color="black"/>` +
+    `<feComposite width="${PIXEL}" height="${PIXEL}"/><feTile result="grid"/>` +
+    `<feComposite in="soft" in2="grid" operator="in"/>` +
+    `<feMorphology operator="dilate" radius="${n((PIXEL - dot) / 2)}"/>` +
+    `<feOffset dx="${n((PIXEL - dot) / 2)}" dy="${n((PIXEL - dot) / 2)}"/></filter>`
+  )
+}
+
 /**
  * Compiles a validated scene into one self-animating SVG document (SMIL), so
  * the desktop plays it with no redraws. The stage takes the box's shape
@@ -769,6 +791,7 @@ export function sceneToSvg(
     `shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" style="display:block;background:${ground}">` +
     (look.defs ? `<defs>${look.defs}</defs>` : '') +
     `<rect x="${-sw * 4}" y="${-H * 4}" width="${sw * 9}" height="${H * 4 + GROUND_Y}" fill="${sky}"/>` +
+    (rich ? `<defs>${PIXELIZE(sw)}</defs><g filter="url(#sc-pixelize)">` : '') +
     (look.under?.(sw, H, GROUND_Y) ?? '') +
     paint('back', stage.back) +
     `<rect x="${-sw * 4}" y="${stage.groundTop}" width="${sw * 9}" height="${H * 4}" fill="${ground}"/>` +
@@ -776,6 +799,7 @@ export function sceneToSvg(
     paint('back', stage.near) +
     (look.foreFilter ? `<g filter="url(#${look.foreFilter})">${fore(withDust, propCount)}</g>` : fore(withDust, propCount)) +
     stage.lens +
+    (rich ? '</g>' : '') +
     (look.over?.(sw, H, GROUND_Y) ?? '') +
     (scene.title ? title(scene.title, look.titleColor ?? (rich ? '#efe6d2' : accent), rich ? { ...look, font: MONO_FONT, charW: 6.3 } : look) : '') +
     caption(scene.caption, { startX: plan.startX, x: plan.endX, y: plan.endY, arrive: plan.arrive, jump: scene.hero.action === 'celebrate' ? 16 : scene.hero.action === 'fly' ? 2 : 0, sway: scene.hero.action === 'inspect' ? 2 * U : 0 }, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined) +
