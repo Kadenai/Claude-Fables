@@ -65,10 +65,7 @@ export function painter(rules: Rules, suffix: string): Painter {
   const general = (svg: string, family: Family, depth: number) => {
     for (const [id, g] of gradients(svg)) known.set(id, g)
     // A lamp's streak on the wet street is light on water: a style draws its lamps without it.
-    let out = stripLight(dropBlooms(svg))
-      .replace(/<rect\b[^>]*fill="url\(#sc-wet\)"[^>]*\/>/g, '')
-      // So is the cone of light under a street lamp: a style draws the lamp, not the light round it.
-      .replace(/<path\b[^>]*fill="url\(#sc-cone\)"[^>]*\/>/g, family === 'lamp' ? '' : '$&')
+    let out = stripLight(dropBlooms(svg)).replace(/<rect\b[^>]*fill="url\(#sc-wet\)"[^>]*\/>/g, '')
     out = repaint(out, {
       ink: (color, attr) => rules.ink(color, family, depth, attr),
       url: (id, attr) => (attr === 'stop-color' ? undefined : (rules.url?.(id, family, attr, known.get(id)) ?? remapGradient(id, family, depth))),

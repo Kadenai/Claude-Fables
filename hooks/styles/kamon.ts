@@ -20,7 +20,7 @@
  *   The caption is dyed cream on a silk panel, ruled twice.
  */
 import type { HeroPainter } from '../hero3d'
-import { type Model, outlinedFaces } from '../clawd3d'
+import { type Model, outlinedOrder } from '../clawd3d'
 import { lum, meanOf, num as n, poly } from '../art/ink'
 import { MIST_TILE, mistBanks, tiled } from '../art/mist'
 import { painter, type Ctx } from '../art/painter'
@@ -112,13 +112,17 @@ function futae(c: Ctx, r: number): string {
 /** Claude as the gallery's emblem: cream planes parted by cuts, eyes cut through, a cut round him. */
 const hero = (): HeroPainter => (m: Model, cx: number, floor: number) => {
   const hulls = m.parts.map(pt => poly(pt.hull, cx, floor)).join('')
-  const faces = outlinedFaces(m).map(f => poly(f.pts, cx, floor)).join('')
+  // One path per part, legs first: a path's cuts are stroked over all its fills, so a part cut with the body would show through it.
+  const parts = outlinedOrder(m)
+    .filter(pt => pt.faces.length)
+    .map(pt => `<path d="${pt.faces.map(f => poly(f.pts, cx, floor)).join('')}"/>`)
+    .join('')
   const eyes = m.eyes
     .map(e => (e.poly ? `<path fill="${SILK}" d="${poly(e.poly, cx, floor)}"/>` : `<path fill="none" stroke="${SILK}" stroke-width="1.1" stroke-linecap="round" d="${poly(e.line ?? [], cx, floor, false)}"/>`))
     .join('')
   return (
     `<path fill="${SILK}" stroke="${SILK}" stroke-width="2.4" stroke-linejoin="round" d="${hulls}"/>` +
-    `<path fill="${CREAM}" stroke="${SILK}" stroke-width="1" stroke-linejoin="miter" d="${faces}"/>` +
+    `<g fill="${CREAM}" stroke="${SILK}" stroke-width="1" stroke-linejoin="miter">${parts}</g>` +
     eyes
   )
 }
