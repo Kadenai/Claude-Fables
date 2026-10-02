@@ -1,6 +1,5 @@
 export type FablesBackdrop =
   | 'forest'
-  | 'sea'
   | 'space'
   | 'city'
   | 'desert'

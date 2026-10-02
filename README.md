@@ -36,7 +36,7 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 | `hooks/looks.ts` | The graphic styles: color remaps, pixel treatments, textures and frames |
 | `hooks/clawd3d.ts` | The 3D Claude: the box model, its motions and its projection (ported from the gallery) |
 | `hooks/hero3d.ts` | Bakes the posed 3D model into SVG frames that SMIL plays in turn |
-| `hooks/scenery.ts` | The nine authored scenes drawn with the 3D Claude |
+| `hooks/scenery.ts` | The eight authored scenes drawn with the 3D Claude |
 | `hooks/voxel.ts` | Sprite stacking: voxel models as stacked SVG slices, for the story props |
 | `types/index.d.ts` | The scene types and the mod's `$.state` contract |
 
@@ -96,12 +96,11 @@ Eighteen graphic styles, after looks from the [Claude Mascot Style Gallery](http
 
 Most styles draw Claude as the gallery's 3D model rather than the pixel sprite: the same box body, arms, legs and pill eyes, lit and depth-sorted. The band's frame runs no script, so the model can't be drawn live. `hooks/clawd3d.ts` poses it 6 to 12 times per motion (walk, run, swim, fly, dig, inspect, celebrate, think, idle), `hooks/hero3d.ts` bakes each pose into flat SVG polygons, and the scene flips through them with SMIL. Walking and running end in an idle loop on arrival. The model can't follow the cursor or be dragged; those need the live engine.
 
-The scenery changes to match (`hooks/scenery.ts`). Each of the nine backdrops is an authored scene with one brief, one light source and a small palette:
+The scenery changes to match (`hooks/scenery.ts`). Each of the eight backdrops is an authored scene with one brief, one light source and a small palette:
 
 | Backdrop | The scene |
 | --- | --- |
 | forest | Dawn in an old forest: a low sun behind two rows of firs, mist between them, light falling through in shafts, two great trunks framing the edges |
-| sea | A night crossing: a full moon and its path on the water, a lighthouse sweeping its beam from a headland, one far sail |
 | space | Earthrise over a lunar outpost: a blue world over the grey horizon, the Milky Way, a base keeping one light blinking |
 | city | Blue hour: three ranks of buildings in haze, a spire with a slow red light, an elevated train carrying its lit carriages home |
 | desert | Canyon sunset: mesas, buttes and spires fading into violet, rimmed by the low sun, a saguaro at the edge |
@@ -112,7 +111,9 @@ The scenery changes to match (`hooks/scenery.ts`). Each of the nine backdrops is
 
 Depth comes from atmospheric perspective: silhouettes further back are lighter and nearer the sky's color. Focal points sit off the middle, so the middle of the stage, where Claude and the caption are, stays calm. Silhouettes come from smooth noise rather than repeated tiles, so there is no seam at any width. Everything is clipped to the stage, and motion is slow and belongs to the story. Styles with narrow palettes map scenery onto tonal ramps of their own colors, so the depth survives every style.
 
-Story props are sprite-stacked (`hooks/voxel.ts`): the pixel art is extruded three voxels deep and drawn as a stack of slices, darkened walls under a lit top, turned a little to show its side. A prop that spins swings round and back instead. Props are scaled so a 16-pixel prop stands about as tall as Claude. With the pixel Claude, the stage stays flat pixel art.
+Surfaces are rendered with SVG filters, which add detail for almost no size. Seeded noise becomes material grain clipped to each shape: needles, bark, grass, sand, plaster, paving, gravel, regolith. Noise read as a height field and lit from the scene's light source gives rock its relief, so mesas, the volcano's cone and the mountain faces read as carved. Far layers sit slightly out of focus, lights bloom, backlit crests carry a rim of light, and a lens pass adds fine grain and a vignette over the whole frame, Claude included.
+
+Story props are sprite-stacked (`hooks/voxel.ts`): the pixel art is extruded three voxels deep and drawn as a stack of slices, darkened walls under a lit top, turned a little to show its side. A prop that spins swings round and back instead. Props are scaled so a 16-pixel prop stands about as tall as Claude, and the train is drawn at Claude's height. With the pixel Claude, the stage stays flat pixel art.
 
 The speech bubble picks the spot beside or above Claude that covers the least of Claude, the props, their labels, the chapter tag and the sun or moon. Prop labels take the style's caption colors, so they stay readable in every style.
 

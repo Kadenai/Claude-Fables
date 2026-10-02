@@ -142,12 +142,13 @@ describe('composition', () => {
   })
 
   test('every rich backdrop clips its scenery to the stage', () => {
-    for (const backdrop of ['forest', 'sea', 'space', 'city', 'desert', 'volcano', 'rails', 'lab', 'night']) {
+    for (const backdrop of ['forest', 'space', 'city', 'desert', 'volcano', 'rails', 'lab', 'night']) {
       const scene = parseScene({ backdrop, hero: { action: 'walk', from: 0, to: 40 }, caption: 'x' })
       if (!scene) throw new Error('expected a scene')
       const svg = sceneToSvg(scene, { figure: '3d', width: 1800, height: 192 })
       expect(svg).toContain('<clipPath id="sc-stage">')
-      expect(svg.match(/clip-path="url\(#sc-stage\)"/g)?.length).toBe(2)
+      // Back, near and lens layers are each held to the stage.
+      expect(svg.match(/clip-path="url\(#sc-stage\)"/g)?.length).toBe(3)
     }
   })
 })

@@ -33,7 +33,7 @@ describe('looks', () => {
 
   test('every look draws every backdrop within the Svg limit, keeping the text', () => {
     for (const name of LOOK_NAMES) {
-      for (const backdrop of ['forest', 'sea', 'space', 'city', 'desert', 'volcano', 'rails', 'lab', 'night']) {
+      for (const backdrop of ['forest', 'space', 'city', 'desert', 'volcano', 'rails', 'lab', 'night']) {
         const scene = parseScene({ ...SCENE, backdrop, props: Array.from({ length: 8 }, (_, i) => ({ ...SCENE.props[0], x: i * 12 })) })
         if (!scene) throw new Error('expected a scene')
         const svg = sceneToSvg(scene, { width: 2400, height: 192, look: name })

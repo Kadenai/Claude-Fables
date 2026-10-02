@@ -12,7 +12,6 @@ import { SPRITE_NAMES } from './sprites'
 
 export const BACKDROPS: readonly FablesBackdrop[] = [
   'forest',
-  'sea',
   'space',
   'city',
   'desert',

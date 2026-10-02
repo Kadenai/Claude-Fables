@@ -1,18 +1,18 @@
 /**
- * Scenery for the styles that draw the 3D Claude: nine authored scenes.
+ * Scenery for the styles that draw the 3D Claude: eight authored scenes.
  *
  * Each scene is composed to one brief: a time of day, one light source, and a
  * palette of a few related colors, with every element there to tell that
  * moment. Depth comes from atmospheric perspective: silhouettes further back
  * are lighter and closer to the sky's color, nearer ones darker and richer.
- * The focal point (the sun, the moon, a lighthouse, a spire) sits off the
+ * The focal point (the sun, the moon, a spire, the crater) sits off the
  * middle, so the middle of the stage, where Claude and the caption live, stays
  * calm. Framing elements may run off the stage edges, as in a painting; nothing
  * else does, and every layer is clipped to the stage.
  *
  * Silhouettes are drawn from smooth noise rather than repeated tiles, so the
  * scene has no visible seam at any width. Motion is slow and belongs to the
- * story: a beam sweeping, mist drifting, a train going home.
+ * story: mist drifting, smoke rising, a train going home.
  *
  * Shading uses the named colors `black` and `white`: a look's palette remap
  * only touches hex colors, so the shading survives every look.
@@ -32,6 +32,8 @@ export type Stage = {
   near: string
   /** Features the caption should not cover: the sun, the moon, a focal point. */
   keep: { x: number; y: number; w: number; h: number }[]
+  /** Over everything on the stage, Claude included: grain and vignette, as a lens would add. */
+  lens: string
 }
 
 type Rand = () => number
@@ -182,6 +184,52 @@ const wisp = (x: number, y: number, w: number, color: string, opacity: number, d
 
 const clip = (svg: string) => `<g clip-path="url(#sc-stage)">${svg}</g>`
 
+// ---------------------------------------------------------------- materials and light
+
+/**
+ * A material: seeded noise turned into dark and light speckle, clipped to the
+ * shape it is applied to and laid over its own color. `fx` and `fy` set the
+ * grain across and down: stretch one to get strata, bark or ripples.
+ */
+function texture(id: string, fx: number, fy: number, dark: number, light: number, seed: number, octaves = 2): string {
+  return (
+    `<filter id="${id}" x="-2%" y="-2%" width="104%" height="104%">` +
+    `<feTurbulence type="fractalNoise" baseFrequency="${fx} ${fy}" numOctaves="${octaves}" seed="${seed}" result="n"/>` +
+    `<feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  ${dark} 0 0 0 ${f(-dark * 0.52)}" result="d"/>` +
+    `<feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 ${light} 0 0 ${f(-light * 0.56)}" result="l"/>` +
+    `<feComposite in="d" in2="SourceAlpha" operator="in" result="dm"/><feComposite in="l" in2="SourceAlpha" operator="in" result="lm"/>` +
+    `<feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="dm"/><feMergeNode in="lm"/></feMerge></filter>`
+  )
+}
+
+/**
+ * Relief: noise read as a height field and lit by a distant light from
+ * `azimuth` degrees (0 from the right, 180 from the left), so a flat face reads
+ * as carved rock. The shape's own color is kept and modulated by the light.
+ */
+function relief(id: string, azimuth: number, fx: number, fy: number, scale: number, seed: number): string {
+  return (
+    `<filter id="${id}" x="-2%" y="-2%" width="104%" height="104%">` +
+    `<feTurbulence type="fractalNoise" baseFrequency="${fx} ${fy}" numOctaves="4" seed="${seed}" result="n"/>` +
+    `<feDiffuseLighting in="n" surfaceScale="${scale}" diffuseConstant="1.1" lighting-color="white" result="l"><feDistantLight azimuth="${azimuth}" elevation="32"/></feDiffuseLighting>` +
+    `<feComposite in="SourceGraphic" in2="l" operator="arithmetic" k1="1.05" k2=".22" result="lit"/>` +
+    `<feComposite in="lit" in2="SourceAlpha" operator="in"/></filter>`
+  )
+}
+
+/** Filters every scene shares: blurs for depth of field and soft light, and a bloom for things that glow. */
+const LIGHT =
+  `<filter id="sc-dof" x="-5%" y="-20%" width="110%" height="140%"><feGaussianBlur stdDeviation=".7"/></filter>` +
+  `<filter id="sc-haze" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="3"/></filter>` +
+  `<filter id="sc-bloom" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.4"/></filter>`
+
+/** Something that glows: the shape blurred wide and faint under the shape itself. */
+const bloom = (svg: string, opacity = 0.8) => `<g filter="url(#sc-bloom)" opacity="${opacity}">${svg}</g>${svg}`
+
+/** A silhouette backlit by `color`: a lit copy nudged toward the light, drawn behind it. */
+const rim = (svg: string, color: string, dx: number, dy: number, opacity = 0.5) =>
+  `<g transform="translate(${dx} ${dy})" opacity="${opacity}">${svg.replace(/fill="[^"]*"/g, `fill="${color}"`)}</g>${svg}`
+
 // ---------------------------------------------------------------- the scenes
 
 type Ctx = { rand: Rand; sw: number; ground: number; detail: number }
@@ -212,7 +260,7 @@ function forest(c: Ctx): Scene {
     .map((k, i) => {
       const x0 = sunX + k * 40
       const x1 = sunX + k * 260
-      return `<path d="M${f(x0 - 3)} ${sunY}L${f(x0 + 3)} ${sunY}L${f(x1 + 18)} ${ground}L${f(x1 - 18)} ${ground}z" fill="url(#sc-shaft)" opacity=".5"><animate attributeName="opacity" values=".35;.65;.35" dur="${8 + i * 3}s" begin="${-i * 2}s" repeatCount="indefinite"/></path>`
+      return `<path d="M${f(x0 - 3)} ${sunY}L${f(x0 + 3)} ${sunY}L${f(x1 + 18)} ${ground}L${f(x1 - 18)} ${ground}z" fill="url(#sc-shaft)" opacity=".8"><animate attributeName="opacity" values=".6;1;.6" dur="${8 + i * 3}s" begin="${-i * 2}s" repeatCount="indefinite"/></path>`
     })
     .join('')
   const mist = (y: number, o: number, dur: number) =>
@@ -228,24 +276,26 @@ function forest(c: Ctx): Scene {
     return `<circle cx="${f(x)}" cy="${f(y)}" r=".8" fill="${dawn}" opacity="0"><animate attributeName="opacity" values="0;.8;0" dur="${f(between(rand, 4, 7))}s" begin="${f(-rand() * 6)}s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 0;${f(between(rand, -6, 6))} -8" dur="${f(between(rand, 6, 9))}s" repeatCount="indefinite"/></circle>`
   }).join('')
   const back =
-    `<defs>${vgrad('sc-sky', [[0, sky], [0.55, mix(sky, dawn, 0.45)], [0.8, dawn]])}${rgrad('sc-sun', '#fff1cf', 0.7)}${vgrad('sc-shaft', [[0, '#fff1cf', 0.22], [1, '#fff1cf', 0]])}${vgrad('sc-mist', [[0, '#e8efe0', 0], [0.5, '#e8efe0', 0.5], [1, '#e8efe0', 0]])}</defs>` +
+    `<defs>${texture('sc-foliage', 1.1, 0.8, 1.5, 0.35, 3)}${vgrad('sc-sky', [[0, sky], [0.55, mix(sky, dawn, 0.45)], [0.8, dawn]])}${rgrad('sc-sun', '#fff1cf', 0.7)}${vgrad('sc-shaft', [[0, '#fff1cf', 0.22], [1, '#fff1cf', 0]])}${vgrad('sc-mist', [[0, '#e8efe0', 0], [0.5, '#e8efe0', 0.5], [1, '#e8efe0', 0]])}</defs>` +
     `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
-    `<circle cx="${f(sunX)}" cy="${sunY}" r="70" fill="url(#sc-sun)"/><circle cx="${f(sunX)}" cy="${sunY}" r="8" fill="#fff4dc"/>` +
-    `<path fill="${far}" d="${conifers(rand, sw, farBase, x => 14 + farH(x), 8)}"/><path fill="${far}" d="${ridge(sw, 82, x => 2 + farH(x) * 0.15)}"/>` +
+    `<circle cx="${f(sunX)}" cy="${sunY}" r="70" fill="url(#sc-sun)"/>` +
+    bloom(`<circle cx="${f(sunX)}" cy="${sunY}" r="8" fill="#fff4dc"/>`, 1) +
+    // The far row is softer, as a lens focused nearer would see it.
+    `<g filter="url(#sc-dof)"><path fill="${far}" d="${conifers(rand, sw, farBase, x => 14 + farH(x), 8)}"/><path fill="${far}" d="${ridge(sw, 82, x => 2 + farH(x) * 0.15)}"/></g>` +
     mist(70, 0.55, 30) +
-    shafts +
-    `<path fill="${mid}" d="${conifers(rand, sw, midBase, x => 24 + midH(x), 11)}"/>` +
+    `<g filter="url(#sc-haze)">${shafts}</g>` +
+    // The near row is backlit: a line of dawn along every crest, and needles in the shade.
+    `<g filter="url(#sc-foliage)">${rim(`<path fill="${mid}" d="${conifers(rand, sw, midBase, x => 24 + midH(x), 11)}"/>`, dawn, 0, -0.9, 0.55)}</g>` +
     mist(ground - 18, 0.35, 24) +
     motes
   // The forest floor: lit where the shafts land, a worn path, and the two trunks framing it all.
   const near =
-    `<defs>${vgrad('sc-floor', [[0, '#3d6b3f'], [1, '#203b26']])}</defs>` +
-    `<rect x="0" y="${ground - 6}" width="${sw}" height="${H - ground + 6}" fill="url(#sc-floor)"/>` +
+    `<defs>${vgrad('sc-floor', [[0, '#3d6b3f'], [1, '#203b26']])}${texture('sc-grass', 0.35, 0.9, 1.4, 0.25, 8)}${texture('sc-bark', 0.6, 0.035, 1.8, 0.4, 5, 3)}</defs>` +
+    `<rect x="0" y="${ground - 6}" width="${sw}" height="${H - ground + 6}" fill="url(#sc-floor)" filter="url(#sc-grass)"/>` +
     `<ellipse cx="${f(sunX)}" cy="${ground + 2}" rx="${f(sw * 0.3)}" ry="7" fill="${dawn}" opacity=".16"/>` +
     `<path d="M0 ${ground + 4}C${f(sw * 0.3)} ${ground + 1} ${f(sw * 0.6)} ${ground + 7} ${sw} ${ground + 3}v5C${f(sw * 0.6)} ${ground + 12} ${f(sw * 0.3)} ${ground + 6} 0 ${ground + 9}z" fill="#6b7a4a" opacity=".35"/>` +
-    trunk(-6, 22, true) +
-    trunk(sw - 18, 26, false) +
-    canopy(rand, sw, deep)
+    `<g filter="url(#sc-bark)">${trunk(-6, 22, true)}${trunk(sw - 18, 26, false)}</g>` +
+    `<g filter="url(#sc-foliage)">${canopy(rand, sw, deep)}</g>`
   return { sky, soil: '#2c4a30', groundTop: ground - 6, back, near, keep: [[sunX, sunY, 12]] }
 }
 
@@ -263,88 +313,6 @@ function canopy(rand: Rand, sw: number, color: string): string {
     return d
   }
   return `<path fill="${color}" d="${clump(8, 1)}${clump(sw - 10, -1)}"/>`
-}
-
-/**
- * A night crossing. A full moon hangs over a calm sea and lays its path on the
- * water; on a headland to one side a lighthouse turns its beam; far off, a
- * single sail. The swell lines draw closer together toward the horizon.
- */
-function sea(c: Ctx): Scene {
-  const { rand, sw, ground } = c
-  const floor = ground - 2
-  const horizon = 70
-  const top = '#0c1430'
-  const low = '#3b4a7c'
-  const water = '#17284c'
-  const moonX = sw * 0.72
-  const moonY = 30
-  // The headland: two tones of cliff, the near one darker, wholly on the far side from the moon.
-  const hx = sw * 0.04
-  const hw = Math.min(170, sw * 0.32)
-  // The headland rises from the left edge to a grassy top and drops to the sea in a sheer face;
-  // the face looks toward the moon and catches its light. A lower reef of rock lies in front.
-  const edge = hx + hw * 0.72
-  const cliff =
-    `<path fill="#1a2240" d="M-10 ${horizon + 2}V${horizon - 22}C${f(hx + hw * 0.2)} ${horizon - 27} ${f(hx + hw * 0.5)} ${horizon - 25} ${f(edge)} ${horizon - 22}L${f(edge + 4)} ${horizon - 12}L${f(edge + 8)} ${horizon - 4}L${f(hx + hw)} ${horizon + 2}z"/>` +
-    `<path fill="#5a6494" opacity=".55" d="M${f(edge)} ${horizon - 22}L${f(edge + 4)} ${horizon - 12}L${f(edge + 8)} ${horizon - 4}L${f(hx + hw)} ${horizon + 2}H${f(edge + 2)}L${f(edge - 1)} ${horizon - 10}z"/>` +
-    `<path fill="none" stroke="#7a84b4" stroke-opacity=".5" stroke-width=".8" d="M-10 ${horizon - 22}C${f(hx + hw * 0.2)} ${horizon - 27} ${f(hx + hw * 0.5)} ${horizon - 25} ${f(edge)} ${horizon - 22}"/>`
-  const reef = `<path fill="#111830" d="M-10 ${horizon + 3}V${horizon - 6}q14 -5 26 -1q10 -6 22 0q8 2 14 7z"/>`
-  const lx = edge - 16
-  const ly = horizon - 23
-  const lampY = ly - 22
-  // The lighthouse: a tapered white tower with its lit side toward the moon, a gallery and a lantern.
-  const tower =
-    `<path fill="#d9d6cc" d="M${f(lx - 3.4)} ${ly}L${f(lx - 2.4)} ${f(lampY + 4)}h4.8L${f(lx + 3.4)} ${ly}z"/>` +
-    `<path fill="black" opacity=".28" d="M${f(lx - 3.4)} ${ly}L${f(lx - 2.4)} ${f(lampY + 4)}h2L${f(lx - 0.6)} ${ly}z"/>` +
-    `<path fill="#a8463c" d="M${f(lx - 3.1)} ${f(ly - 7)}h6.2l-.25 3h-5.7zM${f(lx - 2.8)} ${f(ly - 14)}h5.6l-.25 3h-5.1z"/>` +
-    `<rect x="${f(lx - 3.6)}" y="${f(lampY + 3)}" width="7.2" height="1.4" fill="#2a2e3a"/>` +
-    `<rect x="${f(lx - 2)}" y="${f(lampY)}" width="4" height="3" fill="#ffe9b0"/>` +
-    `<path fill="#2a2e3a" d="M${f(lx - 2.4)} ${f(lampY)}l2.4 -2.4l2.4 2.4z"/>`
-  const beam =
-    `<path d="M${f(lx)} ${f(lampY + 1.5)}l90 -10v20z" fill="url(#sc-beam)">` +
-    `<animateTransform attributeName="transform" type="rotate" values="-12 ${f(lx)} ${f(lampY + 1.5)};10 ${f(lx)} ${f(lampY + 1.5)};-12 ${f(lx)} ${f(lampY + 1.5)}" dur="9s" repeatCount="indefinite"/></path>` +
-    `<circle cx="${f(lx)}" cy="${f(lampY + 1.5)}" r="16" fill="url(#sc-lamp)"/>`
-  // The moon's path: short bright dashes straight below it, wider and further apart toward us.
-  let path = ''
-  for (let i = 0; i < 9; i++) {
-    const t = i / 8
-    const y = horizon + 2 + (floor - horizon - 4) * t ** 1.4
-    const w = 4 + t * 26
-    path += `<rect x="${f(moonX - w / 2 + Math.sin(i * 2.1) * 3)}" y="${f(y)}" width="${f(w)}" height="${f(0.8 + t)}" rx=".5" fill="#f4ecd0" opacity="${f(0.55 - t * 0.25)}"><animate attributeName="opacity" values="${f(0.55 - t * 0.25)};${f(0.18 - t * 0.08)};${f(0.55 - t * 0.25)}" dur="${f(2.4 + (i % 3) * 0.7)}s" begin="${f(-i * 0.4)}s" repeatCount="indefinite"/></rect>`
-  }
-  // Glints on the swell: short broken strokes in rows that draw apart toward us, each row drifting.
-  let swell = ''
-  for (let i = 0; i < 6; i++) {
-    const t = (i + 1) / 7
-    const y = horizon + (floor - horizon) * t ** 1.6
-    let d = ''
-    for (let x = between(rand, 0, 30); x < sw; x += between(rand, 30, 90) * (0.6 + t)) d += `M${f(x)} ${f(y)}h${f(between(rand, 6, 18) * (0.5 + t))}`
-    swell += `<path d="${d}" stroke="white" stroke-opacity="${f(0.07 + t * 0.12)}" stroke-width="${f(0.5 + t * 0.6)}" stroke-linecap="round"><animateTransform attributeName="transform" type="translate" values="0 0;${f(-6 - i * 2)} 0;0 0" dur="${10 + i * 2}s" repeatCount="indefinite"/></path>`
-  }
-  const sail =
-    `<g><path d="M0 0l5 -9v9zM-1 1h8l-1.5 1.6h-5z" fill="#c9c4b4" opacity=".7"/>` +
-    `<animateTransform attributeName="transform" type="translate" values="${f(sw * 0.44)} ${horizon - 1};${f(sw * 0.52)} ${horizon - 1};${f(sw * 0.44)} ${horizon - 1}" dur="120s" repeatCount="indefinite"/></g>`
-  const back =
-    `<defs>${vgrad('sc-sky', [[0, top], [0.75, low], [1, mix(low, '#8a8fb0', 0.4)]])}${vgrad('sc-water', [[0, mix(water, low, 0.5)], [1, '#0b1630']])}${rgrad('sc-moon', '#f4ecd0', 0.5)}${rgrad('sc-lamp', '#ffe9b0', 0.8)}` +
-    `<linearGradient id="sc-beam"><stop offset="0" stop-color="#ffe9b0" stop-opacity=".3"/><stop offset="1" stop-color="#ffe9b0" stop-opacity="0"/></linearGradient></defs>` +
-    `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
-    stars(rand, sw, Math.round(60 * c.detail), horizon - 14, [moonX, moonY, 30]) +
-    `<circle cx="${f(moonX)}" cy="${moonY}" r="58" fill="url(#sc-moon)"/>` +
-    orb(moonX, moonY, 11, '#f1ead2', 'sc-moonball') +
-    wisp(moonX - 70, moonY + 6, 110, '#6a7099', 0.5, 60, 20) +
-    wisp(sw * 0.18, 22, 90, '#4a5280', 0.45, 70, -16) +
-    `<rect x="0" y="${horizon}" width="${sw}" height="${H - horizon}" fill="url(#sc-water)"/>` +
-    `<rect x="0" y="${horizon}" width="${sw}" height=".8" fill="#9aa2c8" opacity=".5"/>` +
-    sail +
-    beam +
-    cliff +
-    tower +
-    reef +
-    path +
-    swell
-  const near = `<rect x="0" y="${floor}" width="${sw}" height="1" fill="white" opacity=".18"/>`
-  return { sky: top, soil: '#0f1a36', floor, groundTop: floor, back, near, keep: [[moonX, moonY, 14], [lx, lampY, 10]] }
 }
 
 /**
@@ -380,25 +348,37 @@ function space(c: Ctx): Scene {
     `<animateTransform attributeName="transform" type="translate" values="0 0;0 0;-36 13" keyTimes="0;.93;1" dur="17s" repeatCount="indefinite"/></path>`
   const back =
     `<defs>${vgrad('sc-sky', [[0, '#04050b'], [1, '#121630']])}${rgrad('sc-band', '#b8a8d8', 0.22)}${rgrad('sc-rim', '#8fd0ff', 0.6)}` +
+    texture('sc-milky', 0.025, 0.07, 1.4, 1.6, 4, 3) +
+    `<filter id="sc-clouds" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".045 .11" numOctaves="4" seed="9"/><feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 3.4 -1.8"/></filter>` +
+    `<clipPath id="sc-globe"><circle cx="${f(earthX)}" cy="${earthY}" r="${earthR}"/></clipPath>` +
     `<radialGradient id="sc-earth" cx=".34" cy=".3" r=".8"><stop offset="0" stop-color="#6fb8e0"/><stop offset=".55" stop-color="#2f6a9a"/><stop offset="1" stop-color="#0f2240"/></radialGradient></defs>` +
     `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
-    `<ellipse cx="${f(sw * 0.45)}" cy="38" rx="${f(sw * 0.55)}" ry="16" fill="url(#sc-band)" transform="rotate(14 ${f(sw * 0.45)} 38)"/>` +
+    `<ellipse cx="${f(sw * 0.45)}" cy="38" rx="${f(sw * 0.55)}" ry="16" fill="url(#sc-band)" transform="rotate(14 ${f(sw * 0.45)} 38)" filter="url(#sc-milky)"/>` +
     `<path d="${dust}" fill="white" opacity=".45"/>` +
     stars(rand, sw, Math.round(70 * c.detail), horizon - 6, [earthX, earthY, earthR + 10]) +
     shooting +
+    // A few bright stars with the diffraction spikes a lens gives them.
+    [0.12, 0.46, 0.9]
+      .map((k, i) => {
+        const x = sw * k
+        const y = 12 + i * 9
+        return bloom(`<path d="M${f(x - 3.5)} ${y}h7M${f(x)} ${y - 3.5}v7" stroke="white" stroke-width=".35" opacity=".8"/><circle cx="${f(x)}" cy="${y}" r=".8" fill="white"/>`, 0.9)
+      })
+      .join('') +
     `<circle cx="${f(earthX)}" cy="${earthY}" r="${earthR + 9}" fill="url(#sc-rim)"/>` +
     `<circle cx="${f(earthX)}" cy="${earthY}" r="${earthR}" fill="url(#sc-earth)"/>` +
-    // Clouds on the lit limb, and the night side's terminator.
-    `<path fill="white" opacity=".3" d="M${f(earthX - 22)} ${earthY - 18}c6 -3 12 -1 16 1c-5 2 -11 2 -16 -1zM${f(earthX - 8)} ${earthY - 28}c7 -2 13 0 16 2c-6 1 -12 1 -16 -2z"/>` +
+    // Weather: cloud cover from noise, clipped to the globe, then the night side's terminator over it.
+    `<g clip-path="url(#sc-globe)"><rect x="${f(earthX - earthR)}" y="${earthY - earthR}" width="${earthR * 2}" height="${earthR * 2}" filter="url(#sc-clouds)" opacity=".75"/></g>` +
     `<path fill="black" opacity=".5" d="M${f(earthX + 6)} ${earthY - earthR + 0.5}A${earthR} ${earthR} 0 0 1 ${f(earthX + 6)} ${earthY + earthR - 0.5}A${earthR * 0.7} ${earthR} 0 0 0 ${f(earthX + 6)} ${earthY - earthR + 0.5}z"/>` +
-    `<path fill="#3d3b48" d="${ridge(sw, horizon, x => horizon - surface(x), 12)}"/>`
+    `<path fill="#3d3b48" d="${ridge(sw, horizon, x => horizon - surface(x), 12)}" filter="url(#sc-dof)"/>`
   // The plain: grey regolith darkening toward us, the base far out on it, and craters lying flat in perspective.
   const crater = (x: number, y: number, r: number) =>
     `<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(r)}" ry="${f(r * 0.24)}" fill="black" opacity=".3"/><path d="M${f(x - r)} ${f(y)}a${f(r)} ${f(r * 0.24)} 0 0 0 ${f(r * 2)} 0" fill="none" stroke="white" stroke-opacity=".16" stroke-width=".8"/>`
   const near =
-    `<defs>${vgrad('sc-ground', [[0, '#5a5866'], [1, '#2a2832']])}</defs>` +
-    `<rect x="0" y="${horizon - 2}" width="${sw}" height="${H - horizon + 2}" fill="url(#sc-ground)"/>` +
-    `<path fill="#4a4856" d="${ridge(sw, horizon, x => horizon - surface(x) - 0.5, 12)}"/>` +
+    `<defs>${vgrad('sc-ground', [[0, '#5a5866'], [1, '#2a2832']])}${texture('sc-regolith', 0.85, 1.1, 1.5, 0.45, 21)}${relief('sc-dunes', 200, 0.012, 0.06, 3, 13)}</defs>` +
+    `<rect x="0" y="${horizon - 2}" width="${sw}" height="${H - horizon + 2}" fill="url(#sc-ground)" filter="url(#sc-dunes)"/>` +
+    `<rect x="0" y="${horizon - 2}" width="${sw}" height="${H - horizon + 2}" fill="#4a4856" opacity=".01" filter="url(#sc-regolith)"/>` +
+    `<path fill="#4a4856" d="${ridge(sw, horizon, x => horizon - surface(x) - 0.5, 12)}" filter="url(#sc-regolith)"/>` +
     outpost +
     crater(sw * 0.56, horizon + 5, 10) +
     crater(sw * 0.1, floor + 9, 14) +
@@ -440,7 +420,8 @@ function city(c: Ctx): Scene {
       }
       x += w + (rand() < 0.3 ? 4 : 0)
     }
-    return `<path fill="${color}" d="${d}"/><path fill="#f6c97a" d="${lit}" opacity=".85"/>${blink}`
+    // Lit windows glow a little into the dusk around them.
+    return `<path fill="${color}" d="${d}"/>${bloom(`<path fill="#f6c97a" d="${lit}" opacity=".85"/>`, 0.7)}${blink}`
   }
   const spireX = sw * 0.62
   const spireBase = ground - 26
@@ -453,16 +434,18 @@ function city(c: Ctx): Scene {
   const deckY = ground - 30
   let piers = ''
   for (let x = 20; x < sw; x += 80) piers += `M${x} ${deckY + 3}h4V${ground - 6}h-4z`
-  const carriages = Array.from({ length: 5 }, (_, i) => `<rect x="${i * 26}" y="-8" width="24" height="8" rx="1.5" fill="#3a405e"/><path fill="#ffe1a0" d="${[4, 9, 14, 19].map(k => `M${i * 26 + k} -6h3v3h-3z`).join('')}"/>`).join('')
+  const carriages = Array.from({ length: 5 }, (_, i) => `<rect x="${i * 26}" y="-8" width="24" height="8" rx="1.5" fill="#3a405e"/><rect x="${i * 26}" y="-8" width="24" height="1" fill="white" opacity=".12"/>${bloom(`<path fill="#ffe1a0" d="${[4, 9, 14, 19].map(k => `M${i * 26 + k} -6h3v3h-3z`).join('')}"/>`, 0.8)}`).join('')
   const train = `<g>${carriages}<animateTransform attributeName="transform" type="translate" values="${sw + 10} ${deckY};-150 ${deckY};-150 ${deckY}" keyTimes="0;.55;1" dur="${f(Math.max(14, sw / 30))}s" repeatCount="indefinite"/></g>`
   const back =
-    `<defs>${vgrad('sc-sky', [[0, top], [0.55, '#465488'], [0.85, mix('#465488', dusk, 0.6)], [1, dusk]])}</defs>` +
+    `<defs>${vgrad('sc-sky', [[0, top], [0.55, '#465488'], [0.85, mix('#465488', dusk, 0.6)], [1, dusk]])}${vgrad('sc-pollution', [[0, '#f6b88a', 0], [1, '#f6b88a', 0.4]])}${texture('sc-concrete', 0.08, 0.5, 0.7, 0, 31)}</defs>` +
     `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
+    // The city's own light, warming the bottom of the sky behind the towers.
+    `<rect y="${ground - 50}" width="${sw}" height="34" fill="url(#sc-pollution)"/>` +
     stars(rand, sw, Math.round(16 * c.detail), 26) +
     wisp(sw * 0.1, 30, 120, '#c98a8a', 0.25, 80, 20) +
-    rank(ground - 22, mix('#2a3258', air, 0.55), 30, 54, 16, 40, 0.06) +
-    spire +
-    rank(ground - 14, mix('#222846', air, 0.2), 18, 40, 24, 56, 0.22) +
+    `<g filter="url(#sc-dof)">${rank(ground - 22, mix('#2a3258', air, 0.55), 30, 54, 16, 40, 0.06)}</g>` +
+    rim(spire, dusk, -0.7, 0, 0.35) +
+    `<g filter="url(#sc-concrete)">${rank(ground - 14, mix('#222846', air, 0.2), 18, 40, 24, 56, 0.22)}</g>` +
     `<path fill="#1c2036" d="M0 ${deckY}h${sw}v3H0z${piers}"/>` +
     train +
     rank(ground - 6, '#171a2c', 8, 22, 32, 72, 0.12)
@@ -470,11 +453,13 @@ function city(c: Ctx): Scene {
   const lamp = (x: number) =>
     `<circle cx="${f(x)}" cy="${ground - 40}" r="26" fill="url(#sc-lamp)"/>` +
     `<rect x="${f(x - 0.9)}" y="${ground - 40}" width="1.8" height="40" fill="#2a2e44"/>` +
-    `<path fill="#2a2e44" d="M${f(x - 4)} ${ground - 41}h8l-1.5 2.4h-5z"/><rect x="${f(x - 2.5)}" y="${ground - 38.6}" width="5" height="1.2" fill="#ffe1a0"/>` +
-    `<ellipse cx="${f(x)}" cy="${ground + 4}" rx="22" ry="3" fill="#ffe1a0" opacity=".14"/>`
+    `<path fill="#2a2e44" d="M${f(x - 4)} ${ground - 41}h8l-1.5 2.4h-5z"/>` + bloom(`<rect x="${f(x - 2.5)}" y="${ground - 38.6}" width="5" height="1.2" fill="#ffe1a0"/>`, 1) +
+    `<ellipse cx="${f(x)}" cy="${ground + 4}" rx="22" ry="3" fill="#ffe1a0" opacity=".14"/>` +
+    // The wet paving gives the lamp back as a long soft streak.
+    `<rect x="${f(x - 2.5)}" y="${ground - 4}" width="5" height="22" fill="url(#sc-wet)" filter="url(#sc-bloom)"/>`
   const near =
-    `<defs>${vgrad('sc-walk', [[0, '#3a3e54'], [1, '#22253a']])}${rgrad('sc-lamp', '#ffe1a0', 0.45)}</defs>` +
-    `<rect x="0" y="${ground - 6}" width="${sw}" height="${H - ground + 6}" fill="url(#sc-walk)"/>` +
+    `<defs>${vgrad('sc-walk', [[0, '#3a3e54'], [1, '#22253a']])}${rgrad('sc-lamp', '#ffe1a0', 0.45)}${vgrad('sc-wet', [[0, '#ffe1a0', 0.5], [1, '#ffe1a0', 0]])}${texture('sc-paving', 0.4, 1.2, 1, 0.1, 33)}</defs>` +
+    `<rect x="0" y="${ground - 6}" width="${sw}" height="${H - ground + 6}" fill="url(#sc-walk)" filter="url(#sc-paving)"/>` +
     `<rect x="0" y="${ground - 6}" width="${sw}" height="1" fill="${dusk}" opacity=".35"/>` +
     lamp(sw * 0.16) +
     lamp(sw * 0.86)
@@ -520,7 +505,8 @@ function desert(c: Ctx): Scene {
       for (let y = t + 4; y < base - 3; y += 4.5) strata += `M${f(l + 2)} ${f(y)}H${f(r - 2)}`
       x += w + talus * 2 + between(rand, every * 0.3, every)
     }
-    return `<path fill="${color}" d="${body}"/><path fill="black" opacity=".22" d="${shade}"/><path stroke="black" stroke-opacity=".07" d="${strata}"/><path fill="${rim}" opacity=".7" d="${light}"/>`
+    // The rock is carved by relief lit from the sun's side, banded by its strata, rimmed with light.
+    return `<g filter="url(#sc-sandstone)"><path fill="${color}" d="${body}"/><path fill="black" opacity=".22" d="${shade}"/></g><path stroke="black" stroke-opacity=".08" d="${strata}"/>${bloom(`<path fill="${rim}" opacity=".7" d="${light}"/>`, 0.6)}`
   }
   const saguaro = (x: number) =>
     `<path fill="#2a1c22" d="M${f(x)} ${ground + 2}V${ground - 58}a3.5 3.5 0 0 1 7 0V${ground + 2}z` +
@@ -531,18 +517,20 @@ function desert(c: Ctx): Scene {
     `<g transform="translate(${f(sw * 0.62)} 30)"><path d="M-6 0q3 -2.6 6 0q3 -2.6 6 0" fill="none" stroke="#3a2430" stroke-width="1" stroke-linecap="round" transform="translate(16 0)"/>` +
     `<animateTransform attributeName="transform" type="rotate" values="0;360" dur="26s" additive="sum" repeatCount="indefinite"/></g>`
   const back =
-    `<defs>${vgrad('sc-sky', [[0, top], [0.45, '#8a4a6a'], [0.75, glowC], [1, horizonC]])}${rgrad('sc-sun', '#ffe8b0', 0.8)}</defs>` +
+    `<defs>${vgrad('sc-sky', [[0, top], [0.45, '#8a4a6a'], [0.75, glowC], [1, horizonC]])}${rgrad('sc-sun', '#ffe8b0', 0.8)}${relief('sc-sandstone', 180, 0.02, 0.16, 2.2, 41)}</defs>` +
     `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
     wisp(sw * 0.5, 30, 130, '#d98a7a', 0.45, 90, 18) +
     wisp(sw * 0.08, 20, 90, '#b07080', 0.35, 70, -14) +
-    `<circle cx="${f(sunX)}" cy="${sunY}" r="90" fill="url(#sc-sun)"/><circle cx="${f(sunX)}" cy="${sunY}" r="13" fill="#fff0c8"/>` +
+    `<circle cx="${f(sunX)}" cy="${sunY}" r="90" fill="url(#sc-sun)"/>` +
+    bloom(`<circle cx="${f(sunX)}" cy="${sunY}" r="13" fill="#fff0c8"/>`, 1) +
     hawk +
     formations(ground - 20, mix('#9a5a7a', horizonC, 0.4), horizonC, 60, 12, 22) +
     formations(ground - 10, '#7a3f52', glowC, 140, 22, 44) +
     `<rect x="0" y="${ground - 26}" width="${sw}" height="18" fill="${horizonC}" opacity=".07"><animate attributeName="opacity" values=".04;.1;.04" dur="5s" repeatCount="indefinite"/></rect>`
   const near =
-    `<defs>${vgrad('sc-flat', [[0, '#c98a5a'], [1, '#7a4a3a']])}</defs>` +
-    `<rect x="0" y="${ground - 8}" width="${sw}" height="${H - ground + 8}" fill="url(#sc-flat)"/>` +
+    `<defs>${vgrad('sc-flat', [[0, '#c98a5a'], [1, '#7a4a3a']])}${relief('sc-ripples', 160, 0.006, 0.35, 1.6, 43)}${texture('sc-grit', 0.9, 0.9, 1, 0.3, 45)}</defs>` +
+    // Sand: wind ripples lit low from the sun, and a fine grit over them.
+    `<g filter="url(#sc-grit)"><rect x="0" y="${ground - 8}" width="${sw}" height="${H - ground + 8}" fill="url(#sc-flat)" filter="url(#sc-ripples)"/></g>` +
     `<path fill="#a86a4a" opacity=".5" d="${ridge(sw, ground - 6, noise(rand, [[3, 160]]), 20, ground + 2)}"/>` +
     saguaro(sw - 26) +
     // Boulders in the near left corner, their tops catching the light.
@@ -584,29 +572,34 @@ function volcano(c: Ctx): Scene {
     `<path d="${pts}" fill="none" stroke="url(#sc-lava)" stroke-width="${w}" stroke-linecap="round"><animate attributeName="opacity" values="1;.7;1" dur="${dur}s" repeatCount="indefinite"/></path>`
   const back =
     `<defs>${vgrad('sc-sky', [[0, '#0d0709'], [0.6, '#2a0f0c'], [1, '#5a1e10']])}${rgrad('sc-glow', '#ff7a3a', 0.6)}` +
-    `<radialGradient id="sc-ash" cx=".5" cy=".75" r=".6"><stop offset="0" stop-color="#c85a2a"/><stop offset="1" stop-color="#3a2420"/></radialGradient>` +
-    `${vgrad('sc-lava', [[0, '#ffe08a'], [1, '#e0401a']])}</defs>` +
+    `<radialGradient id="sc-ash" cx=".5" cy=".8" r=".7"><stop offset="0" stop-color="#d8703a"/><stop offset=".6" stop-color="#6a3a2a"/><stop offset="1" stop-color="#4a2a24"/></radialGradient>` +
+    `${vgrad('sc-lava', [[0, '#ffe08a'], [1, '#e0401a']])}${relief('sc-basalt', 270, 0.03, 0.09, 3, 51)}${vgrad('sc-uplight', [[0, '#ff7a3a', 0.45], [0.35, '#ff7a3a', 0.08], [1, '#ff7a3a', 0]])}</defs>` +
     `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
     stars(rand, sw, Math.round(18 * c.detail), 30, [cx, 20, 60]) +
     `<circle cx="${f(cx)}" cy="${apexY}" r="90" fill="url(#sc-glow)"/>` +
-    plume +
-    `<path fill="#1e1414" d="${ridge(sw, ground - 18, noise(rand, [[16, 220], [6, 70]]), 14)}"/>` +
-    `<path fill="#140d0d" d="${cone}"/>` +
+    `<g filter="url(#sc-haze)">${plume}</g>` +
+    `<path fill="#1e1414" d="${ridge(sw, ground - 18, noise(rand, [[16, 220], [6, 70]]), 14)}" filter="url(#sc-dof)"/>` +
+    `<path fill="#2a1a16" d="${cone}" filter="url(#sc-basalt)"/>` +
+    // The crater lights the cone from above: brightest at the rim, gone by the foot.
+    `<path fill="url(#sc-uplight)" d="${cone}"/>` +
     // The lit rim, and lava down the face.
     `<path d="M${f(cx - 11)} ${apexY}h22" stroke="#ffb060" stroke-width="2" stroke-linecap="round"/>` +
-    lava(`M${f(cx - 4)} ${apexY + 1}C${f(cx - 8)} ${apexY + 24} ${f(cx - 2)} ${apexY + 40} ${f(cx - 18)} ${base}`, 2.4, 3) +
-    lava(`M${f(cx + 5)} ${apexY + 1}C${f(cx + 10)} ${apexY + 20} ${f(cx + 4)} ${apexY + 44} ${f(cx + 24)} ${base}`, 1.6, 4) +
+    bloom(
+      lava(`M${f(cx - 4)} ${apexY + 1}C${f(cx - 8)} ${apexY + 24} ${f(cx - 2)} ${apexY + 40} ${f(cx - 18)} ${base}`, 2.4, 3) +
+        lava(`M${f(cx + 5)} ${apexY + 1}C${f(cx + 10)} ${apexY + 20} ${f(cx + 4)} ${apexY + 44} ${f(cx + 24)} ${base}`, 1.6, 4),
+      1,
+    ) +
     embers
   // The cooled field: dark rock, a few cracks still glowing, picked up by the light of the flow.
   const cracks = [0.12, 0.34, 0.52, 0.9]
     .map((k, i) => {
       const x = sw * k
-      return `<path d="M${f(x)} ${ground + 6 + i * 2}l9 -2l7 3l11 -1.5" fill="none" stroke="#ff7a3a" stroke-width="1" stroke-linecap="round"><animate attributeName="opacity" values=".9;.35;.9" dur="${4 + i}s" repeatCount="indefinite"/></path>`
+      return bloom(`<path d="M${f(x)} ${ground + 6 + i * 2}l9 -2l7 3l11 -1.5" fill="none" stroke="#ff7a3a" stroke-width="1" stroke-linecap="round"><animate attributeName="opacity" values=".9;.35;.9" dur="${4 + i}s" repeatCount="indefinite"/></path>`, 0.9)
     })
     .join('')
   const near =
-    `<defs>${vgrad('sc-rock', [[0, '#2a1a16'], [1, '#120a0a']])}<radialGradient id="sc-spill" cy="0" r=".7"><stop offset="0" stop-color="#ff7a3a" stop-opacity=".22"/><stop offset="1" stop-color="#ff7a3a" stop-opacity="0"/></radialGradient></defs>` +
-    `<rect x="0" y="${base}" width="${sw}" height="${H - base}" fill="url(#sc-rock)"/>` +
+    `<defs>${vgrad('sc-rock', [[0, '#2a1a16'], [1, '#120a0a']])}${relief('sc-flow', 250, 0.02, 0.2, 2.5, 53)}<radialGradient id="sc-spill" cy="0" r=".7"><stop offset="0" stop-color="#ff7a3a" stop-opacity=".22"/><stop offset="1" stop-color="#ff7a3a" stop-opacity="0"/></radialGradient></defs>` +
+    `<rect x="0" y="${base}" width="${sw}" height="${H - base}" fill="url(#sc-rock)" filter="url(#sc-flow)"/>` +
     `<rect x="${f(cx - vw)}" y="${base}" width="${f(vw * 2)}" height="10" fill="url(#sc-spill)"/>` +
     cracks
   return { sky: '#0d0709', soil: '#1e1210', groundTop: base, back, near, keep: [[cx, apexY, 16]] }
@@ -622,13 +615,13 @@ function rails(c: Ctx): Scene {
   const top = '#5f6fa4'
   const warm = '#f6b98a'
   const back =
-    `<defs>${vgrad('sc-sky', [[0, top], [0.6, mix(top, warm, 0.6)], [1, warm]])}${vgrad('sc-mist', [[0, '#f2dcc8', 0], [0.6, '#f2dcc8', 0.55], [1, '#f2dcc8', 0]])}</defs>` +
+    `<defs>${vgrad('sc-sky', [[0, top], [0.6, mix(top, warm, 0.6)], [1, warm]])}${vgrad('sc-mist', [[0, '#f2dcc8', 0], [0.6, '#f2dcc8', 0.55], [1, '#f2dcc8', 0]])}${relief('sc-granite', 10, 0.09, 0.06, 1.3, 61)}</defs>` +
     `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
     wisp(sw * 0.15, 18, 110, '#ffd6b8', 0.5, 90, 20) +
     wisp(sw * 0.6, 28, 80, '#e8b8b0', 0.4, 70, -14) +
-    peaks(rand, sw, ground - 22, { n: Math.max(3, Math.round(sw / 200)), lo: 34, hi: 60, lit: '#c98a7a', shade: '#6a6a9a', snow: '#fbe6d4', snowShade: '#b4b4d4', light: 1 }) +
+    `<g filter="url(#sc-granite)">${peaks(rand, sw, ground - 22, { n: Math.max(3, Math.round(sw / 200)), lo: 34, hi: 60, lit: '#c98a7a', shade: '#6a6a9a', snow: '#fbe6d4', snowShade: '#b4b4d4', light: 1 })}</g>` +
     `<rect x="${-sw * 0.1}" y="${ground - 40}" width="${sw * 1.2}" height="22" fill="url(#sc-mist)"><animateTransform attributeName="transform" type="translate" values="0 0;${f(sw * 0.05)} 0;0 0" dur="40s" repeatCount="indefinite"/></rect>` +
-    `<path fill="#3e4a62" d="${conifers(rand, sw, x => ground - 10 - noise(rand, [[6, 180]])(x), noise(rand, [[8, 120]]), 9)}"/><path fill="#3e4a62" d="${ridge(sw, ground - 12, noise(rand, [[4, 160]]))}"/>`
+    rim(`<path fill="#3e4a62" d="${conifers(rand, sw, x => ground - 10 - noise(rand, [[6, 180]])(x), noise(rand, [[8, 120]]), 9)}"/><path fill="#3e4a62" d="${ridge(sw, ground - 12, noise(rand, [[4, 160]]))}"/>`, warm, 0.7, -0.5, 0.45)
   // The track: poles with sagging wires going by, the ballast, sleepers and a rail polished by the sun.
   const P = 150
   let tile = ''
@@ -639,11 +632,11 @@ function rails(c: Ctx): Scene {
   let ties = ''
   for (let x = -14; x < sw + 14; x += 14) ties += `M${x} ${ground + 1}h9v2.6h-9z`
   const near =
-    `<defs>${vgrad('sc-bed', [[0, '#5a5048'], [1, '#2a2622']])}</defs>` +
-    `<rect x="0" y="${ground - 4}" width="${sw}" height="${H - ground + 4}" fill="url(#sc-bed)"/>` +
+    `<defs>${vgrad('sc-bed', [[0, '#5a5048'], [1, '#2a2622']])}${texture('sc-gravel', 1.3, 1.3, 1.8, 0.7, 63)}</defs>` +
+    `<rect x="0" y="${ground - 4}" width="${sw}" height="${H - ground + 4}" fill="url(#sc-bed)" filter="url(#sc-gravel)"/>` +
     `<g>${tile}<animateTransform attributeName="transform" type="translate" values="0 0;${-P} 0" dur="3.2s" repeatCount="indefinite"/></g>` +
     `<g><path d="${ties}" fill="#3a2a22"/><animateTransform attributeName="transform" type="translate" values="0 0;-14 0" dur=".3s" repeatCount="indefinite"/></g>` +
-    `<rect x="0" y="${ground - 1}" width="${sw}" height="1.6" fill="#8a8078"/><rect x="0" y="${ground - 1}" width="${sw}" height=".5" fill="${warm}" opacity=".9"/>`
+    `<rect x="0" y="${ground - 1}" width="${sw}" height="1.6" fill="#8a8078"/>` + bloom(`<rect x="0" y="${ground - 1}" width="${sw}" height=".5" fill="${warm}" opacity=".9"/>`, 0.7)
   return { sky: top, soil: '#3a342e', groundTop: ground - 4, back, near }
 }
 
@@ -678,7 +671,10 @@ function lab(c: Ctx): Scene {
   }).join('')
   const windowSvg =
     `<clipPath id="sc-glass"><rect x="${f(wx)}" y="${wy}" width="${f(ww)}" height="${wh}"/></clipPath>` +
-    `<g clip-path="url(#sc-glass)"><rect x="${f(wx)}" y="${wy}" width="${f(ww)}" height="${wh}" fill="url(#sc-night)"/><path fill="#141a2c" d="${skyline}"/><path fill="#f6c97a" d="${lights}" opacity=".7"/>${rain}</g>` +
+    // Behind the glass the city is out of focus: soft towers, its lights opened into bokeh.
+    `<g clip-path="url(#sc-glass)"><rect x="${f(wx)}" y="${wy}" width="${f(ww)}" height="${wh}" fill="url(#sc-night)"/><path fill="#141a2c" d="${skyline}" filter="url(#sc-dof)"/>` +
+    `<g filter="url(#sc-bloom)"><path fill="#f6c97a" d="${lights}" opacity=".9" transform="translate(0 0)"/></g><path fill="#f6c97a" d="${lights}" opacity=".35"/>${rain}` +
+    `<path d="M${f(wx + ww * 0.15)} ${wy}l${f(ww * 0.22)} 0l${f(-ww * 0.3)} ${wh}l${f(-ww * 0.12)} 0z" fill="white" opacity=".05"/></g>` +
     `<path fill="none" stroke="#2c343e" stroke-width="3" d="M${f(wx)} ${wy}h${f(ww)}v${wh}h${f(-ww)}zM${f(wx + ww / 2)} ${wy}v${wh}"/>` +
     `<rect x="${f(wx - 4)}" y="${wy + wh}" width="${f(ww + 8)}" height="2.4" fill="#343c48"/>`
   // The bench along the back wall, the lamp, the monitors.
@@ -690,7 +686,7 @@ function lab(c: Ctx): Scene {
     return (
       `<ellipse cx="${f(x + w / 2)}" cy="${bench - 12}" rx="${f(w)}" ry="16" fill="url(#sc-screen)"/>` +
       `<rect x="${f(x)}" y="${bench - 24}" width="${f(w)}" height="17" rx="1" fill="#0e1418"/><rect x="${f(x + 1.5)}" y="${bench - 22.5}" width="${f(w - 3)}" height="14" fill="#0f2c2c"/>` +
-      lines +
+      bloom(lines, 0.9) +
       `<rect x="${f(x + w / 2 - 1.5)}" y="${bench - 7}" width="3" height="7" fill="#0e1418"/>`
     )
   }
@@ -699,12 +695,12 @@ function lab(c: Ctx): Scene {
   const sx = lampX - 12
   const sy = bench - 22
   const lamp =
-    `<path d="M${f(sx - 4)} ${f(sy + 3)}L${f(sx - 18)} ${bench}H${f(sx + 16)}L${f(sx + 5)} ${f(sy + 3)}z" fill="url(#sc-cone)"/>` +
+    `<path d="M${f(sx - 4)} ${f(sy + 3)}L${f(sx - 18)} ${bench}H${f(sx + 16)}L${f(sx + 5)} ${f(sy + 3)}z" fill="url(#sc-cone)" filter="url(#sc-soft)"/>` +
     `<path fill="#2a2e36" d="M${f(lampX - 5)} ${bench}h10v-1.6a5 1.6 0 0 0 -10 0z"/>` +
     `<path d="M${f(lampX)} ${bench - 1.5}L${f(lampX + 4)} ${bench - 16}L${f(sx + 2)} ${f(sy)}" fill="none" stroke="#3a3e46" stroke-width="1.4" stroke-linejoin="round"/>` +
     `<circle cx="${f(lampX + 4)}" cy="${bench - 16}" r="1.2" fill="#4a4e58"/>` +
     `<path fill="#3a3e46" d="M${f(sx - 5)} ${f(sy + 3)}L${f(sx - 1)} ${f(sy - 3)}L${f(sx + 6)} ${f(sy - 1)}L${f(sx + 6)} ${f(sy + 3)}z"/>` +
-    `<path fill="${warm}" d="M${f(sx - 5)} ${f(sy + 3)}H${f(sx + 6)}v.8H${f(sx - 5)}z"/>`
+    bloom(`<path fill="${warm}" d="M${f(sx - 5)} ${f(sy + 3)}H${f(sx + 6)}v.8H${f(sx - 5)}z"/>`, 1)
   // A whiteboard on the left wall: the night's reasoning in faded marker, two notes stuck to it.
   const bx = Math.max(16, sw * 0.06)
   const bw = Math.min(90, sw * 0.18)
@@ -721,9 +717,10 @@ function lab(c: Ctx): Scene {
   const rx = sw - 30
   let leds = ''
   for (let k = 0; k < 7; k++) leds += `<rect x="${f(rx + 5)}" y="${f(26 + k * 9)}" width="2" height="1.4" fill="${k % 3 ? cyan : '#7aff9a'}"><animate attributeName="opacity" values="1;.2;1" dur="${f(between(rand, 0.8, 2.4))}s" begin="${f(-rand() * 2)}s" repeatCount="indefinite"/></rect>`
+  leds = bloom(leds, 0.8)
   const back =
-    `<defs>${vgrad('sc-wall', [[0, '#141920'], [1, wall]])}${vgrad('sc-night', [[0, '#0a1020'], [1, '#283050']])}${rgrad('sc-screen', cyan, 0.22)}${vgrad('sc-cone', [[0, warm, 0.35], [1, warm, 0]])}</defs>` +
-    `<rect width="${sw}" height="${H}" fill="url(#sc-wall)"/>` +
+    `<defs>${vgrad('sc-wall', [[0, '#141920'], [1, wall]])}${vgrad('sc-night', [[0, '#0a1020'], [1, '#283050']])}${rgrad('sc-screen', cyan, 0.22)}${vgrad('sc-cone', [[0, warm, 0.35], [1, warm, 0]])}${texture('sc-plaster', 0.03, 0.045, 0.45, 0, 71, 3)}</defs>` +
+    `<rect width="${sw}" height="${H}" fill="url(#sc-wall)" filter="url(#sc-plaster)"/>` +
     windowSvg +
     board +
     `<rect x="0" y="${bench}" width="${sw}" height="3" fill="#2c323c"/><rect x="0" y="${bench}" width="${sw}" height=".8" fill="white" opacity=".12"/>` +
@@ -736,8 +733,10 @@ function lab(c: Ctx): Scene {
     leds
   // The floor: dark, a faint reflection of the window and the lamp.
   const near =
-    `<defs>${vgrad('sc-floor', [[0, '#20262e'], [1, '#0e1216']])}</defs>` +
-    `<rect x="0" y="${ground - 4}" width="${sw}" height="${H - ground + 4}" fill="url(#sc-floor)"/>` +
+    `<defs>${vgrad('sc-floor', [[0, '#20262e'], [1, '#0e1216']])}${texture('sc-epoxy', 0.02, 0.3, 0.6, 0, 73)}</defs>` +
+    `<rect x="0" y="${ground - 4}" width="${sw}" height="${H - ground + 4}" fill="url(#sc-floor)" filter="url(#sc-epoxy)"/>` +
+    // The polished floor gives back the monitors' glow.
+    `<rect x="${f(sw * 0.36)}" y="${ground}" width="60" height="14" fill="${cyan}" opacity=".07" filter="url(#sc-haze)"/>` +
     `<rect x="${f(wx)}" y="${ground}" width="${f(ww)}" height="10" fill="#4a5a7a" opacity=".12"/>` +
     `<ellipse cx="${f(lampX)}" cy="${ground + 4}" rx="30" ry="4" fill="${warm}" opacity=".08"/>`
   return { sky: wall, soil: '#1a1e24', groundTop: ground - 4, back, near, keep: [[wx + ww / 2, wy + wh / 2, 22], [bx + bw / 2, 39, bw / 2]] }
@@ -770,7 +769,7 @@ function night(c: Ctx): Scene {
         `<path fill="black" opacity=".25" d="M${f(x + w / 2)} ${f(y - 12)}l${f(w / 2)} 5v7h${f(-w / 2)}z"/>` +
         `<rect x="${f(x + 2)}" y="${f(y - 5)}" width="2" height="2" fill="${lit ? '#f6c97a' : '#141a30'}"/>` +
         (lit
-          ? `<circle cx="${f(x + 3)}" cy="${f(y - 4)}" r="7" fill="url(#sc-window)"/>` +
+          ? `<circle cx="${f(x + 3)}" cy="${f(y - 4)}" r="7" fill="url(#sc-window)"/>` + bloom(`<rect x="${f(x + 2)}" y="${f(y - 5)}" width="2" height="2" fill="#f6c97a"/>`, 1) +
             `<rect x="${f(x + w - 4)}" y="${f(y - 13)}" width="2" height="4" fill="#232a46"/>` +
             [0, 1, 2]
               .map(k => `<circle cx="${f(x + w - 3)}" cy="${f(y - 14)}" r="1.4" fill="#8a90b0" opacity="0"><animateTransform attributeName="transform" type="translate" values="0 0;${-4 - k} -14" dur="7s" begin="${k * 2.3}s" repeatCount="indefinite"/><animate attributeName="r" values="1.2;3" dur="7s" begin="${k * 2.3}s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;.35;0" dur="7s" begin="${k * 2.3}s" repeatCount="indefinite"/></circle>`)
@@ -803,21 +802,24 @@ function night(c: Ctx): Scene {
     `<rect width="${sw}" height="${H}" fill="url(#sc-sky)"/>` +
     stars(rand, sw, Math.round(70 * c.detail), 60, [moonX, moonY, 26]) +
     `<circle cx="${f(moonX)}" cy="${moonY}" r="54" fill="url(#sc-moon)"/>` +
-    orb(moonX, moonY, 9, '#f1ead2', 'sc-moonball') +
+    // A faint halo ring, as moonlight makes through thin high cloud.
+    `<circle cx="${f(moonX)}" cy="${moonY}" r="22" fill="none" stroke="#c8cce8" stroke-opacity=".12" stroke-width="2.4" filter="url(#sc-soft)"/>` +
+    bloom(orb(moonX, moonY, 9, '#f1ead2', 'sc-moonball'), 0.7) +
     wisp(moonX - 60, moonY + 8, 90, '#5a6290', 0.45, 70, 16) +
-    `<path fill="${mix('#1c2648', low, 0.45)}" d="${ridge(sw, 0, x => -far(x))}"/>` +
-    `<path fill="#18203e" d="${ridge(sw, 0, x => -hill(x))}"/>` +
+    `<path fill="${mix('#1c2648', low, 0.45)}" d="${ridge(sw, 0, x => -far(x))}" filter="url(#sc-dof)"/>` +
+    // The near hill's crest catches the moon.
+    rim(`<path fill="#18203e" d="${ridge(sw, 0, x => -hill(x))}"/>`, '#6a76b0', 0.4, -0.7, 0.5) +
     cottages
   const near =
-    `<defs>${vgrad('sc-meadow', [[0, '#1a2440'], [1, '#0c1222']])}</defs>` +
-    `<path fill="url(#sc-meadow)" d="${ridge(sw, ground - 4, noise(rand, [[3, 200]]), 20)}"/>` +
+    `<defs>${vgrad('sc-meadow', [[0, '#1a2440'], [1, '#0c1222']])}${texture('sc-sward', 0.3, 0.9, 1, 0.06, 81)}${texture('sc-leaves', 0.9, 0.7, 1.2, 0, 83)}</defs>` +
+    `<path fill="url(#sc-meadow)" d="${ridge(sw, ground - 4, noise(rand, [[3, 200]]), 20)}" filter="url(#sc-sward)"/>` +
     `<path d="M${f(sw * 0.3)} ${H}C${f(sw * 0.38)} ${ground + 10} ${f(sw * 0.4)} ${ground + 2} ${f(vx)} ${ground - 6}l4 0C${f(sw * 0.5)} ${ground + 2} ${f(sw * 0.5)} ${ground + 10} ${f(sw * 0.44)} ${H}z" fill="#2a3458" opacity=".5"/>` +
-    oak() +
+    `<g filter="url(#sc-leaves)">${oak()}</g>` +
     flies
   return { sky: top, soil: '#141c34', groundTop: ground - 4, back, near, keep: [[moonX, moonY, 12]] }
 }
 
-const SCENES: Record<string, (c: Ctx) => Scene> = { forest, sea, space, city, desert, volcano, rails, lab, night }
+const SCENES: Record<string, (c: Ctx) => Scene> = { forest, space, city, desert, volcano, rails, lab, night }
 
 /**
  * The scenery for a scene on a stage `sw` wide whose front edge is at `ground`.
@@ -838,9 +840,16 @@ export function richBackdrop(scene: FablesScene, rand: Rand, sw: number, ground:
     back:
       `<defs><clipPath id="sc-stage"><rect width="${sw}" height="${H}"/></clipPath>` +
       `<filter id="sc-soft" x="-20%" y="-200%" width="140%" height="500%"><feGaussianBlur stdDeviation="1.4"/></filter>` +
+      LIGHT +
       `<filter id="sc-deep"><feColorMatrix type="matrix" values=".58 0 0 0 0  0 .58 0 0 0  0 0 .62 0 0  0 0 0 1 0"/></filter></defs>` +
       clip(s.back),
     near: clip(s.near + accent),
     keep: (s.keep ?? []).map(([x, y, r]) => ({ x: x - r, y: y - r, w: r * 2, h: r * 2 })),
+    lens: clip(
+      `<defs><filter id="sc-grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="11"/><feColorMatrix type="saturate" values="0"/></filter>` +
+        `<radialGradient id="sc-vignette" cx=".5" cy=".46" r=".72"><stop offset=".5" stop-color="black" stop-opacity="0"/><stop offset="1" stop-color="black" stop-opacity=".42"/></radialGradient></defs>` +
+        `<rect width="${sw}" height="${H}" filter="url(#sc-grain)" opacity=".1" style="mix-blend-mode:overlay"/>` +
+        `<rect width="${sw}" height="${H}" fill="url(#sc-vignette)"/>`,
+    ),
   }
 }

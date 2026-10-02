@@ -164,18 +164,6 @@ function backdrop(scene: FablesScene, rand: () => number, sw: number): Stage {
       }
       break
     }
-    case 'sea': {
-      sky = '#1d2530'
-      ground = '#1f4e73'
-      floor = GROUND_Y - 4
-      const wave = Array.from({ length: sw / (U * 4) + 2 }, (_, i) => `M${i * U * 4} 0h${U * 2}v${U}h-${U * 2}z`).join('')
-      front.push(
-        `<g><path fill="#4a90c2" d="${wave}" transform="translate(0 ${GROUND_Y - U})"/>` +
-          `<animateTransform attributeName="transform" type="translate" values="0 0;-${U * 4} 0" dur="1.2s" repeatCount="indefinite"/></g>`,
-      )
-      parts.push(`<circle cx="${sw - 80}" cy="28" r="12" fill="#e3d9a0" opacity=".85"/>`)
-      break
-    }
     case 'space': {
       sky = '#14121c'
       ground = '#14121c'
@@ -272,7 +260,7 @@ function backdrop(scene: FablesScene, rand: () => number, sw: number): Stage {
 }
 
 /** The flat stage in the shape the scene draws: its front details sit on the ground, behind the props. */
-const flatStage = (s: Stage) => ({ sky: s.sky, ground: s.ground, floor: s.floor, groundTop: GROUND_Y, back: s.back, near: s.front, keep: [] as Rect[] })
+const flatStage = (s: Stage) => ({ sky: s.sky, ground: s.ground, floor: s.floor, groundTop: GROUND_Y, back: s.back, near: s.front, keep: [] as Rect[], lens: '' })
 
 // ---------------------------------------------------------------- particles
 
@@ -358,6 +346,9 @@ function label(text: string, cx: number, y: number, tag: TagStyle, sw: number): 
  * so a 16-pixel prop stands about as tall as the 3D Claude, not over the scenery.
  */
 const PROP_UNIT = 2.6
+/** Props drawn at their own size beside Claude: a train stands about as tall as Claude does. */
+const PROP_UNITS: Partial<Record<string, number>> = { train: 5.2 }
+const unitFor = (prop: FablesProp) => (typeof prop.sprite === 'string' ? (PROP_UNITS[prop.sprite] ?? PROP_UNIT) : PROP_UNIT)
 
 /** How many voxels deep a stacked prop's pixel art is extruded. */
 const PROP_DEPTH = 3
@@ -368,7 +359,7 @@ const PROP_DEPTH = 3
  * swings well round and back instead, so it never shows its thin edge.
  * Its bottom edge sits on `bottom`, centered on `cx`.
  */
-function stackedProp(art: Art, id: string, cx: number, bottom: number, motion: FablesProp['motion']): string {
+function stackedProp(art: Art, id: string, cx: number, bottom: number, motion: FablesProp['motion'], unit: number): string {
   const rows = art.rows.length
   const cols = widthOf(art.rows)
   const v = new Vox(cols, PROP_DEPTH, rows)
@@ -380,13 +371,13 @@ function stackedProp(art: Art, id: string, cx: number, bottom: number, motion: F
     }
   })
   // A prop sliding across the stage faces it squarely; the rest turn a little to show their side.
-  const s = stack(id, v, { s: PROP_UNIT, lift: PROP_UNIT * 0.85, yaw: motion === 'scroll' ? 0 : -16, sway: motion === 'spin' ? 40 : undefined, swayDur: 3.2 })
+  const s = stack(id, v, { s: unit, lift: unit * 0.85, yaw: motion === 'scroll' ? 0 : -16, sway: motion === 'spin' ? 40 : undefined, swayDur: 3.2 })
   return s.defs + place(id, cx, bottom - s.down * 0.6)
 }
 
 function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cell: Cell, solid: boolean, look: Look): string {
   const art = artFor(prop)
-  const unit = solid ? PROP_UNIT : U
+  const unit = solid ? unitFor(prop) : U
   const w = widthOf(art.rows) * unit
   const h = art.rows.length * unit
   const x = Math.round(((sw - w) * prop.x) / 100)
@@ -394,7 +385,7 @@ function propSvg(prop: FablesProp, floor: number, index: number, sw: number, cel
   const cx = x + w / 2
   const cy = y + h / 2
   const shade = solid && prop.y === 'ground' ? `<ellipse cx="${n(cx + 1)}" cy="${n(floor)}" rx="${n(w * 0.55)}" ry="2.6" fill="black" opacity=".28"/>` : ''
-  const body = solid ? stackedProp(art, `fp${index}`, cx, y + h, prop.motion) : `<g transform="translate(${x} ${n(y)}) scale(${U})">${pixelPaths(art.rows, art.colorOf, cell)}</g>`
+  const body = solid ? stackedProp(art, `fp${index}`, cx, y + h, prop.motion, unit) : `<g transform="translate(${x} ${n(y)}) scale(${U})">${pixelPaths(art.rows, art.colorOf, cell)}</g>`
   const slow = n(2 + (index % 3) * 0.7)
   let motion = ''
   switch (prop.motion) {
@@ -670,7 +661,7 @@ export function sceneToSvg(
   const ground = tint('ground', stage.ground)
   // What the speech bubble keeps clear of: the props still drawn, their labels, the chapter tag.
   const avoid = (propCount: number): Rect[] => [
-    ...scene.props.slice(0, propCount).flatMap(p => propRects(p, stage.floor, sw, rich ? PROP_UNIT : U)),
+    ...scene.props.slice(0, propCount).flatMap(p => propRects(p, stage.floor, sw, rich ? unitFor(p) : U)),
     ...(scene.title ? [{ x: 0, y: 0, w: scene.title.length * look.charW + 34 + (look.inset ?? 0), h: 16 + (look.inset ?? 0) }] : []),
     ...stage.keep,
   ]
@@ -690,6 +681,7 @@ export function sceneToSvg(
     // Ground-level scenery goes down before anything that stands on it.
     paint('back', stage.near) +
     (look.foreFilter ? `<g filter="url(#${look.foreFilter})">${fore(withDust, propCount)}</g>` : fore(withDust, propCount)) +
+    stage.lens +
     (look.over?.(sw, H, GROUND_Y) ?? '') +
     (scene.title ? title(scene.title, look.titleColor ?? accent, look) : '') +
     caption(scene.caption, plan.endX, plan.endY, idPrefix, sw, look, avoid(propCount)) +

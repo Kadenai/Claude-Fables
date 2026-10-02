@@ -84,7 +84,7 @@ describe('model replies', () => {
 
   test('the prompt stays bounded however long the session runs', () => {
     const log = Array.from({ length: 14 }, () => ({ kind: 'tool' as const, text: 'y'.repeat(240) }))
-    const story = Array.from({ length: 4 }, () => ({ backdrop: 'sea', caption: 'z'.repeat(90) }))
+    const story = Array.from({ length: 4 }, () => ({ backdrop: 'space', caption: 'z'.repeat(90) }))
     expect(buildPrompt({ ask: 'q'.repeat(300), log, story }).length).toBeLessThan(6000)
   })
 })
@@ -107,7 +107,7 @@ describe('sceneToSvg', () => {
 
   test('the richest possible scene fits the Svg element', () => {
     const big = { pixels: Array.from({ length: 16 }, (_, y) => Array.from({ length: 16 }, (_, x) => 'abcdefgh'[(x * 7 + y * 3) % 8]).join('')), colors: Object.fromEntries([...'abcdefgh'].map((k, i) => [k, `#${i}${i}${i}`])) }
-    for (const backdrop of ['forest', 'sea', 'space', 'city', 'desert', 'volcano', 'rails', 'lab', 'night']) {
+    for (const backdrop of ['forest', 'space', 'city', 'desert', 'volcano', 'rails', 'lab', 'night']) {
       const scene = parseScene({
         ...GOOD,
         backdrop,
