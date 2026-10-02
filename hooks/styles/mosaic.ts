@@ -104,6 +104,10 @@ const scenery = () =>
       opacity: (_f, v) => (v >= 0.35 ? 1 : 0),
       lineless: 0.6,
       faint: 'hide',
+      // A pool of lamplight is set in ochre and cream stones, the cream at its heart.
+      pool: e =>
+        `<ellipse cx="${n(e.cx)}" cy="${n(e.cy)}" rx="${n(e.rx)}" ry="${n(e.ry)}" fill="${P.ochre}" opacity=".85"/>` +
+        `<ellipse cx="${n(e.cx)}" cy="${n(e.cy)}" rx="${n(e.rx * 0.55)}" ry="${n(e.ry * 0.55)}" fill="${P.cream}"/>`,
       redraw: {
         lens: () => '',
         // No reflections: the street and the floor stay plain.

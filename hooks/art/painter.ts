@@ -38,9 +38,21 @@ export type Rules = {
   post?: (svg: string, family: Family, depth: number) => string
   /** Roles or whole families drawn the style's own way. */
   redraw?: Partial<Record<Role | Family, (svg: string, c: Ctx) => string>>
+  /**
+   * The pool a lamp lays on the ground, in the style's terms. The lit painting's
+   * cone of light is not drawn; its pool is, and by default as a flat glow in the lamp's ink.
+   */
+  pool?: (e: Pool, depth: number) => string
   /** Ink for the shapes of the lit painting's templates (firs, clumps, ferns), drawn once in definitions. */
   templateFamily?: Family
 }
+
+export type Pool = { cx: number; cy: number; rx: number; ry: number }
+
+/** The lit painting's pools of lamplight: soft warm ellipses on the ground. */
+const POOL = /<ellipse\b(?=[^>]*\sfilter="url\(#sc-soft\)")(?=[^>]*\scx="([\d.-]+)")(?=[^>]*\scy="([\d.-]+)")(?=[^>]*\srx="([\d.-]+)")(?=[^>]*\sry="([\d.-]+)")[^>]*\/>/g
+/** And its cones of light, which a style leaves out. */
+const CONE = /<path\b[^>]*fill="url\(#sc-cone\)"[^>]*\/>/g
 
 const ANIM = /<(animate|animateTransform|animateMotion)\b[^>]*\/>/g
 
@@ -61,6 +73,16 @@ export function painter(rules: Rules, suffix: string): Painter {
     return `url(#${nid})`
   }
   let pending = ''
+
+  /** A pool of lamplight as a flat glow: a broad faint ellipse with a brighter heart, in the lamp's ink. */
+  const pool = (e: Pool, depth: number): string => {
+    const lamp = rules.ink('#ffd8a0', 'lamp', depth, 'fill')
+    const at = `cx="${+e.cx.toFixed(1)}" cy="${+e.cy.toFixed(1)}"`
+    return (
+      `<ellipse ${at} rx="${+e.rx.toFixed(1)}" ry="${+e.ry.toFixed(1)}" fill="${lamp}" opacity=".28"/>` +
+      `<ellipse ${at} rx="${+(e.rx * 0.55).toFixed(1)}" ry="${+(e.ry * 0.55).toFixed(1)}" fill="${lamp}" opacity=".4"/>`
+    )
+  }
 
   const general = (svg: string, family: Family, depth: number) => {
     for (const [id, g] of gradients(svg)) known.set(id, g)
@@ -91,6 +113,16 @@ export function painter(rules: Rules, suffix: string): Painter {
   return {
     el(role, svg, meta = {}) {
       const info = ROLES[role]
+      if (role === 'lab.cone') return ''
+      let lit = ''
+      if (role === 'city.lamps' || role === 'lab.pool') {
+        // Light on the ground is drawn by every style; the comb of light above it is not.
+        svg = svg.replace(CONE, '').replace(POOL, (_all, cx: string, cy: string, rx: string, ry: string) => {
+          lit += (rules.pool ?? pool)({ cx: +cx, cy: +cy, rx: +rx, ry: +ry }, info.depth)
+          return ''
+        })
+        if (!svg.trim()) return lit
+      }
       const c: Ctx = {
         role,
         family: info.family,
@@ -107,9 +139,9 @@ export function painter(rules: Rules, suffix: string): Painter {
         const out = own(svg, c)
         const defs = pending
         pending = ''
-        return (defs ? `<defs>${defs}</defs>` : '') + out
+        return lit + (defs ? `<defs>${defs}</defs>` : '') + out
       }
-      return general(svg, info.family, info.depth)
+      return lit + general(svg, info.family, info.depth)
     },
     defs(svg) {
       for (const [id, g] of gradients(svg)) known.set(id, g)

@@ -66,6 +66,10 @@ const scenery = () =>
       post: (svg, family, depth) => `<g opacity="${n(family === 'rock' || family === 'land' || family === 'built' ? 0.92 : strength(depth))}">${svg}</g>`,
       lineless: 0.6,
       faint: 'hide',
+      // A pool of lamplight is a smear of yellow ochre rubbed into the wall.
+      pool: e =>
+        `<ellipse cx="${n(e.cx)}" cy="${n(e.cy)}" rx="${n(e.rx)}" ry="${n(e.ry)}" fill="${YOCH}" opacity=".55"/>` +
+        `<ellipse cx="${n(e.cx)}" cy="${n(e.cy)}" rx="${n(e.rx * 0.5)}" ry="${n(e.ry * 0.5)}" fill="${OCH_P}" opacity=".7"/>`,
       redraw: {
         sky: () => '',
         lens: () => '',

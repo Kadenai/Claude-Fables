@@ -70,6 +70,10 @@ const scenery = () =>
       lineless: 0.75,
       faint: 'hide',
       opacity: (_f, v) => (v >= 0.4 ? 1 : v),
+      // A pool of lamplight is a cream plane parted from the ground by a cut, ringed as the sun is.
+      pool: e =>
+        `<ellipse cx="${n(e.cx)}" cy="${n(e.cy)}" rx="${n(e.rx)}" ry="${n(e.ry)}" fill="none" stroke="${SILK}" stroke-width="1.2"/>` +
+        `<ellipse cx="${n(e.cx)}" cy="${n(e.cy)}" rx="${n(e.rx - 1.4)}" ry="${n(Math.max(0.6, e.ry - 0.9))}" fill="${CREAM}" stroke="${SILK}" stroke-width=".55"/>`,
       redraw: {
         sky: () => '',
         lens: () => '',

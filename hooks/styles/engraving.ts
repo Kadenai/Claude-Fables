@@ -171,6 +171,10 @@ const scenery = () =>
       line: (family, depth) => (UNLINED.includes(family) ? '' : `stroke="${INK}" stroke-width="${n(0.18 + depth * 0.4)}" stroke-linejoin="round"`),
       lineless: 0.6,
       faint: 'hide',
+      // A pool of lamplight is left as bare paper, its edge flicked in short strokes of the graver.
+      pool: e =>
+        `<ellipse cx="${n(e.cx)}" cy="${n(e.cy)}" rx="${n(e.rx)}" ry="${n(e.ry)}" fill="${PAPER}" stroke="${INK}" stroke-width=".45" stroke-dasharray="2 1.6"/>` +
+        `<ellipse cx="${n(e.cx)}" cy="${n(e.cy)}" rx="${n(e.rx * 0.6)}" ry="${n(e.ry * 0.6)}" fill="none" stroke="${INK}" stroke-width=".3" stroke-dasharray=".8 2.4"/>`,
       redraw: {
         sky: (svg, c) => {
           const g = c.gradient(svg)
