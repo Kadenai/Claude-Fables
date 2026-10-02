@@ -1,6 +1,7 @@
 import type { FablesProp, FablesScene } from '../types'
 
 import { type FacePaint, motionSvg } from './hero3d'
+import { MONOCRAFT, MONOCRAFT_BOLD } from './monocraft'
 import { richBackdrop } from './scenery'
 import { type Cell, type Layer, type Look, lightness, lookFor, remapColors } from './looks'
 import { HERO_FRAMES, PALETTE, SPRITES, type SpriteName } from './sprites'
@@ -478,6 +479,10 @@ type P = [number, number]
 
 /** The cartoon paper the caption is cut from: a soft drop shadow, an ink outline, then the paper. */
 export type Tone = 'work' | 'trouble' | 'milestone'
+const MONO_FONT = "Monocraft, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+const MONO_FACE =
+  `<defs><style>@font-face{font-family:Monocraft;font-weight:400;src:url(data:font/woff2;base64,${MONOCRAFT}) format("woff2")}` +
+  `@font-face{font-family:Monocraft;font-weight:700;src:url(data:font/woff2;base64,${MONOCRAFT_BOLD}) format("woff2")}</style></defs>`
 const CARD = '#f6f1e7'
 const CARD_INK = '#2b2420'
 const paper = (shape: string) =>
@@ -603,7 +608,7 @@ function propRects(prop: FablesProp, floor: number, sw: number, unit: number): R
  */
 function caption(
   text: string,
-  hero: { startX: number; x: number; y: number; arrive: number },
+  hero: { startX: number; x: number; y: number; arrive: number; jump: number; sway: number },
   idPrefix: string,
   sw: number,
   look: Look,
@@ -615,48 +620,64 @@ function caption(
   const ink = onPaper ? CARD_INK : look.caption.ink
   const heroX = hero.x
   const heroY = hero.y
-  const heroBox: Rect = { x: heroX - 4, y: heroY - 8, w: HERO_W + 8, h: HERO_H + 8 }
-  const top = heroY + HERO_H - MODEL_STAGE_H
+  // Claude's box, reaching as high as Claude jumps.
+  const heroBox: Rect = { x: heroX - 4 - hero.sway, y: heroY - 8 - hero.jump, w: HERO_W + 8 + hero.sway * 2, h: HERO_H + 12 + hero.jump }
+  const top = heroY + HERO_H - MODEL_STAGE_H - hero.jump
   const list = onPaper ? words(text, tone) : text.split(' ').filter(Boolean).map((core): Word => ({ lead: '', core, tail: '', kind: 'plain' }))
+  // On paper the caption is set in Monocraft, whose pixel is a ninth of its size: at 9 units
+  // its pixels land on whole device pixels in the band. Elsewhere the look's own type.
+  const type = onPaper ? { font: MONO_FONT, size: 9, charW: 6, line: 12, base: 13 } : { font: look.font, size: 9.5, charW: look.charW, line: 11, base: 12 }
+  // Claude's path while it walks: the bubble must stay clear of Claude at every point of it.
+  const KEYS = [0, 0.2, 0.4, 0.6, 0.8, 1]
+  const heroAt = (k: number) => hero.startX + (heroX - hero.startX) * k
+  const boxAt = (k: number): Rect => ({ ...heroBox, x: heroAt(k) - 4 - hero.sway })
+  const clampX = (v: number, w: number) => Math.min(sw - w - 2, Math.max(2, v))
   // A narrower wrap, taller, is tried when the wide one finds no clear place.
-  let best = { x: 2, y: 4, score: Infinity, lines: [] as Word[][], w: 0, h: 0 }
-  for (const [wi, width] of [34, 26, 20].entries()) {
+  let best = { x: 2, y: 4, ox: 0, score: Infinity, lines: [] as Word[][], w: 0, h: 0 }
+  for (const [wi, width] of [32, 25, 19].entries()) {
     const lines = wrapWords(list, width).slice(0, wi === 0 ? 3 : 4)
-    const w = Math.ceil(Math.max(...lines.map(lineLen)) * look.charW + 14)
-    const h = lines.length * 11 + 8
+    const w = Math.ceil(Math.max(...lines.map(lineLen)) * type.charW + 14)
+    const h = lines.length * type.line + 7
     const beside = Math.min(GROUND_Y - h - 4, Math.max(4, top - 4))
     const above = top - h - 8
+    const below = heroY + HERO_H + 9
+    // Where the bubble sits relative to Claude: beside it at head height, or above it.
     const spots: P[] = [
-      [heroX + HERO_W + 8, beside],
-      [heroX - w - 8, beside],
-      [heroX + HERO_W / 2 - w / 2, above],
-      [heroX + HERO_W - 10, above],
-      [heroX - w + 10, above],
+      [HERO_W + 8, beside],
+      [-w - 8, beside],
+      [HERO_W / 2 - w / 2, above],
+      [HERO_W - 10, above],
+      [-w + 10, above],
+      // Under Claude, for when it flies and there is no room above it.
+      [HERO_W / 2 - w / 2, below],
     ]
-    for (const [si, [x0, y0]] of spots.entries()) {
-      const x = Math.min(sw - w - 2, Math.max(2, x0))
-      const y = Math.min(GROUND_Y - h - 4, Math.max(4, y0))
-      const r = { x, y, w, h }
-      const score = overlap(r, heroBox) * 4 + avoid.reduce((t, a) => t + overlap(r, a) * 3, 0) + si * 6 + wi * 40
-      if (score < best.score) best = { x, y, score, lines, w, h }
+    for (const [si, [ox, y0]] of spots.entries()) {
+      const y = y0 === below ? Math.min(H - h - 3, y0) : Math.min(GROUND_Y - h - 4, Math.max(4, y0))
+      const x = clampX(heroX + ox, w)
+      // Covering Claude at any moment is ruled out in all but name; the rest is preference.
+      const covers = KEYS.reduce((t, k) => t + overlap({ x: clampX(heroAt(k) + ox, w), y, w, h }, boxAt(k)), 0)
+      const score = covers * 50 + avoid.reduce((t, a) => t + overlap({ x, y, w, h }, a) * 3, 0) + si * 6 + wi * 40
+      if (score < best.score) best = { x, y, ox, score, lines, w, h }
     }
   }
-  const { lines, w, h, x, y } = best
+  const { lines, w, h, x, y, ox } = best
   let delay = 0.2
   const rows = lines
     .map((line, i) => {
       const dur = Math.max(0.2, lineLen(line) * 0.03)
       const id = `${idPrefix}${i}`
       const reveal =
-        `<clipPath id="${id}"><rect x="${n(x)}" y="${n(y + 1 + i * 11)}" width="0" height="14">` +
+        `<clipPath id="${id}"><rect x="${n(x)}" y="${n(y + 2 + i * type.line)}" width="0" height="${type.line + 2}">` +
         `<animate attributeName="width" from="0" to="${w}" dur="${n(dur)}s" begin="${n(delay)}s" fill="freeze"/></rect></clipPath>`
       delay += dur
-      return reveal + `<text clip-path="url(#${id})" x="${n(x + 7)}" y="${n(y + 12 + i * 11)}" font-family="${look.font}" font-size="9.5" fill="${ink}">${lineSvg(line)}</text>`
+      return reveal + `<text clip-path="url(#${id})" x="${n(x + 7)}" y="${n(y + type.base + i * type.line)}" font-family="${type.font}" font-size="${type.size}" fill="${ink}">${lineSvg(line)}</text>`
     })
     .join('')
-  // While Claude walks, the bubble walks with it, held inside the stage.
-  const dx = Math.min(sw - w - 2, Math.max(2, x + hero.startX - heroX)) - x
-  const follow = dx && hero.arrive ? ` transform="translate(${n(dx)} 0)"><animateTransform attributeName="transform" type="translate" values="${n(dx)} 0;0 0" dur="${n(hero.arrive)}s" fill="freeze"/` : ''
+  // While Claude walks, the bubble walks with it along the same path, held inside the stage.
+  const follow =
+    hero.arrive && hero.startX !== heroX
+      ? ` transform="translate(${n(clampX(heroAt(0) + ox, w) - x)} 0)"><animateTransform attributeName="transform" type="translate" values="${KEYS.map(k => `${n(clampX(heroAt(k) + ox, w) - x)} 0`).join(';')}" keyTimes="${KEYS.join(';')}" dur="${n(hero.arrive)}s" fill="freeze"/`
+      : ''
   const fade = `<animate attributeName="opacity" values="0;1" dur=".2s" fill="freeze"/>`
   if (onPaper) {
     const hx = heroX + HERO_W / 2
@@ -676,7 +697,7 @@ function caption(
     const shape =
       `<rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="6"/>` +
       `<path d="M${n(base[0][0])} ${n(base[0][1])}L${n(tip[0])} ${n(tip[1])}L${n(base[1][0])} ${n(base[1][1])}z"/>`
-    return `<g data-part="speech" data-tone="${tone}"${follow || ''}>${paper(shape)}${rows}${fade}</g>`
+    return `<g data-part="speech" data-tone="${tone}"${follow || ''}>${MONO_FACE}${paper(shape)}${rows}${fade}</g>`
   }
   return `<g data-part="speech"${follow || ''}><rect x="${n(x)}" y="${n(y)}" width="${w}" height="${h}" rx="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>${rows}${fade}</g>`
 }
@@ -756,8 +777,8 @@ export function sceneToSvg(
     (look.foreFilter ? `<g filter="url(#${look.foreFilter})">${fore(withDust, propCount)}</g>` : fore(withDust, propCount)) +
     stage.lens +
     (look.over?.(sw, H, GROUND_Y) ?? '') +
-    (scene.title ? title(scene.title, look.titleColor ?? (rich ? '#efe6d2' : accent), look) : '') +
-    caption(scene.caption, { startX: plan.startX, x: plan.endX, y: plan.endY, arrive: plan.arrive }, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined) +
+    (scene.title ? title(scene.title, look.titleColor ?? (rich ? '#efe6d2' : accent), rich ? { ...look, font: MONO_FONT, charW: 6.3 } : look) : '') +
+    caption(scene.caption, { startX: plan.startX, x: plan.endX, y: plan.endY, arrive: plan.arrive, jump: scene.hero.action === 'celebrate' ? 16 : scene.hero.action === 'fly' ? 2 : 0, sway: scene.hero.action === 'inspect' ? 2 * U : 0 }, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined) +
     `</svg>`
 
   const propsShown = props.length

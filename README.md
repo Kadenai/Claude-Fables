@@ -94,7 +94,7 @@ The band's frame takes at most 131,072 characters, so repeated things are drawn 
 
 The story is told in words. Props aren't drawn on the scene, so nothing competes with Claude and the caption, and a slight blur over the scenery keeps both reading first against any backdrop.
 
-The caption is one standard bubble of cartoon paper with a tail pointing at Claude. It stays with Claude: it takes the spot just beside or just above Claude that covers the least of it, the chapter tag and the scene's focal points, and while Claude walks it walks along. Inside it, kinds of words are set apart, so a caption reads like a terminal:
+The caption is one standard bubble of cartoon paper with a tail pointing at Claude, set in [Monocraft](https://github.com/IdreesInc/Monocraft) by Idrees Hassan (SIL Open Font License, `fonts/Monocraft-OFL.txt`), embedded as a 5 KB subset so it reads the same everywhere. It stays with Claude and never covers it: it takes a spot just beside, above or (for a flying Claude) below, checked against Claude's whole path, jumps and sways included, and while Claude walks the bubble walks along. Inside it, kinds of words are set apart, so a caption reads like a terminal:
 
 | Kind | Example | Looks like |
 | --- | --- | --- |

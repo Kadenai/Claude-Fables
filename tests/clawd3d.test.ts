@@ -148,6 +148,9 @@ describe('composition', () => {
     expect(speech).toContain('<tspan fill="#7b3fa0">daysInMonth()</tspan>')
     expect(speech).toContain('<tspan fill="#c4613f">o_O</tspan>')
     expect(speech).not.toContain('`')
+    // Set in the embedded Monocraft, regular and bold.
+    expect(speech.match(/@font-face\{font-family:Monocraft;font-weight:(400|700);src:url\(data:font\/woff2;base64,/g)?.length).toBe(2)
+    expect(speech).toContain('font-family="Monocraft,')
     // It starts beside where Claude starts, and slides along as Claude walks.
     expect(speech).toMatch(/^data-part="speech" data-tone="trouble" transform="translate\(-[\d.]+ 0\)"><animateTransform attributeName="transform" type="translate"/)
   })
