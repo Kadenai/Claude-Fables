@@ -1829,7 +1829,7 @@ const SCENES: Record<string, (c: Ctx) => Scene> = { forest, space, city, desert,
  * `lean` thins the scene's fine detail (stars, motes, rain) for a scene that
  * would not otherwise fit the Svg element.
  */
-export function richBackdrop(scene: FablesScene, rand: Rand, sw: number, ground: number, _w: number, lean = false): Stage {
+export function richBackdrop(scene: FablesScene, rand: Rand, sw: number, ground: number, _w: number, lean = false, soft = false): Stage {
   const make = SCENES[scene.backdrop] ?? night
   const s = make({ rand, sw, ground, detail: lean ? 0.4 : 1 })
   const floor = s.floor ?? ground
@@ -1845,9 +1845,11 @@ export function richBackdrop(scene: FablesScene, rand: Rand, sw: number, ground:
       `<filter id="sc-soft" x="-20%" y="-200%" width="140%" height="500%"><feGaussianBlur stdDeviation="1.4"/></filter>` +
       LIGHT +
       `<filter id="sc-glow" filterUnits="userSpaceOnUse" x="-20" y="-20" width="${sw + 40}" height="${H + 40}"><feGaussianBlur stdDeviation="2.4"/><feComponentTransfer><feFuncA type="linear" slope=".7"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
+      // Drawn smooth, a slight softness over all the scenery keeps Claude and the caption reading first.
+      (soft ? `<filter id="sc-calm" filterUnits="userSpaceOnUse" x="0" y="0" width="${sw}" height="${H}"><feGaussianBlur stdDeviation=".6" edgeMode="duplicate"/></filter>` : '') +
       `</defs>` +
-      clip(s.back),
-    near: clip(s.near),
+      clip(soft ? `<g filter="url(#sc-calm)">${s.back}</g>` : s.back),
+    near: clip(soft ? `<g filter="url(#sc-calm)">${s.near}</g>` : s.near),
     keep: (s.keep ?? []).map(([x, y, r]) => ({ x: x - r, y: y - r, w: r * 2, h: r * 2 })),
     lens: clip(
       `<defs><filter id="sc-grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="11"/><feColorMatrix type="saturate" values="0"/></filter>` +

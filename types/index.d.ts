@@ -49,6 +49,8 @@ declare module 'claude-code' {
     fables: {
       scene: FablesScene | null
       enabled: boolean
+      /** Draw the stage as pixel art (the default), or smooth. */
+      pixelArt: boolean
     }
   }
 }

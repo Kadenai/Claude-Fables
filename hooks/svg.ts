@@ -724,21 +724,33 @@ export function stageWidth(width: number, height: number): number {
 const PIXEL = 2
 /**
  * Turns everything drawn into pixel art, the scenery and Claude alike, without
- * redrawing any of it: one sample is taken at the corner of every PIXEL square
+ * redrawing any of it: one sample is taken at the middle of every PIXEL square
  * (a tiny dot of a tiled grid, cut out of the drawing) and spread over its whole
  * square. The grid starts at the stage's corner, so pixels line up with it.
  */
-const PIXELIZE = (sw: number) => {
+const PIXELIZE = (sw: number, claude: Rect) => {
   const dot = 0.4
+  // The grid is seeded with one dot inside the filter's region, on a whole pixel from the stage's corner.
+  const sample = (from: string, at: Rect) => {
+    const gx = Math.ceil(at.x / PIXEL) * PIXEL
+    const gy = Math.ceil(at.y / PIXEL) * PIXEL
+    return (
+      `<feFlood x="${n(gx + (PIXEL - dot) / 2)}" y="${n(gy + (PIXEL - dot) / 2)}" width="${dot}" height="${dot}" flood-color="black"/>` +
+      `<feComposite x="${n(gx)}" y="${n(gy)}" width="${PIXEL}" height="${PIXEL}"/><feTile result="grid"/>` +
+      `<feComposite in="${from}" in2="grid" operator="in"/>` +
+      `<feMorphology operator="dilate" radius="${n((PIXEL - dot) / 2)}"/>`
+    )
+  }
+  const region = (r: Rect) => `filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="${n(r.x)}" y="${n(r.y)}" width="${n(r.w)}" height="${n(r.h)}"`
   return (
-    `<filter id="sc-pixelize" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="0" y="0" width="${sw}" height="${H}" color-interpolation-filters="sRGB">` +
-    // A little softening first, so each sample stands for its whole square, as a real downscale would.
-    `<feGaussianBlur in="SourceGraphic" stdDeviation="${n(PIXEL * 0.32)}" edgeMode="duplicate" result="soft"/>` +
-    `<feFlood x="0" y="0" width="${dot}" height="${dot}" flood-color="black"/>` +
-    `<feComposite width="${PIXEL}" height="${PIXEL}"/><feTile result="grid"/>` +
-    `<feComposite in="soft" in2="grid" operator="in"/>` +
-    `<feMorphology operator="dilate" radius="${n((PIXEL - dot) / 2)}"/>` +
-    `<feOffset dx="${n((PIXEL - dot) / 2)}" dy="${n((PIXEL - dot) / 2)}"/></filter>`
+    // Claude first, on the same grid: softened a touch so features finer than a pixel, its
+    // eyes, come through as whole pixels. Being one small flat color, it loses nothing to it.
+    `<filter id="sc-pixelize-claude" ${region(claude)} color-interpolation-filters="sRGB">` +
+    `<feGaussianBlur in="SourceGraphic" stdDeviation="${n(PIXEL * 0.3)}"/>` +
+    // Its outline stays hard: a pixel is Claude or it is not.
+    `<feComponentTransfer result="soft"><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>${sample('soft', claude)}</filter>` +
+    // The rest sampled crisp, at the middle of each square, so colors stay as rich as drawn.
+    `<filter id="sc-pixelize" ${region({ x: 0, y: 0, w: sw, h: H })} color-interpolation-filters="sRGB">${sample('SourceGraphic', { x: 0, y: 0, w: sw, h: H })}</filter>`
   )
 }
 
@@ -752,7 +764,7 @@ const PIXELIZE = (sw: number) => {
  */
 export function sceneToSvg(
   scene: FablesScene,
-  options: { width?: number; height?: number; look?: string; figure?: 'auto' | 'pixel' | '3d' } = {},
+  options: { width?: number; height?: number; look?: string; figure?: 'auto' | 'pixel' | '3d'; pixelArt?: boolean } = {},
 ): string {
   const sw = options.width && options.height ? stageWidth(options.width, options.height) : W
   const width = options.width ?? sw
@@ -765,7 +777,9 @@ export function sceneToSvg(
   const figure: Figure = wants === '3d' ? { kind: '3d', paint: look.facePaint ?? 'solid' } : { kind: 'pixel', cell: look.cell }
   // The 3D Claude gets scenery and props with depth to match; the pixel sprite keeps the flat pixel stage.
   const rich = figure.kind === '3d'
-  const stageAt = (lean: boolean) => (rich ? richBackdrop(scene, rng(`${scene.backdrop}|${scene.caption}|stage`), sw, GROUND_Y, W, lean) : flatStage(backdrop(scene, rand, sw)))
+  // Pixel art (the default) pixelizes the whole stage crisply; without it the scenery takes a soft blur instead.
+  const pixelArt = rich && options.pixelArt !== false
+  const stageAt = (lean: boolean) => (rich ? richBackdrop(scene, rng(`${scene.backdrop}|${scene.caption}|stage`), sw, GROUND_Y, W, lean, !pixelArt) : flatStage(backdrop(scene, rand, sw)))
   let stage = stageAt(false)
   const dust = particles(scene, rand, sw)
   // The rich stage tells the story in words alone: no props stand about the scene.
@@ -781,8 +795,10 @@ export function sceneToSvg(
     ...(scene.title ? [{ x: 0, y: 0, w: scene.title.length * look.charW + 34 + (look.inset ?? 0), h: 16 + (look.inset ?? 0) }] : []),
     ...stage.keep,
   ]
+  // Everywhere Claude goes, jumps and digs included: the region its own pixelizing covers.
+  const claudeBox: Rect = { x: Math.min(plan.startX, plan.endX) - 30, y: plan.endY - 40, w: Math.abs(plan.endX - plan.startX) + HERO_W + 60, h: HERO_H + 56 }
   const fore = (withDust: boolean, propCount: number) =>
-    paint('fore', (withDust ? dust : '') + props.slice(0, propCount).join('') + plan.svg)
+    paint('fore', (withDust ? dust : '') + props.slice(0, propCount).join('') + (pixelArt ? `<g filter="url(#sc-pixelize-claude)">${plan.svg}</g>` : plan.svg))
 
   // Sky and ground run far past the stage, so a box the stage could not match
   // (past MIN_W or MAX_W) shows more sky and ground instead of the frame's page.
@@ -791,7 +807,7 @@ export function sceneToSvg(
     `shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" style="display:block;background:${ground}">` +
     (look.defs ? `<defs>${look.defs}</defs>` : '') +
     `<rect x="${-sw * 4}" y="${-H * 4}" width="${sw * 9}" height="${H * 4 + GROUND_Y}" fill="${sky}"/>` +
-    (rich ? `<defs>${PIXELIZE(sw)}</defs><g filter="url(#sc-pixelize)">` : '') +
+    (pixelArt ? `<defs>${PIXELIZE(sw, claudeBox)}</defs><g filter="url(#sc-pixelize)">` : '') +
     (look.under?.(sw, H, GROUND_Y) ?? '') +
     paint('back', stage.back) +
     `<rect x="${-sw * 4}" y="${stage.groundTop}" width="${sw * 9}" height="${H * 4}" fill="${ground}"/>` +
@@ -799,7 +815,7 @@ export function sceneToSvg(
     paint('back', stage.near) +
     (look.foreFilter ? `<g filter="url(#${look.foreFilter})">${fore(withDust, propCount)}</g>` : fore(withDust, propCount)) +
     stage.lens +
-    (rich ? '</g>' : '') +
+    (pixelArt ? '</g>' : '') +
     (look.over?.(sw, H, GROUND_Y) ?? '') +
     (scene.title ? title(scene.title, look.titleColor ?? (rich ? '#efe6d2' : accent), rich ? { ...look, font: MONO_FONT, charW: 6.3 } : look) : '') +
     caption(scene.caption, { startX: plan.startX, x: plan.endX, y: plan.endY, arrive: plan.arrive, jump: scene.hero.action === 'celebrate' ? 16 : scene.hero.action === 'fly' ? 2 : 0, sway: scene.hero.action === 'inspect' ? 2 * U : 0 }, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined) +

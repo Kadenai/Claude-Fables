@@ -60,6 +60,7 @@ To try it from the terminal for one session instead, run `claude --plugin-dir ~/
 ## Use
 
 - `/fables`: toggle the mod on or off. `/fables on` and `/fables off` also work. The setting is remembered across sessions.
+- `/fables pixel`: toggle pixel art (on by default). `/fables pixel on` and `/fables pixel off` also work, and it is remembered too.
 - **Scene model:** Sonnet by default. You can switch to `haiku` (cheaper, faster) or `opus` in the config menu, or under `pluginConfigs.fables.model` in settings.
 
 Every scene is one small Sonnet request, so this costs a few requests per minute while Claude is working.
@@ -94,7 +95,7 @@ The band's frame takes at most 131,072 characters, so repeated things are drawn 
 
 The story is told in words. Props aren't drawn on the scene, so nothing competes with Claude and the caption.
 
-The whole stage, scenery and Claude together, goes through a pixelizer: one SVG filter that softens the drawing a touch, samples it once every two stage units and spreads each sample over its square, so everything reads as pixel art without any of it being redrawn. The grid starts at the stage's corner, so the pixels line up. The caption sits above it, already in pixel type, so it stays sharp.
+With pixel art on (the default), the whole stage, scenery and Claude together, goes through a pixelizer: one SVG filter that samples the drawing at the middle of every two-unit square and spreads each sample over its square, so everything reads as pixel art without any of it being redrawn, and no blur washes the colors out. The grid starts at the stage's corner, so the pixels line up. Claude alone is softened a touch on the same grid first, so its eyes, finer than a pixel, come through as whole pixels, and its outline is snapped hard. The caption sits above it all, already in pixel type, so it stays sharp. With pixel art off, scenes are drawn smooth and the scenery takes a slight blur instead, so Claude and the caption read first.
 
 The caption is one standard bubble of cartoon paper with a tail pointing at Claude, set in [Monocraft](https://github.com/IdreesInc/Monocraft) by Idrees Hassan (SIL Open Font License, `fonts/Monocraft-OFL.txt`), embedded as a 5 KB subset so it reads the same everywhere. It stays with Claude and never covers it: it takes a spot just beside, above or (for a flying Claude) below, checked against Claude's whole path, jumps and sways included, and while Claude walks the bubble walks along. Inside it, kinds of words are set apart, so a caption reads like a terminal:
 

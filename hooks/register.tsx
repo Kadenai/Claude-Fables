@@ -9,8 +9,10 @@ import { H, sceneToSvg, W } from './svg'
 
 const scene = atom({ plugin: 'fables', key: 'scene' } as const, null)
 const enabled = atom({ plugin: 'fables', key: 'enabled' } as const, true)
+const pixelArt = atom({ plugin: 'fables', key: 'pixelArt' } as const, true)
 
 const STORE_ENABLED = 'enabled'
+const STORE_PIXEL = 'pixelArt'
 /**
  * Every scene is drawn in the default look with the 3D Claude. The other looks
  * (looks.ts) and the pixel Claude are paused while the scenes are perfected.
@@ -136,10 +138,12 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     n.isOn = (await $.store.get(STORE_ENABLED)) !== false
     await update($, enabled, () => n.isOn)
+    await update($, pixelArt, () => true)
+    if ((await $.store.get(STORE_PIXEL)) === false) await update($, pixelArt, () => false)
     await $.command.register({
       name: 'fables',
-      description: 'Claude Fables: turn the cartoons above the prompt on or off',
-      argumentHint: '[on|off]',
+      description: 'Claude Fables: turn the cartoons above the prompt on or off, or switch pixel art',
+      argumentHint: '[on|off|pixel [on|off]]',
     })
     $.clock.every(1000, () => void tick($, n))
     return next(e)
@@ -149,6 +153,13 @@ export const register: Register = (on, options) => {
     const arg = e.args.trim().toLowerCase()
     if (/^(style|styles|figure)\b/.test(arg)) {
       return { text: 'Styles are paused for now: Claude Fables draws every scene in its default look.' }
+    }
+    const px = /^pixel(?:\s+(on|off))?$/.exec(arg)
+    if (px) {
+      const value = px[1] === 'on' ? true : px[1] === 'off' ? false : !(await read($, pixelArt))
+      await $.store.set(STORE_PIXEL, value)
+      await update($, pixelArt, () => value)
+      return { text: value ? 'Pixel art is on: the whole scene is drawn in crisp pixels.' : 'Pixel art is off: scenes are drawn smooth.' }
     }
     const value = arg === 'on' ? true : arg === 'off' ? false : !n.isOn
     await setOn($, n, value)
@@ -210,7 +221,7 @@ export const register: Register = (on, options) => {
     const { width, height } = bandBox(e.props.bodyColumns)
     return (
       <Svg
-        source={sceneToSvg(current, { width, height, ...DRAWN })}
+        source={sceneToSvg(current, { width, height, ...DRAWN, pixelArt: await read($, pixelArt) })}
         alt={current.caption}
         width={width}
         height={height}
