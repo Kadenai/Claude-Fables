@@ -12,10 +12,26 @@ export type FablesHeroAction =
   | 'run'
   | 'swim'
   | 'fly'
+  | 'push'
+  | 'carry'
+  | 'sneak'
+  | 'jump'
+  | 'climb'
+  | 'tumble'
   | 'dig'
   | 'inspect'
   | 'celebrate'
   | 'think'
+  | 'build'
+  | 'panic'
+  | 'sleep'
+  | 'dance'
+  | 'spin'
+  | 'wave'
+  | 'point'
+  | 'peek'
+  | 'trip'
+  | 'shrug'
 
 export type FablesMotion = 'none' | 'bob' | 'drift' | 'shake' | 'fall' | 'spin' | 'blink' | 'scroll'
 
@@ -35,7 +51,8 @@ export type FablesProp = {
 export type FablesScene = {
   backdrop: FablesBackdrop
   palette: { sky?: string; ground?: string; accent?: string }
-  hero: { action: FablesHeroAction; from: number; to: number }
+  /** What Claude does, crossing from `from` to `to` (percent of the stage); `then`, what it does next, in place. */
+  hero: { action: FablesHeroAction; from: number; to: number; then?: FablesHeroAction }
   props: FablesProp[]
   particles?: { kind: FablesParticles; density: number }
   caption: string

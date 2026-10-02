@@ -3,7 +3,8 @@ import { describe, expect, test } from 'claude-code/testing'
 import { build, MODEL_H, MOTION_TIMING, type Motion, poseAt } from '../hooks/clawd3d'
 import { motionSvg } from '../hooks/hero3d'
 import { LOOK_NAMES } from '../hooks/looks'
-import { parseScene } from '../hooks/scene'
+import { SYSTEM as narratorSystem } from '../hooks/narrator'
+import { HERO_ACTIONS, parseScene } from '../hooks/scene'
 import { MAX_SVG, sceneToSvg } from '../hooks/svg'
 
 describe('the 3D Clawd', () => {
@@ -38,6 +39,45 @@ describe('the 3D Clawd', () => {
     }
   })
 
+  test('the new expressions draw: wide and focused pills, crossed dizzy eyes, worried brows', () => {
+    expect(build({ eyes: 'wide' }, 1).eyes.every(e => e.poly)).toBe(true)
+    expect(build({ eyes: 'focus' }, 1).eyes).toHaveLength(2)
+    expect(build({ eyes: 'dizzy' }, 1).eyes.filter(e => e.line)).toHaveLength(4)
+    const sad = build({ eyes: 'sad' }, 1).eyes
+    expect(sad.filter(e => e.poly)).toHaveLength(2)
+    expect(sad.filter(e => e.line)).toHaveLength(2)
+  })
+
+  test('tumbling, crouching and shoving keep Claude standing on the ground', () => {
+    for (const motion of ['tumble', 'sneak', 'sleep', 'peek', 'trip'] as const) {
+      for (let k = 0; k < MOTION_TIMING[motion].frames; k++) {
+        const m = build(poseAt(motion, k / MOTION_TIMING[motion].frames, 0.55), 1)
+        const ys = m.parts.flatMap(p => p.hull.map(q => q[1]))
+        expect(Math.max(...ys)).toBeLessThan(1.5)
+        expect(Math.max(...ys)).toBeGreaterThan(-0.5)
+      }
+    }
+  })
+
+  test('a move played once ends close to standing, so the next one takes over smoothly', () => {
+    for (const motion of Object.keys(MOTION_TIMING) as Motion[]) {
+      if (MOTION_TIMING[motion].kind !== 'once') continue
+      const end = { crouch: 0, pitch: 0, armL: 0.06, armR: 0.06, roll: 0, ...poseAt(motion, 0.999, 0) }
+      expect(end.crouch).toBeLessThan(0.15)
+      expect(Math.abs(end.pitch)).toBeLessThan(0.1)
+      expect(Math.abs(end.roll)).toBeLessThan(0.05)
+      expect(Math.max(end.armL, end.armR)).toBeLessThan(0.3)
+    }
+  })
+
+  test('every action the narrator may pick has a motion, and the narrator is told them all', () => {
+    for (const action of HERO_ACTIONS) {
+      expect(MOTION_TIMING[action as Motion]).toBeDefined()
+      expect(narratorSystem).toContain(`"${action}"`)
+    }
+    expect(narratorSystem).toContain('"then"')
+  })
+
   test('a loop bakes one frame per pose, each shown in its own slot', () => {
     const { svg, frames } = motionSvg('walk', { height: 40, cx: 26, floor: 36, yaw: 0.55 })
     expect(frames).toBe(MOTION_TIMING.walk.frames)
@@ -50,6 +90,27 @@ describe('figures in scenes', () => {
   const scene = parseScene({ backdrop: 'forest', hero: { action: 'walk', from: 80, to: 10 }, caption: 'Back to the start.' })
   if (!scene) throw new Error('expected a scene')
 
+  test('a second action is kept when known and dropped when not', () => {
+    const at = (then: unknown) => parseScene({ backdrop: 'lab', hero: { action: 'sneak', from: 0, to: 40, then }, caption: 'x' })?.hero
+    expect(at('peek')).toEqual({ action: 'sneak', from: 0, to: 40, then: 'peek' })
+    expect(at('moonwalk')).toEqual({ action: 'sneak', from: 0, to: 40 })
+    expect(at(undefined)).toEqual({ action: 'sneak', from: 0, to: 40 })
+  })
+
+  test('the second action takes over where the first ends: on arrival, after one play, after a loop', () => {
+    const svg = (hero: object) => sceneToSvg(parseScene({ backdrop: 'lab', hero, caption: 'x' })!, { look: 'original', figure: '3d', width: 640, height: 192 })
+    // Crossing 40% of 640 units at 25 a second: the peek begins on arrival.
+    const sneak = svg({ action: 'sneak', from: 0, to: 40, then: 'peek' })
+    expect(sneak).toMatch(/repeatDur="\d+(\.\d+)?s"/)
+    expect(sneak).toMatch(/begin="\d+(\.\d+)?s" repeatCount="indefinite"/)
+    // A trip plays once (2.2s), then Claude stands idle.
+    expect(svg({ action: 'trip', from: 30, to: 30 })).toContain('begin="2.2s"')
+    // A loop has two turns (2 x 3.2s of sleep) before the wave; the sleeper's z's show only until then.
+    const nap = svg({ action: 'sleep', from: 30, to: 30, then: 'wave' })
+    expect(nap).toContain('>z</text>')
+    expect(nap).toContain('<set attributeName="visibility" to="visible" end="6.4s"/>')
+  })
+
   test('the figure setting overrides the look', () => {
     const pixel = sceneToSvg(scene, { look: 'ukiyoe', figure: 'pixel' })
     const model = sceneToSvg(scene, { look: 'ukiyoe', figure: '3d' })
@@ -61,10 +122,11 @@ describe('figures in scenes', () => {
   test('every look fits the Svg element with either figure, at the widest stage', () => {
     for (const look of LOOK_NAMES) {
       for (const figure of ['pixel', '3d'] as const) {
-        for (const action of ['walk', 'celebrate']) {
+        // The heaviest Claude: a twelve-frame tumble handing over to a twelve-frame inspect.
+        for (const [action, then] of [['walk'], ['celebrate'], ['tumble', 'inspect'], ['trip', 'dance']]) {
           const rich = parseScene({
             backdrop: 'city',
-            hero: { action, from: 0, to: 60 },
+            hero: { action, from: 0, to: 60, then },
             props: Array.from({ length: 8 }, (_, i) => ({ sprite: 'server', x: i * 12, label: 'l'.repeat(18), motion: 'bob' })),
             particles: { kind: 'sparks', density: 1 },
             caption: 'x',

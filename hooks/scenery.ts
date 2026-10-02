@@ -546,16 +546,17 @@ function forest(c: Ctx): Scene {
     `<path fill="#e8d590" opacity=".55" d="${edgeLit}"/><g fill="#e8d590" opacity=".55">${frontLit}</g>`
 
   // The framing trunks, cropped by the stage edges: bark in shade, a warm edge toward the
-  // light, moss at the foot, roots flaring into the grass.
+  // light, moss at the foot. They stand beyond the path, roots flaring into its far edge,
+  // so the path, the grass and the ferns all pass in front of them.
   const bigTrunk = (x: number, w: number, side: 1 | -1) => {
     const inner = side > 0 ? x + w : x
     return (
-      `<path fill="${SHADE}" d="M${f(x)} -4h${f(w)}l${f(w * 0.06)} ${ground - 8}q${f(w * 0.3)} 6 ${f(w * 0.7)} 14H${f(x - w * 0.8)}q${f(w * 0.4)} -8 ${f(w * 0.74)} -14z"/>` +
-      `<path fill="${DEEP}" d="M${f(side > 0 ? x : x + w * 0.6)} -4h${f(w * 0.4)}v${ground + 2}h${f(-w * 0.4)}z" opacity=".6"/>` +
+      `<path fill="${SHADE}" d="M${f(x)} -4h${f(w)}l${f(w * 0.06)} ${ground - 10}q${f(w * 0.3)} 4 ${f(w * 0.6)} 7H${f(x - w * 0.6)}q${f(w * 0.36)} -3 ${f(w * 0.6)} -7z"/>` +
+      `<path fill="${DEEP}" d="M${f(side > 0 ? x : x + w * 0.6)} -4h${f(w * 0.4)}v${ground}h${f(-w * 0.4)}z" opacity=".6"/>` +
       `<path fill="${KEY}" opacity=".7" d="M${f(inner - side * 2)} -4h2v${ground - 6}h-2z"/>`
     )
   }
-  const moss = (x: number, w: number) => `<path fill="#4d7a3a" d="M${f(x - w * 0.7)} ${ground + 6}q${f(w * 0.9)} -12 ${f(w * 2.2)} 0z" opacity=".85"/>`
+  const moss = (x: number, w: number) => `<path fill="#4d7a3a" d="M${f(x - w * 0.7)} ${ground - 2}q${f(w * 0.9)} -8 ${f(w * 2.2)} 0z" opacity=".85"/>`
   const canopyLight = (cx: number, dir: 1 | -1) => {
     let d = ''
     let e = ''
@@ -570,7 +571,7 @@ function forest(c: Ctx): Scene {
   }
   const trunksSvg = `<g filter="url(#sc-bark)">${bigTrunk(-8, 24, 1)}${bigTrunk(sw - 18, 28, -1)}</g>` + moss(2, 14) + moss(sw - 10, 14)
   const canopySvg = `<g filter="url(#sc-leaves)">${canopyLight(8, 1)}${canopyLight(sw - 10, -1)}</g>`
-  const frame = () => c.p.el('forest.trunks', trunksSvg) + c.p.el('forest.canopy', canopySvg)
+
 
   // Motes drifting in the light.
   const motes = Array.from({ length: Math.round(12 * c.detail) }, () => {
@@ -679,13 +680,14 @@ function forest(c: Ctx): Scene {
     // The meadow's far edge dissolves into the mist instead of meeting it in a line.
     c.p.el('forest.shrubs', `<g filter="url(#sc-needles)">${shrubs}</g>`) +
     c.p.el('forest.groundmist', `<rect x="0" y="${mid - 8}" width="${sw}" height="10" fill="url(#sc-groundmist)"/>`, { lean: c.detail < 1, sw, y: mid - 8, h: 10 }) +
+    c.p.el('forest.trunks', trunksSvg) +
     c.p.el('forest.path', path, { sw }) +
     floor() +
     // Where the sun lands through the clearing the light is strong enough to add, not just tint.
     c.p.el('forest.sunpatch', `<ellipse cx="${f(sunX)}" cy="${ground}" rx="${f(clearing * 3.4)}" ry="14" fill="url(#sc-sunpatch)" style="mix-blend-mode:screen"/>`, { cx: sunX, cy: ground }) +
     c.p.el('forest.grass', grass) +
     c.p.el('forest.ferns', fernSvg) +
-    frame()
+    c.p.el('forest.canopy', canopySvg)
   return { sky: '#1c3436', soil: '#2c4a30', groundTop: mid - 2, back, near: near_, keep: [[sunX, sunY, 12]] }
 }
 

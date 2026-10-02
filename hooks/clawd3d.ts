@@ -40,10 +40,25 @@ export type Pose = {
   stride: number
   eyeX: number
   eyeY: number
-  eyes: 'open' | 'happy' | 'closed'
+  eyes: Eyes
+  /** Each arm swept forward from the side, about the shoulder's upright axis: 0 at the side, pi/2 straight ahead. */
+  armFwdL: number
+  armFwdR: number
+  /** Each shoulder slid up the body's side, model units, so a raised arm clears the top: a wave, a load overhead. */
+  liftL: number
+  liftR: number
+  /** How far the body sinks onto its legs, 0 to 1: a crouch, a sneak, a doze. */
+  crouch: number
+  /** A sideways shift of the whole figure, model units: a lean out, a shove. */
+  dx: number
+  /** A roll of the whole figure, legs and all, about the body's centre (radians), lifted to keep it on the ground. */
+  tumble: number
 }
 
-export const POSE0: Pose = { yaw: 0, pitch: 0, roll: 0, hop: 0, sq: 1, armL: 0.06, armR: 0.06, walk: 0, stride: 0, eyeX: 0, eyeY: 0, eyes: 'open' }
+/** The eyes' expressions: open pills, the happy and closed arcs, and four more. */
+export type Eyes = 'open' | 'happy' | 'closed' | 'wide' | 'focus' | 'dizzy' | 'sad'
+
+export const POSE0: Pose = { yaw: 0, pitch: 0, roll: 0, hop: 0, sq: 1, armL: 0.06, armR: 0.06, walk: 0, stride: 0, eyeX: 0, eyeY: 0, eyes: 'open', armFwdL: 0, armFwdR: 0, liftL: 0, liftR: 0, crouch: 0, dx: 0, tumble: 0 }
 
 const LIGHT = norm([-0.42, 0.62, 0.66])
 const CAMERA_PITCH = 0.2
@@ -122,9 +137,22 @@ export function build(pose: Partial<Pose>, s: number): Model {
   const py = PY * p.sq
   const R = mul(rY(p.yaw), mul(rX(p.pitch), rZ(p.roll)))
   const Cm = rX(CAMERA_PITCH)
+  // A crouch lowers the body by part of the legs' length; the legs shorten to match.
+  const drop = p.crouch * D.LH * 0.5
+  // A tumble turns everything about the body's centre, lifted by however far a corner now reaches below the feet.
+  const tc = Math.cos(p.tumble)
+  const ts = Math.sin(p.tumble)
+  const tcy = D.LH + D.BH / 2
+  const tlift = p.tumble
+    ? -Math.min(...[[-D.BW / 2, D.LH], [D.BW / 2, D.LH], [-D.BW / 2, D.LH + D.BH], [D.BW / 2, D.LH + D.BH], [-5.45, 0], [5.45, 0], [-D.BW / 2 - D.AW, D.LH + D.AY], [D.BW / 2 + D.AW, D.LH + D.AY]].map(([x, y]) => tcy + x! * ts + (y! - tcy) * tc))
+    : 0
   const W = (x: number, y: number, z: number): V3 => {
+    if (p.tumble) {
+      const ty = y - tcy
+      ;[x, y] = [x * tc - ty * ts, tcy + x * ts + ty * tc + tlift]
+    }
     const r = mv(R, x * sxz, y * p.sq - py, z * sxz)
-    return mv(Cm, r[0], r[1] + py + p.hop - CY, r[2])
+    return mv(Cm, r[0] + p.dx, r[1] + py + p.hop - CY, r[2])
   }
   // The camera tilts the ground too: anchor the screen so ground level under the centre is y = 0.
   const groundY = mv(Cm, 0, -CY, 0)[1]
@@ -153,19 +181,25 @@ export function build(pose: Partial<Pose>, s: number): Model {
     return { name, faces, depth: q.reduce((t, c) => t + c[2], 0) / 8, corners: sp }
   }
 
-  const body = part('body', box(-D.BW / 2, D.LH, -D.BD / 2, D.BW / 2, D.LH + D.BH, D.BD / 2))
+  const body = part('body', box(-D.BW / 2, D.LH - drop, -D.BD / 2, D.BW / 2, D.LH + D.BH - drop, D.BD / 2))
   const arms = ([-1, 1] as const).map(side => {
     const ang = side < 0 ? -p.armL : p.armR
     const c = Math.cos(ang)
     const sn = Math.sin(ang)
+    const fwd = side < 0 ? p.armFwdL : p.armFwdR
+    const fc = Math.cos(fwd)
+    const fs = Math.sin(fwd)
     const px = (side * D.BW) / 2
-    const ay = D.LH + D.AY
+    const ay = D.LH + D.AY - drop + (side < 0 ? p.liftL : p.liftR)
     const x0 = side < 0 ? -D.BW / 2 - D.AW : D.BW / 2 - 0.3
     const x1 = side < 0 ? -D.BW / 2 + 0.3 : D.BW / 2 + D.AW
     return part('arm', box(x0, ay - D.AH / 2, -D.AD / 2, x1, ay + D.AH / 2, D.AD / 2), cc => {
       const dx = cc[0] - px
       const dy = cc[1] - ay
-      return [px + dx * c - dy * sn, ay + dx * sn + dy * c, cc[2]]
+      if (!fwd) return [px + dx * c - dy * sn, ay + dx * sn + dy * c, cc[2]]
+      // Raised first, then swept forward about the shoulder: the arm's reach turns toward the viewer.
+      const ox = dx * c - dy * sn
+      return [px + ox * fc, ay + dx * sn + dy * c, cc[2] + side * ox * fs]
     }, side < 0 ? 'right' : 'left')
   })
   const OFF = [0, Math.PI, 0, Math.PI]
@@ -175,8 +209,8 @@ export function build(pose: Partial<Pose>, s: number): Model {
     const lift = p.stride * 0.75 * Math.max(0, Math.cos(ph))
     const c = Math.cos(sw)
     const sn = Math.sin(sw)
-    const hy = D.LH
-    return part('leg', box(lx - D.LW / 2, 0, lz - D.LD / 2, lx + D.LW / 2, D.LH + 0.45, lz + D.LD / 2), cc => {
+    const hy = D.LH - drop
+    return part('leg', box(lx - D.LW / 2, 0, lz - D.LD / 2, lx + D.LW / 2, D.LH + 0.45 - drop, lz + D.LD / 2), cc => {
       const dy = cc[1] - hy
       const dz = cc[2] - lz
       return [cc[0], hy + dy * c - dz * sn + lift, lz + dy * sn + dz * c]
@@ -186,14 +220,16 @@ export function build(pose: Partial<Pose>, s: number): Model {
   // Back arms, legs under a hidden underside, the body, legs under a shown underside, front arms.
   const bf = body.faces
   const [armL, armR] = arms as [Part, Part]
+  // An arm swept forward stands in front of the body whichever side it hangs from.
+  const ahead = (fwd: number) => fwd > 0.4
   const order: Part[] = []
-  if (!bf.left.vis) order.push(armL)
-  if (!bf.right.vis) order.push(armR)
+  if (!bf.left.vis && !ahead(p.armFwdL)) order.push(armL)
+  if (!bf.right.vis && !ahead(p.armFwdR)) order.push(armR)
   if (!bf.bottom.vis) order.push(...legs)
   order.push(body)
   if (bf.bottom.vis) order.push(...legs)
-  if (bf.left.vis) order.push(armL)
-  if (bf.right.vis) order.push(armR)
+  if (bf.left.vis || ahead(p.armFwdL)) order.push(armL)
+  if (bf.right.vis || ahead(p.armFwdR)) order.push(armR)
   const faces = order.flatMap(pt => Object.values(pt.faces).filter(f => f.vis).sort((a, b) => a.depth - b.depth)).map(({ part, name, pts, light }) => ({ part, name, pts, light }))
   const parts = order.map((pt): ModelPart => {
     // Each of the box's twelve edges, with the faces that meet along it.
@@ -225,9 +261,17 @@ export function build(pose: Partial<Pose>, s: number): Model {
     const zf = D.BD / 2 + 0.03
     for (const side of [-1, 1]) {
       const ex = side * D.EX + Math.max(-1, Math.min(1, p.eyeX)) * 0.55
-      const ey = D.LH + D.EY + Math.max(-1, Math.min(1, p.eyeY)) * 0.42
+      const ey = D.LH + D.EY - drop + Math.max(-1, Math.min(1, p.eyeY)) * 0.42
       const E = (dx: number, dy: number) => proj(W(ex + dx, ey + dy, zf))
-      if (p.eyes === 'happy') eyes.push({ line: [E(-ew * 1.15, -eh * 0.2), E(-ew * 0.6, eh * 0.3), E(0, eh * 0.5), E(ew * 0.6, eh * 0.3), E(ew * 1.15, -eh * 0.2)] })
+      const ellipse = (rx: number, ry: number, oy = 0): P2[] => Array.from({ length: 12 }, (_, i) => E(Math.cos((Math.PI * i) / 6) * rx, oy + Math.sin((Math.PI * i) / 6) * ry))
+      if (p.eyes === 'wide') eyes.push({ poly: ellipse(ew * 1.3, eh * 1.15) })
+      // Narrowed in concentration: a flat slit.
+      else if (p.eyes === 'focus') eyes.push({ poly: ellipse(ew * 1.1, eh * 0.42, -eh * 0.1) })
+      // Seeing stars: a cross for each eye.
+      else if (p.eyes === 'dizzy') eyes.push({ line: [E(-ew, eh * 0.7), E(ew, -eh * 0.7)] }, { line: [E(-ew, -eh * 0.7), E(ew, eh * 0.7)] })
+      // Worried: the eyes a little smaller, a brow above each slanting up toward the middle.
+      else if (p.eyes === 'sad') eyes.push({ poly: ellipse(ew * 0.85, eh * 0.8, -eh * 0.15) }, { line: [E(side * ew * 1.3, eh * 1.15), E(-side * ew * 0.9, eh * 1.6)] })
+      else if (p.eyes === 'happy') eyes.push({ line: [E(-ew * 1.15, -eh * 0.2), E(-ew * 0.6, eh * 0.3), E(0, eh * 0.5), E(ew * 0.6, eh * 0.3), E(ew * 1.15, -eh * 0.2)] })
       else if (p.eyes === 'closed') eyes.push({ line: [E(-ew * 1.2, eh * 0.05), E(-ew * 0.5, -eh * 0.22), E(0, -eh * 0.28), E(ew * 0.5, -eh * 0.22), E(ew * 1.2, eh * 0.05)] })
       else {
         // A pill: two half circles joined by straight sides.
@@ -250,19 +294,51 @@ export function build(pose: Partial<Pose>, s: number): Model {
 
 // ---------------------------------------------------------------- motions
 
-export type Motion = 'walk' | 'run' | 'swim' | 'fly' | 'dig' | 'inspect' | 'celebrate' | 'think' | 'idle'
+export type Motion =
+  | 'walk' | 'run' | 'swim' | 'fly' | 'push' | 'carry' | 'sneak' | 'jump' | 'climb' | 'tumble'
+  | 'dig' | 'inspect' | 'celebrate' | 'think' | 'idle' | 'build' | 'panic' | 'sleep' | 'dance' | 'spin' | 'wave' | 'point' | 'peek'
+  | 'trip' | 'shrug'
 
-/** Frames per loop and the loop's length in seconds, per motion. */
-export const MOTION_TIMING: Record<Motion, { frames: number; dur: number }> = {
-  walk: { frames: 6, dur: 0.64 },
-  run: { frames: 6, dur: 0.4 },
-  swim: { frames: 6, dur: 1.2 },
-  fly: { frames: 6, dur: 0.6 },
-  dig: { frames: 6, dur: 0.45 },
-  inspect: { frames: 12, dur: 3 },
-  celebrate: { frames: 8, dur: 0.7 },
-  think: { frames: 6, dur: 2.4 },
-  idle: { frames: 6, dur: 2.4 },
+/**
+ * How a motion plays: `travel` while Claude crosses the stage, `loop` in place
+ * for as long as the scene lasts, `once` in place a single time before the
+ * next motion takes over.
+ */
+export type MotionKind = 'travel' | 'loop' | 'once'
+
+/** Frames per loop, the loop's length in seconds, and how it plays, per motion. */
+export const MOTION_TIMING: Record<Motion, { frames: number; dur: number; kind: MotionKind }> = {
+  walk: { frames: 6, dur: 0.64, kind: 'travel' },
+  run: { frames: 6, dur: 0.4, kind: 'travel' },
+  swim: { frames: 6, dur: 1.2, kind: 'travel' },
+  fly: { frames: 6, dur: 0.6, kind: 'travel' },
+  push: { frames: 6, dur: 0.9, kind: 'travel' },
+  carry: { frames: 6, dur: 0.8, kind: 'travel' },
+  sneak: { frames: 6, dur: 1.1, kind: 'travel' },
+  jump: { frames: 6, dur: 0.7, kind: 'travel' },
+  climb: { frames: 6, dur: 0.6, kind: 'travel' },
+  tumble: { frames: 8, dur: 0.6, kind: 'travel' },
+  dig: { frames: 6, dur: 0.45, kind: 'loop' },
+  inspect: { frames: 12, dur: 3, kind: 'loop' },
+  celebrate: { frames: 8, dur: 0.7, kind: 'loop' },
+  think: { frames: 6, dur: 2.4, kind: 'loop' },
+  idle: { frames: 12, dur: 6, kind: 'loop' },
+  build: { frames: 6, dur: 0.6, kind: 'loop' },
+  panic: { frames: 6, dur: 0.42, kind: 'loop' },
+  sleep: { frames: 6, dur: 3.2, kind: 'loop' },
+  dance: { frames: 8, dur: 0.9, kind: 'loop' },
+  spin: { frames: 8, dur: 0.8, kind: 'loop' },
+  wave: { frames: 6, dur: 0.8, kind: 'loop' },
+  point: { frames: 6, dur: 1.2, kind: 'loop' },
+  peek: { frames: 8, dur: 2.4, kind: 'loop' },
+  trip: { frames: 12, dur: 2.2, kind: 'once' },
+  shrug: { frames: 10, dur: 1.8, kind: 'once' },
+}
+
+/** Smoothstep from 0 at `a` to 1 at `b`. */
+const ease = (t: number, a: number, b: number) => {
+  const x = Math.max(0, Math.min(1, (t - a) / (b - a)))
+  return x * x * (3 - 2 * x)
 }
 
 /** The pose `t` of the way (0 to 1) through one loop of a motion; `yaw` turns it toward where it goes. */
@@ -280,6 +356,27 @@ export function poseAt(motion: Motion, t: number, yaw: number): Partial<Pose> {
       const flap = 0.5 - 0.5 * Math.cos(a)
       return { yaw, pitch: 0.1, armL: -0.3 + 1.7 * flap, armR: -0.3 + 1.7 * flap, hop: 0.6 * flap, walk: a, stride: 0.25 }
     }
+    // Leaning into something heavy: sunk low, arms out in front, short dogged steps.
+    case 'push':
+      return { yaw: yaw * 1.7, pitch: 0.3, crouch: 0.35, walk: a, stride: 0.7, hop: Math.abs(sin) * 0.1, armL: 0.3, armR: 0.3, armFwdL: 1.3, armFwdR: 1.3, liftL: 1, liftR: 1, sq: 0.97, eyes: 'focus' }
+    // A load held overhead: both arms up, the body a touch squashed under it, heavy steps.
+    case 'carry':
+      return { yaw, walk: a, stride: 0.6, hop: Math.abs(sin) * 0.15, armL: 1.5, armR: 1.5, liftL: 3.6, liftR: 3.6, sq: 0.95 + 0.02 * Math.cos(2 * a), pitch: -0.05 }
+    // On tiptoe, crouched, hands up in front, eyes darting about.
+    case 'sneak':
+      return { yaw, crouch: 0.55, pitch: 0.1, walk: a, stride: 0.5, armL: 0.5, armR: 0.5, armFwdL: 0.8, armFwdR: 0.8, eyeX: 0.8 * sin, eyeY: 0.2 }
+    // Hop after hop: a crouch to wind up, a leap with arms flung up, legs tucked.
+    case 'jump': {
+      const up = Math.max(0, sin)
+      const down = Math.max(0, -sin)
+      return { yaw, hop: up * 5, crouch: down * 0.5, armL: 0.1 + up * 1.2, armR: 0.1 + up * 1.2, walk: a, stride: 0.3 * up, sq: 1 + up * 0.08 - down * 0.05, eyes: up > 0.5 ? 'happy' : 'open' }
+    }
+    // Scrambling up and over: arms reaching up in turn, legs pedalling.
+    case 'climb':
+      return { yaw, pitch: 0.2, walk: a, stride: 1.1, hop: Math.abs(sin) * 0.4, armL: 1.2 + 0.6 * sin, armR: 1.2 - 0.6 * sin, armFwdL: 0.6, armFwdR: 0.6, eyes: 'focus' }
+    // Rolling along, head over heels.
+    case 'tumble':
+      return { yaw: yaw * 0.3, tumble: -a, armL: 0.5, armR: 0.5, eyes: 'dizzy' }
     case 'dig':
       return { yaw: yaw * 0.6, pitch: 0.4 + 0.12 * sin, armL: -0.3 + 0.9 * Math.max(0, sin), armR: -0.3 + 0.9 * Math.max(0, -sin), sq: 0.95 }
     case 'inspect':
@@ -290,8 +387,66 @@ export function poseAt(motion: Motion, t: number, yaw: number): Partial<Pose> {
     }
     case 'think':
       return { yaw: yaw * 0.4 + 0.15 * sin, eyeX: 0.5, eyeY: 1, roll: 0.06 * sin, sq: 1 + 0.015 * sin, armR: 0.5, eyes: t > 0.78 && t < 0.9 ? 'closed' : 'open' }
-    case 'idle':
-      return { yaw: yaw * 0.5, sq: 1 + 0.015 * sin, eyes: t > 0.78 && t < 0.9 ? 'closed' : 'open' }
+    // Standing about: a glance one way, a blink, a glance the other, a shift of weight, a stretch.
+    case 'idle': {
+      const stretch = ease(t, 0.62, 0.72) - ease(t, 0.8, 0.92)
+      const eyeX = t < 0.2 ? -0.8 : t >= 0.34 && t < 0.5 ? 0.8 : 0
+      return {
+        yaw: yaw * 0.5 + eyeX * 0.12,
+        eyeX,
+        roll: t >= 0.5 && t < 0.62 ? 0.05 : 0,
+        sq: 1 + 0.015 * sin + stretch * 0.06,
+        armL: 0.06 + stretch * 1.1,
+        armR: 0.06 + stretch * 1.1,
+        eyes: t >= 0.2 && t < 0.28 ? 'closed' : stretch > 0.5 ? 'happy' : 'open',
+      }
+    }
+    // Hammering away: arms out in front, raised and brought down in turn.
+    case 'build':
+      return { yaw: yaw * 1.6, pitch: 0.15 + 0.05 * Math.abs(sin), armFwdL: 1.3, armFwdR: 1.3, liftL: 1.5, liftR: 1.5, armL: 0.2 + 1.1 * Math.max(0, sin), armR: 0.2 + 1.1 * Math.max(0, -sin), sq: 1 - 0.03 * Math.abs(Math.cos(a)), eyes: 'focus' }
+    // Flapping about: arms up and waving, a tremble from side to side, eyes wide.
+    case 'panic':
+      return { yaw: yaw * 0.3, dx: 0.35 * Math.cos(3 * a), hop: Math.abs(Math.sin(2 * a)) * 0.6, armL: 1.3 + 0.4 * Math.sin(2 * a), armR: 1.3 - 0.4 * Math.sin(2 * a), liftL: 2.6, liftR: 2.6, sq: 1.04, eyes: 'wide' }
+    // Dozing where it stands: sunk low, arms hanging, a slow breath.
+    case 'sleep':
+      return { yaw: yaw * 0.3, crouch: 0.7, pitch: 0.1, roll: 0.04 * sin, sq: 1 + 0.03 * sin, armL: -0.15, armR: -0.15, eyes: 'closed' }
+    // A victory jig: hopping from side to side, arms up in turn.
+    case 'dance':
+      return { yaw: yaw * 0.5 + 0.3 * sin, hop: Math.abs(sin) * 1.6, dx: sin, roll: -sin * 0.12, walk: a, stride: 0.6, armL: 0.4 + Math.max(0, sin), armR: 0.4 + Math.max(0, -sin), eyes: 'happy' }
+    // A twirl on the spot.
+    case 'spin':
+      return { yaw: yaw + a, hop: 0.3 * Math.abs(Math.sin(2 * a)), armL: 0.5, armR: 0.5 }
+    // A hello: the near arm up high, waving.
+    case 'wave':
+      return { yaw: yaw * 0.5, armL: 1.5 + 0.45 * sin, liftL: 3.8, roll: 0.04 * sin, eyes: 'happy' }
+    // There! An arm held out ahead, eyes on it, a little bounce.
+    case 'point':
+      return { yaw: yaw * 1.2, armR: 0.35, armFwdR: 0.9, liftR: 1.6, hop: 0.25 * Math.max(0, sin), eyeX: 0.8, eyes: 'wide' }
+    // Leaning out from where it hides, then back.
+    case 'peek': {
+      const out = Math.max(0, sin)
+      return { yaw: yaw * 0.6, crouch: 0.45, dx: 1.6 * out, roll: -0.15 * out, pitch: 0.05, eyeX: 0.8 * out, eyes: out > 0.3 ? 'wide' : 'open' }
+    }
+    // A stumble forward, a plop onto the ground, seeing stars, and back up.
+    case 'trip': {
+      const fall = ease(t, 0, 0.22) - ease(t, 0.22, 0.32)
+      const sit = ease(t, 0.22, 0.32) - ease(t, 0.78, 0.95)
+      return {
+        yaw: yaw * 0.5 + (sit > 0.5 ? 0.15 * Math.sin(a * 3) : 0),
+        pitch: fall * 0.6,
+        dx: fall * 1.2,
+        armL: 0.06 + fall * 1.4,
+        armR: 0.06 + fall * 1.4,
+        crouch: sit * 0.8,
+        roll: sit * 0.1,
+        eyes: sit > 0.5 ? 'dizzy' : fall > 0.3 ? 'wide' : 'open',
+      }
+    }
+    // Arms out and up, head on one side, then settling: no idea.
+    case 'shrug': {
+      const up = ease(t, 0, 0.3) - ease(t, 0.7, 1)
+      return { yaw: yaw * 0.5, armL: 0.06 + up * 0.9, armR: 0.06 + up * 0.9, liftL: up * 1.6, liftR: up * 1.6, roll: up * 0.12, sq: 1 + up * 0.04, eyes: up > 0.4 ? 'sad' : 'open' }
+    }
   }
 }
 

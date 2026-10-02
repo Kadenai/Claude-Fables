@@ -1,5 +1,6 @@
-import type { FablesProp, FablesScene } from '../types'
+import type { FablesHeroAction, FablesProp, FablesScene } from '../types'
 
+import { type Motion, MOTION_TIMING } from './clawd3d'
 import { type HeroPainter, motionSvg } from './hero3d'
 import { gradeFilter } from './grade'
 import { MONOCRAFT, MONOCRAFT_BOLD } from './monocraft'
@@ -340,24 +341,50 @@ const heroColor = (k: string) => PALETTE[k]
 type HeroPlan = { svg: string; startX: number; endX: number; endY: number; arrive: number }
 
 /** How the hero is drawn: the pixel sprite in a cell style, or the 3D model painted one way. */
-export type Figure = { kind: 'pixel'; cell: Cell } | { kind: '3d'; hero?: HeroPainter; lean?: boolean }
+export type Figure = { kind: 'pixel'; cell: Cell } | { kind: '3d'; hero?: HeroPainter; lean?: boolean; second?: number }
 
 /** The 3D model stands a little taller than the sprite, arms reaching past its box. */
 const MODEL_STAGE_H = 40
 
+/** The pixel sprite knows fewer moves: each newer action stands in as the nearest one it has. */
+const SPRITE_ACTION: Record<FablesHeroAction, FablesHeroAction> = {
+  walk: 'walk', run: 'run', swim: 'swim', fly: 'fly', dig: 'dig', inspect: 'inspect', celebrate: 'celebrate', think: 'think',
+  push: 'walk', carry: 'walk', sneak: 'walk', climb: 'walk', jump: 'run', tumble: 'run',
+  build: 'dig', panic: 'inspect', sleep: 'think', dance: 'celebrate', spin: 'celebrate', wave: 'celebrate', point: 'inspect', peek: 'inspect',
+  trip: 'think', shrug: 'think',
+}
+
+/** How fast Claude crosses the stage, per travelling action (units a second). */
+const SPEED: Partial<Record<FablesHeroAction, number>> = { run: 110, fly: 80, tumble: 90, jump: 60, climb: 40, carry: 30, sneak: 25, push: 22 }
+
+/** How high Claude's moves take it above its box, for the caption to keep clear of. */
+export const heroReach = (action: FablesHeroAction): number =>
+  action === 'celebrate' ? 16 : action === 'climb' ? 24 : action === 'jump' ? 18 : action === 'dance' ? 6 : action === 'fly' || action === 'panic' ? 2 : 0
+
+/** A loop that hands over to another plays this long first (seconds). */
+const LOOP_FIRST = (motion: Motion) => Math.max(2.4, 2 * MOTION_TIMING[motion].dur)
+
 function hero(scene: FablesScene, floor: number, sw: number, figure: Figure, tint: (svg: string) => string = svg => svg): HeroPlan {
   const cell = figure.kind === 'pixel' ? figure.cell : 'solid'
-  const { action } = scene.hero
-  const isMoving = action === 'walk' || action === 'run' || action === 'swim' || action === 'fly'
+  // The sprite plays the nearest move it has, and no second one.
+  const action = figure.kind === 'pixel' ? SPRITE_ACTION[scene.hero.action] : scene.hero.action
+  const then = figure.kind === 'pixel' ? undefined : scene.hero.then
+  const kind = MOTION_TIMING[action].kind
+  const isMoving = kind === 'travel'
   const span = sw - HERO_W
   const fromX = Math.round((span * scene.hero.from) / 100)
   const toX = Math.round((span * scene.hero.to) / 100)
   const baseY = action === 'fly' ? 34 : action === 'swim' ? floor - HERO_H + 12 : floor - HERO_H
-  const speed = action === 'run' ? 110 : action === 'fly' ? 80 : 45
+  const speed = SPEED[action] ?? 45
   const moveDur = isMoving ? Math.max(0.6, Math.abs(toX - fromX) / speed) : 0
   const step = action === 'run' ? 0.18 : 0.32
   const steps = isMoving ? Math.max(2, Math.round(moveDur / step)) : 0
   const flip = toX < fromX ? ` translate(${HERO_W} 0) scale(-1 1)` : ''
+  // When the first move gives way to the next: on arrival, after a single play, or after a loop has had its turn.
+  // Swimming and flying keep going unless told otherwise; walking, running and the rest stand idle on arrival.
+  const second: Motion | undefined =
+    figure.kind === 'pixel' ? undefined : (then ?? (kind === 'once' || (isMoving && action !== 'swim' && action !== 'fly') ? 'idle' : undefined))
+  const handover = second === undefined ? undefined : isMoving ? moveDur : kind === 'once' ? MOTION_TIMING[action].dur : LOOP_FIRST(action)
 
   const legs = (frame: number, values: string) =>
     `<g opacity="${frame === 0 ? 1 : 0}" transform="scale(${U})">${pixelPaths(HERO_FRAMES[frame] ?? [], heroColor, cell)}` +
@@ -369,27 +396,27 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure, tin
     figure.kind === '3d'
       ? motionSvg(motion, { height: MODEL_STAGE_H, cx: HERO_W / 2, floor: HERO_H, yaw: 0.55, hero: figure.hero, ...when }).svg
       : ''
-  // Walking and running stop on arrival and stand idle; swimming and flying keep going.
   const frames =
     figure.kind === 'pixel'
       ? legs(0, '1;0') + legs(1, '0;1')
-      : action === 'walk' || action === 'run'
-        ? model(action, { until: moveDur }) + model('idle', { from: moveDur, maxFrames: figure.kind === '3d' && figure.lean ? 2 : undefined })
-        : model(action)
+      : second === undefined || handover === undefined
+        ? model(action)
+        : model(action, { until: handover }) + model(second, { from: handover, maxFrames: figure.kind === '3d' ? (figure.lean ? 2 : figure.second) : undefined })
 
+  // A move's own sway, for the moves the 3D model does not bake into its frames; it stops when the next move begins.
+  const until = handover === undefined ? 'repeatCount="indefinite"' : `repeatDur="${n(handover)}s"`
   let inner = ''
-  // The 3D model bakes its own hops, digging and steps into its frames.
   const baked = figure.kind === '3d'
-  switch (baked && (action === 'dig' || action === 'celebrate' || action === 'walk' || action === 'run') ? 'baked' : action) {
+  switch (baked && action !== 'swim' && action !== 'fly' && action !== 'inspect' ? 'baked' : action) {
     case 'swim':
     case 'fly':
-      inner = `<animateTransform attributeName="transform" type="translate" values="0 0;0 -${U};0 0" dur="1.2s" repeatCount="indefinite" additive="sum"/>`
+      inner = `<animateTransform attributeName="transform" type="translate" values="0 0;0 -${U};0 0" dur="1.2s" ${until} additive="sum"/>`
       break
     case 'dig':
       inner = `<animateTransform attributeName="transform" type="rotate" values="-6 ${HERO_W / 2} ${HERO_H};6 ${HERO_W / 2} ${HERO_H};-6 ${HERO_W / 2} ${HERO_H}" dur=".4s" repeatCount="indefinite" additive="sum"/>`
       break
     case 'inspect':
-      inner = `<animateTransform attributeName="transform" type="translate" values="0 0;-${U * 2} 0;0 0;${U * 2} 0;0 0" dur="3s" repeatCount="indefinite" additive="sum"/>`
+      inner = `<animateTransform attributeName="transform" type="translate" values="0 0;-${U * 2} 0;0 0;${U * 2} 0;0 0" dur="3s" ${until} additive="sum"/>`
       break
     case 'celebrate':
       inner = `<animateTransform attributeName="transform" type="translate" values="0 0;0 -16;0 0" keyTimes="0;.4;1" dur=".7s" repeatCount="indefinite" additive="sum"/>`
@@ -402,39 +429,63 @@ function hero(scene: FablesScene, floor: number, sw: number, figure: Figure, tin
       break
   }
 
-  let extras = ''
-  // The pixel sprite thinks in dots; the 3D Claude's caption already sits where they would.
-  if (action === 'think' && figure.kind === 'pixel') {
-    extras = [0, 1, 2]
-      .map(
-        i =>
-          `<rect x="${HERO_W + 2 + i * 6}" y="-6" width="${U}" height="${U}" fill="${PAPER}"><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.3;.8;1" dur="1.5s" begin="${i * 0.3}s" repeatCount="indefinite"/></rect>`,
-      )
-      .join('')
-  } else if (action === 'dig') {
-    extras = [0, 1, 2, 3]
-      .map(
-        i =>
-          `<rect x="${HERO_W / 2}" y="${HERO_H - 2}" width="${U}" height="${U}" fill="#7a4a2b"><animateTransform attributeName="transform" type="translate" values="0 0;${(i - 1.5) * 14} -18;${(i - 1.5) * 22} 4" dur=".9s" begin="${i * 0.2}s" repeatCount="indefinite"/></rect>`,
-      )
-      .join('')
-  } else if (action === 'celebrate') {
-    extras = [0, 1, 2, 3, 4]
-      .map(
-        i =>
-          `<rect x="${i * 12}" y="-4" width="3" height="3" fill="${['#e3b341', '#e05252', '#6fc2c9', '#5e9c4a', '#7b5fb5'][i]}"><animateTransform attributeName="transform" type="translate" values="0 0;${(i - 2) * 6} -20" dur="1s" begin="${i * 0.15}s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0" dur="1s" begin="${i * 0.15}s" repeatCount="indefinite"/></rect>`,
-      )
-      .join('')
-  }
+  // A move's flourishes; with a second move each set shows only while its own move plays.
+  const shown = (svg: string, begin?: number, end?: number) =>
+    !svg || (begin === undefined && end === undefined)
+      ? svg
+      : `<g visibility="hidden">${svg}<set attributeName="visibility" to="visible"${begin ? ` begin="${n(begin)}s"` : ''}${end !== undefined ? ` end="${n(end)}s"` : ''}/></g>`
+  const extras = shown(flourish(action, figure), handover === undefined ? undefined : 0, handover) + (second && handover !== undefined ? shown(flourish(second, figure), handover) : '')
 
   const travel = isMoving
-    ? `<animateTransform attributeName="transform" type="translate" values="${fromX} ${baseY};${toX} ${baseY}" dur="${n(moveDur)}s" fill="freeze"/>`
+    ? action === 'climb'
+      ? // Up and over: the climb rises to its height halfway and comes down the far side.
+        `<animateTransform attributeName="transform" type="translate" values="${fromX} ${baseY};${n((fromX + toX) / 2)} ${baseY - 24};${toX} ${baseY}" keyTimes="0;.5;1" calcMode="spline" keySplines=".3 0 .6 1;.4 0 .7 1" dur="${n(moveDur)}s" fill="freeze"/>`
+      : `<animateTransform attributeName="transform" type="translate" values="${fromX} ${baseY};${toX} ${baseY}" dur="${n(moveDur)}s" fill="freeze"/>`
     : ''
   const at = isMoving ? fromX : toX
   const svg =
     `<g transform="translate(${at} ${baseY})">${travel}` +
     `<g>${inner}<g transform="${flip.trim() || 'translate(0 0)'}">${frames}</g>${tint(extras)}</g></g>`
   return { svg, startX: isMoving ? fromX : toX, endX: toX, endY: baseY, arrive: isMoving ? moveDur : 0 }
+}
+
+/** The bits a move throws off: dirt from digging, confetti, the sprite's thinking dots, a sleeper's z's. */
+function flourish(action: Motion, figure: Figure): string {
+  // The pixel sprite thinks in dots; the 3D Claude's caption already sits where they would.
+  if (action === 'think' && figure.kind === 'pixel') {
+    return [0, 1, 2]
+      .map(
+        i =>
+          `<rect x="${HERO_W + 2 + i * 6}" y="-6" width="${U}" height="${U}" fill="${PAPER}"><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.3;.8;1" dur="1.5s" begin="${i * 0.3}s" repeatCount="indefinite"/></rect>`,
+      )
+      .join('')
+  }
+  if (action === 'dig') {
+    return [0, 1, 2, 3]
+      .map(
+        i =>
+          `<rect x="${HERO_W / 2}" y="${HERO_H - 2}" width="${U}" height="${U}" fill="#7a4a2b"><animateTransform attributeName="transform" type="translate" values="0 0;${(i - 1.5) * 14} -18;${(i - 1.5) * 22} 4" dur=".9s" begin="${i * 0.2}s" repeatCount="indefinite"/></rect>`,
+      )
+      .join('')
+  }
+  if (action === 'celebrate') {
+    return [0, 1, 2, 3, 4]
+      .map(
+        i =>
+          `<rect x="${i * 12}" y="-4" width="3" height="3" fill="${['#e3b341', '#e05252', '#6fc2c9', '#5e9c4a', '#7b5fb5'][i]}"><animateTransform attributeName="transform" type="translate" values="0 0;${(i - 2) * 6} -20" dur="1s" begin="${i * 0.15}s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0" dur="1s" begin="${i * 0.15}s" repeatCount="indefinite"/></rect>`,
+      )
+      .join('')
+  }
+  // A sleeper's z's, rising from above Claude and fading as they go.
+  if (action === 'sleep') {
+    return [0, 1, 2]
+      .map(
+        i =>
+          `<text x="${HERO_W * 0.7}" y="${HERO_H - MODEL_STAGE_H + 4}" font-family="Georgia, serif" font-size="${6 + i * 1.5}" font-weight="700" fill="#e8e2d0" opacity="0"><animateTransform attributeName="transform" type="translate" values="0 0;${6 + i * 2} -16" dur="2.4s" begin="${i * 0.8}s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;.9;0" dur="2.4s" begin="${i * 0.8}s" repeatCount="indefinite"/>z</text>`,
+      )
+      .join('')
+  }
+  return ''
 }
 
 // ---------------------------------------------------------------- caption
@@ -824,12 +875,17 @@ export function sceneToSvg(
     (look.texture?.(sw, H, GROUND_Y, pixelArt) ?? '') +
     (look.frame?.(sw, H, GROUND_Y) ?? '') +
     (tag?.svg ?? '') +
-    caption(scene.caption, { startX: plan.startX, x: plan.endX, y: plan.endY, arrive: plan.arrive, jump: scene.hero.action === 'celebrate' ? 16 : scene.hero.action === 'fly' ? 2 : 0, sway: scene.hero.action === 'inspect' ? 2 * U : 0 }, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined) +
+    caption(scene.caption, { startX: plan.startX, x: plan.endX, y: plan.endY, arrive: plan.arrive, jump: Math.max(heroReach(scene.hero.action), scene.hero.then ? heroReach(scene.hero.then) : 0), sway: scene.hero.action === 'inspect' ? 2 * U : 0 }, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined) +
     `</svg>`
 
   const propsShown = props.length
   let svg = build(true, propsShown)
-  // Over the limit, the scenery thins out first, then the particles, and only then the props.
+  // Over the limit, Claude's second move is baked in fewer poses first; then the scenery
+  // thins out, then the particles go, and only then the props.
+  if (svg.length > BUDGET && figure.kind === '3d') {
+    plan = hero(scene, stage.floor, sw, { ...figure, second: 6 }, tint)
+    svg = build(true, propsShown)
+  }
   if (svg.length > BUDGET && rich) {
     stage = stageAt(true)
     svg = build(true, propsShown)

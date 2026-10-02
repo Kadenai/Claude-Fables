@@ -24,10 +24,26 @@ export const HERO_ACTIONS: readonly FablesHeroAction[] = [
   'run',
   'swim',
   'fly',
+  'push',
+  'carry',
+  'sneak',
+  'jump',
+  'climb',
+  'tumble',
   'dig',
   'inspect',
   'celebrate',
   'think',
+  'build',
+  'panic',
+  'sleep',
+  'dance',
+  'spin',
+  'wave',
+  'point',
+  'peek',
+  'trip',
+  'shrug',
 ]
 export const MOTIONS: readonly FablesMotion[] = [
   'none',
@@ -146,6 +162,8 @@ export function parseScene(raw: unknown): FablesScene | null {
       action: oneOf(hero.action, HERO_ACTIONS, 'walk'),
       from: Math.round(clampNumber(hero.from, 0, 100, 10)),
       to: Math.round(clampNumber(hero.to, 0, 100, 60)),
+      // What comes next is played where Claude stands, so a second journey is just its moves in place.
+      ...(typeof hero.then === 'string' && (HERO_ACTIONS as readonly string[]).includes(hero.then) ? { then: hero.then as FablesHeroAction } : {}),
     },
     props: (Array.isArray(raw.props) ? raw.props : [])
       .map(parseProp)

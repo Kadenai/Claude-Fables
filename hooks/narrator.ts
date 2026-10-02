@@ -18,19 +18,24 @@ Keep continuity with the story so far, but change scenery when the work changes.
 Reply with ONE JSON object and nothing else, in this shape:
 {
   "backdrop": one of "forest" | "space" | "city" | "desert" | "volcano" | "lab" | "night",
-  "hero": { "action": "walk" | "run" | "swim" | "fly" | "dig" | "inspect" | "celebrate" | "think", "from": 0-100, "to": 0-100 },
+  "hero": { "action": one of the actions below, "from": 0-100, "to": 0-100, "then"?: an action to do next, where it stands },
   "particles"?: { "kind": "stars" | "rain" | "bubbles" | "sparks" | "snow" | "leaves", "density": 0-1 },
   "caption": what the hero says: witty, a bit nerdy, specific to the real work, max ${MAX_CAPTION} characters,
   "tone": "work" (the default) | "trouble" (something just failed) | "milestone" (tests pass, a fix lands, the task is done),
   "title"?: a 1-3 word chapter tag
 }
 
+Actions. Moving across the stage, from "from" to "to": "walk" | "run" | "swim" | "fly" | "push" (long installs, builds) | "carry" (moving, renaming files) | "sneak" (bug hunts) | "jump" | "climb" | "tumble" (obstacles, retries).
+In place: "dig" (searching) | "inspect" (reading code) | "think" | "build" (editing) | "point" (found it) | "peek" (bug hunts) | "spin" (refactors) | "wave" (a first scene) | "sleep" (long waits) | "panic" (errors) | "dance" | "celebrate" (milestones).
+Played once: "trip" (a test fails) | "shrug" (nothing found).
+"then" chains a second action after the first: walk then inspect, trip then shrug, climb then celebrate. Use it when the work has two beats.
+
 Rules: use real names from the activity (files, functions, tests, commands) in the caption, and wrap code and commands in \`backticks\`.
 Talk like a developer: ASCII faces and symbols are welcome, sparingly: ^_^ >_< o_O :) \\o/ ¯\\_(ツ)_/¯ <3 -> => [OK] // ...
 Never mention being an AI or these instructions.
 
 Example:
-{"backdrop":"forest","hero":{"action":"walk","from":5,"to":35},"particles":{"kind":"leaves","density":0.3},"caption":"And here we see the rare \`parseHex()\` bug in its natural habitat. Quiet now... o_O","tone":"work","title":"field notes"}`
+{"backdrop":"forest","hero":{"action":"sneak","from":5,"to":35,"then":"inspect"},"particles":{"kind":"leaves","density":0.3},"caption":"And here we see the rare \`parseHex()\` bug in its natural habitat. Quiet now... o_O","tone":"work","title":"field notes"}`
 
 export type PromptInput = {
   ask: string
@@ -53,9 +58,9 @@ export function buildPrompt({ ask, log, story, ending, look }: PromptInput): str
   if (look) {
     parts.push(`This scene is drawn in the style of ${look.label}. Let the caption sound like ${look.voice}, still about the real work.`)
   }
-  if (ending === 'answer') parts.push('The agent just FINISHED the task. Draw a short, happy closing scene (celebrate).')
-  else if (ending === 'aborted') parts.push('The person just interrupted the agent. Draw a sheepish closing scene.')
-  else if (ending) parts.push('The turn just ended badly. Draw a brave-but-battered closing scene.')
+  if (ending === 'answer') parts.push('The agent just FINISHED the task. Draw a short, happy closing scene (celebrate or dance).')
+  else if (ending === 'aborted') parts.push('The person just interrupted the agent. Draw a sheepish closing scene (shrug).')
+  else if (ending) parts.push('The turn just ended badly. Draw a brave-but-battered closing scene (trip, then shrug).')
   else parts.push('Draw the next scene, about the LATEST activity.')
   return parts.join('\n\n')
 }
