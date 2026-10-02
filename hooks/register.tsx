@@ -5,16 +5,40 @@ import type { FablesScene } from '../types'
 
 import { type Activity, pushActivity, summarizeSpeech, summarizeTool } from './activity'
 import { backoffMs, buildPrompt, remember, sceneFromReply, type StoryBeat, SYSTEM } from './narrator'
-import { sceneToSvg } from './svg'
+import { H, sceneToSvg, W } from './svg'
 
 const scene = atom({ plugin: 'fables', key: 'scene' } as const, null)
 const enabled = atom({ plugin: 'fables', key: 'enabled' } as const, true)
+const pixelArt = atom({ plugin: 'fables', key: 'pixelArt' } as const, true)
 
 const STORE_ENABLED = 'enabled'
+const STORE_PIXEL = 'pixelArt'
+/**
+ * Every scene is drawn in the default look with the 3D Claude. The other looks
+ * (looks.ts) and the pixel Claude are paused while the scenes are perfected.
+ */
+const DRAWN = { look: 'pixel', figure: '3d' } as const
 /** How long the closing scene of a turn stays up. */
 const LINGER_MS = 30000
 /** This plugin's own tools, if it ever registers any, are not part of the story. */
 const OWN_TOOLS = 'mcp__fables__'
+
+/**
+ * The band's code font advance in CSS pixels: the desktop measures the band in
+ * cells of it, and the Svg wants pixels.
+ */
+const PX_PER_COLUMN = 8
+/** CSS pixels per stage unit: the stage's H units come out this many times taller. */
+const SCALE = 1.5
+
+/**
+ * The band's box in CSS pixels: its whole width, at a fixed height so the art and
+ * the caption keep one size whatever the window; the stage widens to fill it.
+ */
+function bandBox(columns: number): { width: number; height: number } {
+  const width = Number.isFinite(columns) && columns > 0 ? Math.round(columns * PX_PER_COLUMN) : W * SCALE
+  return { width, height: Math.round(H * SCALE) }
+}
 
 type Ending = 'answer' | 'aborted' | 'error' | 'refusal'
 
@@ -114,10 +138,12 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     n.isOn = (await $.store.get(STORE_ENABLED)) !== false
     await update($, enabled, () => n.isOn)
+    await update($, pixelArt, () => true)
+    if ((await $.store.get(STORE_PIXEL)) === false) await update($, pixelArt, () => false)
     await $.command.register({
       name: 'fables',
-      description: 'Claude Fables: turn the cartoons above the prompt on or off',
-      argumentHint: '[on|off]',
+      description: 'Claude Fables: turn the cartoons above the prompt on or off, or switch pixel art',
+      argumentHint: '[on|off|pixel [on|off]]',
     })
     $.clock.every(1000, () => void tick($, n))
     return next(e)
@@ -125,6 +151,16 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'fables' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
+    if (/^(style|styles|figure)\b/.test(arg)) {
+      return { text: 'Styles are paused for now: Claude Fables draws every scene in its default look.' }
+    }
+    const px = /^pixel(?:\s+(on|off))?$/.exec(arg)
+    if (px) {
+      const value = px[1] === 'on' ? true : px[1] === 'off' ? false : !(await read($, pixelArt))
+      await $.store.set(STORE_PIXEL, value)
+      await update($, pixelArt, () => value)
+      return { text: value ? 'Pixel art is on: the whole scene is drawn in crisp pixels.' : 'Pixel art is off: scenes are drawn smooth.' }
+    }
     const value = arg === 'on' ? true : arg === 'off' ? false : !n.isOn
     await setOn($, n, value)
     return {
@@ -180,6 +216,17 @@ export const register: Register = (on, options) => {
     const current = await read($, scene)
     if (!current || !(await read($, enabled))) return next(e)
     const { Svg } = $.ui.resolve(e)
-    return <Svg source={sceneToSvg(current)} alt={current.caption} isInteractive />
+    // The interactive frame does not size itself from the markup (left alone it
+    // is a 300x150 box), so give it the band's box; a new width draws anew.
+    const { width, height } = bandBox(e.props.bodyColumns)
+    return (
+      <Svg
+        source={sceneToSvg(current, { width, height, ...DRAWN, pixelArt: await read($, pixelArt) })}
+        alt={current.caption}
+        width={width}
+        height={height}
+        isInteractive
+      />
+    )
   })
 }

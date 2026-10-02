@@ -1,11 +1,9 @@
 export type FablesBackdrop =
   | 'forest'
-  | 'sea'
   | 'space'
   | 'city'
   | 'desert'
   | 'volcano'
-  | 'rails'
   | 'lab'
   | 'night'
 
@@ -41,6 +39,8 @@ export type FablesScene = {
   props: FablesProp[]
   particles?: { kind: FablesParticles; density: number }
   caption: string
+  /** How the work is going, which the caption's paper shows. */
+  tone?: 'work' | 'trouble' | 'milestone'
   title?: string
 }
 
@@ -49,6 +49,8 @@ declare module 'claude-code' {
     fables: {
       scene: FablesScene | null
       enabled: boolean
+      /** Draw the stage as pixel art (the default), or smooth. */
+      pixelArt: boolean
     }
   }
 }

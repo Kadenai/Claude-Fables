@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'claude-code/testing'
 
+import { summarizeTool } from '../hooks/activity'
 import { buildPrompt, sceneFromReply } from '../hooks/narrator'
 import { extractJson, parseHex, parseScene } from '../hooks/scene'
-import { MAX_SVG, sceneToSvg } from '../hooks/svg'
+import { H, MAX_SVG, MAX_W, MIN_W, sceneToSvg, stageWidth } from '../hooks/svg'
+import { SCENARIOS } from '../scripts/scenarios'
 
 const GOOD = {
-  backdrop: 'rails',
+  backdrop: 'lab',
   hero: { action: 'run', from: 70, to: 20 },
   props: [{ sprite: 'train', x: 70, y: 'ground', motion: 'scroll', label: '#zzzzzz', color: '#e05252' }],
   caption: 'Pulled over: a color regex that accepts #zzzzzz.',
@@ -14,7 +16,7 @@ const GOOD = {
 describe('parseScene', () => {
   test('keeps a good scene', () => {
     const scene = parseScene(GOOD)
-    expect(scene?.backdrop).toBe('rails')
+    expect(scene?.backdrop).toBe('lab')
     expect(scene?.hero).toEqual({ action: 'run', from: 70, to: 20 })
     expect(scene?.props[0]?.label).toBe('#zzzzzz')
   })
@@ -84,7 +86,7 @@ describe('model replies', () => {
 
   test('the prompt stays bounded however long the session runs', () => {
     const log = Array.from({ length: 14 }, () => ({ kind: 'tool' as const, text: 'y'.repeat(240) }))
-    const story = Array.from({ length: 4 }, () => ({ backdrop: 'sea', caption: 'z'.repeat(90) }))
+    const story = Array.from({ length: 4 }, () => ({ backdrop: 'space', caption: 'z'.repeat(90) }))
     expect(buildPrompt({ ask: 'q'.repeat(300), log, story }).length).toBeLessThan(6000)
   })
 })
@@ -107,7 +109,7 @@ describe('sceneToSvg', () => {
 
   test('the richest possible scene fits the Svg element', () => {
     const big = { pixels: Array.from({ length: 16 }, (_, y) => Array.from({ length: 16 }, (_, x) => 'abcdefgh'[(x * 7 + y * 3) % 8]).join('')), colors: Object.fromEntries([...'abcdefgh'].map((k, i) => [k, `#${i}${i}${i}`])) }
-    for (const backdrop of ['forest', 'sea', 'space', 'city', 'desert', 'volcano', 'rails', 'lab', 'night']) {
+    for (const backdrop of ['forest', 'space', 'city', 'desert', 'volcano', 'lab', 'night']) {
       const scene = parseScene({
         ...GOOD,
         backdrop,
@@ -116,9 +118,11 @@ describe('sceneToSvg', () => {
         particles: { kind: 'sparks', density: 1 },
       })
       if (!scene) throw new Error('expected a scene')
-      const svg = sceneToSvg(scene)
-      expect(svg.length).toBeLessThan(MAX_SVG)
-      expect(svg.startsWith('<svg')).toBe(true)
+      for (const width of [undefined, 3000]) {
+        const svg = sceneToSvg(scene, width ? { width, height: 192 } : {})
+        expect(svg.length).toBeLessThan(MAX_SVG)
+        expect(svg.startsWith('<svg')).toBe(true)
+      }
     }
   })
 
@@ -126,5 +130,36 @@ describe('sceneToSvg', () => {
     const scene = parseScene({ ...GOOD, particles: { kind: 'stars', density: 0.5 } })
     if (!scene) throw new Error('expected a scene')
     expect(sceneToSvg(scene)).toBe(sceneToSvg(scene))
+  })
+
+  test('the stage takes the shape of the box it is drawn in', () => {
+    const scene = parseScene(GOOD)
+    if (!scene) throw new Error('expected a scene')
+    for (const width of [480, 960, 1800]) {
+      const svg = sceneToSvg(scene, { width, height: 192 })
+      expect(svg).toContain(`viewBox="0 0 ${(width * H) / 192} ${H}"`)
+      expect(svg).toContain(`width="${width}" height="192"`)
+    }
+    expect(stageWidth(100, 192)).toBe(MIN_W)
+    expect(stageWidth(99999, 192)).toBe(MAX_W)
+    expect(stageWidth(0, 0)).toBe(640)
+  })
+})
+
+describe('viewer scenarios', () => {
+  test('every scripted scene passes the validator whole, in time order', () => {
+    for (const s of SCENARIOS) {
+      for (const scene of [...s.beats.map(b => b.scene), s.closing]) {
+        const parsed = parseScene(scene)
+        expect(parsed).not.toBeNull()
+        // Nothing was cut: the caption and the tone came through as written.
+        expect(parsed?.caption).toBe((scene as { caption: string }).caption)
+        expect(parsed?.tone).toBe((scene as { tone?: string }).tone)
+      }
+      const times = [...s.steps.map(st => st.at), s.end]
+      expect(times).toEqual([...times].sort((a, b) => a - b))
+      expect(s.beats.every(b => b.at < s.end)).toBe(true)
+      for (const st of s.steps) if ('tool' in st) expect(summarizeTool(st.tool, st.input).length).toBeGreaterThan(4)
+    }
   })
 })
