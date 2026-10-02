@@ -2,7 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import { buildPrompt, sceneFromReply } from '../hooks/narrator'
 import { extractJson, parseHex, parseScene } from '../hooks/scene'
-import { MAX_SVG, sceneToSvg } from '../hooks/svg'
+import { H, MAX_SVG, MAX_W, MIN_W, sceneToSvg, stageWidth } from '../hooks/svg'
 
 const GOOD = {
   backdrop: 'rails',
@@ -116,9 +116,11 @@ describe('sceneToSvg', () => {
         particles: { kind: 'sparks', density: 1 },
       })
       if (!scene) throw new Error('expected a scene')
-      const svg = sceneToSvg(scene)
-      expect(svg.length).toBeLessThan(MAX_SVG)
-      expect(svg.startsWith('<svg')).toBe(true)
+      for (const width of [undefined, 3000]) {
+        const svg = sceneToSvg(scene, width ? { width, height: 192 } : {})
+        expect(svg.length).toBeLessThan(MAX_SVG)
+        expect(svg.startsWith('<svg')).toBe(true)
+      }
     }
   })
 
@@ -126,5 +128,18 @@ describe('sceneToSvg', () => {
     const scene = parseScene({ ...GOOD, particles: { kind: 'stars', density: 0.5 } })
     if (!scene) throw new Error('expected a scene')
     expect(sceneToSvg(scene)).toBe(sceneToSvg(scene))
+  })
+
+  test('the stage takes the shape of the box it is drawn in', () => {
+    const scene = parseScene(GOOD)
+    if (!scene) throw new Error('expected a scene')
+    for (const width of [480, 960, 1800]) {
+      const svg = sceneToSvg(scene, { width, height: 192 })
+      expect(svg).toContain(`viewBox="0 0 ${(width * H) / 192} ${H}"`)
+      expect(svg).toContain(`width="${width}" height="192"`)
+    }
+    expect(stageWidth(100, 192)).toBe(MIN_W)
+    expect(stageWidth(99999, 192)).toBe(MAX_W)
+    expect(stageWidth(0, 0)).toBe(640)
   })
 })

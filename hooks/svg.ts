@@ -2,9 +2,15 @@ import type { FablesProp, FablesScene } from '../types'
 
 import { HERO_FRAMES, PALETTE, SPRITES, type SpriteName } from './sprites'
 
-/** Logical stage, scaled to the band by the SVG's viewBox. */
+/**
+ * The logical stage: always H tall, and as wide as the band's shape asks, from
+ * MIN_W to MAX_W (W when nothing asks), so a wide window shows more of the
+ * scene rather than a bigger one.
+ */
 export const W = 640
 export const H = 128
+export const MIN_W = 320
+export const MAX_W = 1600
 /** One art pixel, in stage units. */
 export const U = 4
 const GROUND_Y = 104
@@ -91,7 +97,7 @@ type Stage = {
   front: string
 }
 
-function backdrop(scene: FablesScene, rand: () => number): Stage {
+function backdrop(scene: FablesScene, rand: () => number, sw: number): Stage {
   const accent = scene.palette.accent
   const parts: string[] = []
   const front: string[] = []
@@ -104,15 +110,15 @@ function backdrop(scene: FablesScene, rand: () => number): Stage {
     case 'forest': {
       sky = '#20261f'
       ground = '#3c6e34'
-      for (let i = 0; i < 9; i++) {
-        const x = at(rand() * W)
+      for (let i = 0; i < Math.round((9 * sw) / W); i++) {
+        const x = at(rand() * sw)
         const h = at(24 + rand() * 30)
         parts.push(
           `<rect x="${x}" y="${GROUND_Y - h}" width="${U * 3}" height="${h}" fill="#2a3a26"/>`,
           `<rect x="${x - U * 2}" y="${GROUND_Y - h - U * 3}" width="${U * 7}" height="${U * 5}" fill="#2f4a2a"/>`,
         )
       }
-      for (let x = 0; x < W; x += U * 5) {
+      for (let x = 0; x < sw; x += U * 5) {
         const h = U * (1 + Math.floor(rand() * 3))
         front.push(`<rect x="${x + at(rand() * 8)}" y="${GROUND_Y - h}" width="${U}" height="${h}" fill="#5e9c4a"/>`)
       }
@@ -122,12 +128,12 @@ function backdrop(scene: FablesScene, rand: () => number): Stage {
       sky = '#1d2530'
       ground = '#1f4e73'
       floor = GROUND_Y - 4
-      const wave = Array.from({ length: W / (U * 4) + 2 }, (_, i) => `M${i * U * 4} 0h${U * 2}v${U}h-${U * 2}z`).join('')
+      const wave = Array.from({ length: sw / (U * 4) + 2 }, (_, i) => `M${i * U * 4} 0h${U * 2}v${U}h-${U * 2}z`).join('')
       front.push(
         `<g><path fill="#4a90c2" d="${wave}" transform="translate(0 ${GROUND_Y - U})"/>` +
           `<animateTransform attributeName="transform" type="translate" values="0 0;-${U * 4} 0" dur="1.2s" repeatCount="indefinite"/></g>`,
       )
-      parts.push(`<circle cx="560" cy="28" r="12" fill="#e3d9a0" opacity=".85"/>`)
+      parts.push(`<circle cx="${sw - 80}" cy="28" r="12" fill="#e3d9a0" opacity=".85"/>`)
       break
     }
     case 'space': {
@@ -136,7 +142,7 @@ function backdrop(scene: FablesScene, rand: () => number): Stage {
       floor = 92
       for (let i = 0; i < 3; i++) {
         const r = 4 + rand() * 12
-        parts.push(`<circle cx="${n(rand() * W)}" cy="${n(10 + rand() * 60)}" r="${n(r)}" fill="${['#54408a', '#7b5fb5', '#8a8780'][i]}" opacity=".7"/>`)
+        parts.push(`<circle cx="${n(rand() * sw)}" cy="${n(10 + rand() * 60)}" r="${n(r)}" fill="${['#54408a', '#7b5fb5', '#8a8780'][i]}" opacity=".7"/>`)
       }
       break
     }
@@ -144,7 +150,7 @@ function backdrop(scene: FablesScene, rand: () => number): Stage {
       sky = '#1e2230'
       ground = '#33353d'
       let x = 0
-      while (x < W) {
+      while (x < sw) {
         const w = at(24 + rand() * 40)
         const h = at(30 + rand() * 50)
         parts.push(`<rect x="${x}" y="${GROUND_Y - h}" width="${w - U}" height="${h}" fill="#2b2f3d"/>`)
@@ -163,9 +169,9 @@ function backdrop(scene: FablesScene, rand: () => number): Stage {
     case 'desert': {
       sky = '#2e2620'
       ground = '#c9a46a'
-      parts.push(`<circle cx="${n(80 + rand() * 480)}" cy="26" r="14" fill="#f0c060"/>`)
-      for (let i = 0; i < 4; i++) {
-        const cx = rand() * W
+      parts.push(`<circle cx="${n(80 + rand() * (sw - 160))}" cy="26" r="14" fill="#f0c060"/>`)
+      for (let i = 0; i < Math.round((4 * sw) / W); i++) {
+        const cx = rand() * sw
         parts.push(`<ellipse cx="${n(cx)}" cy="${GROUND_Y}" rx="${n(60 + rand() * 60)}" ry="${n(8 + rand() * 10)}" fill="#a8844f"/>`)
       }
       break
@@ -173,7 +179,7 @@ function backdrop(scene: FablesScene, rand: () => number): Stage {
     case 'volcano': {
       sky = '#2a1a17'
       ground = '#4a2c20'
-      const vx = at(380 + rand() * 160)
+      const vx = at(sw * 0.6 + rand() * (sw * 0.4 - 120))
       parts.push(
         `<polygon points="${vx},${GROUND_Y} ${vx + 50},${GROUND_Y - 70} ${vx + 66},${GROUND_Y - 70} ${vx + 116},${GROUND_Y}" fill="#5a3520"/>`,
         `<rect x="${vx + 50}" y="${GROUND_Y - 74}" width="16" height="6" fill="#f06a2b"><animate attributeName="fill" values="#f06a2b;#e3b341;#f06a2b" dur="1.4s" repeatCount="indefinite"/></rect>`,
@@ -191,9 +197,9 @@ function backdrop(scene: FablesScene, rand: () => number): Stage {
     case 'rails': {
       sky = '#23232a'
       ground = '#2c2b2f'
-      const ties = Array.from({ length: W / (U * 4) + 2 }, (_, i) => `M${i * U * 4} 0h${U * 2}v${U}h-${U * 2}z`).join('')
+      const ties = Array.from({ length: sw / (U * 4) + 2 }, (_, i) => `M${i * U * 4} 0h${U * 2}v${U}h-${U * 2}z`).join('')
       front.push(
-        `<rect x="0" y="${GROUND_Y}" width="${W}" height="2" fill="#8a8780"/>`,
+        `<rect x="0" y="${GROUND_Y}" width="${sw}" height="2" fill="#8a8780"/>`,
         `<g><path fill="#5a3520" d="${ties}" transform="translate(0 ${GROUND_Y + 3})"/>` +
           `<animateTransform attributeName="transform" type="translate" values="0 0;-${U * 4} 0" dur=".5s" repeatCount="indefinite"/></g>`,
       )
@@ -202,20 +208,20 @@ function backdrop(scene: FablesScene, rand: () => number): Stage {
     case 'lab': {
       sky = '#202628'
       ground = '#3b3e47'
-      for (let x = 0; x < W; x += 32) parts.push(`<rect x="${x}" y="0" width="1" height="${GROUND_Y}" fill="#2a3134"/>`)
-      for (let y = 0; y < GROUND_Y; y += 32) parts.push(`<rect x="0" y="${y}" width="${W}" height="1" fill="#2a3134"/>`)
-      for (let x = 0; x < W; x += U * 4) front.push(`<rect x="${x}" y="${GROUND_Y}" width="${U * 2}" height="${U}" fill="#5b5f6b"/>`)
+      for (let x = 0; x < sw; x += 32) parts.push(`<rect x="${x}" y="0" width="1" height="${GROUND_Y}" fill="#2a3134"/>`)
+      for (let y = 0; y < GROUND_Y; y += 32) parts.push(`<rect x="0" y="${y}" width="${sw}" height="1" fill="#2a3134"/>`)
+      for (let x = 0; x < sw; x += U * 4) front.push(`<rect x="${x}" y="${GROUND_Y}" width="${U * 2}" height="${U}" fill="#5b5f6b"/>`)
       break
     }
     case 'night':
     default: {
       sky = '#1b1d26'
       ground = '#2c2e36'
-      parts.push(`<circle cx="${n(60 + rand() * 520)}" cy="24" r="10" fill="#e8e3c8"/>`)
+      parts.push(`<circle cx="${n(60 + rand() * (sw - 120))}" cy="24" r="10" fill="#e8e3c8"/>`)
       break
     }
   }
-  if (accent) front.push(`<rect x="0" y="${GROUND_Y}" width="${W}" height="2" fill="${accent}" opacity=".7"/>`)
+  if (accent) front.push(`<rect x="0" y="${GROUND_Y}" width="${sw}" height="2" fill="${accent}" opacity=".7"/>`)
   return {
     sky: scene.palette.sky ?? sky,
     ground: scene.palette.ground ?? ground,
@@ -227,13 +233,13 @@ function backdrop(scene: FablesScene, rand: () => number): Stage {
 
 // ---------------------------------------------------------------- particles
 
-function particles(scene: FablesScene, rand: () => number): string {
+function particles(scene: FablesScene, rand: () => number, sw: number): string {
   if (!scene.particles) return ''
   const { kind, density } = scene.particles
-  const count = Math.round(density * 36)
+  const count = Math.round((density * 36 * sw) / W)
   const out: string[] = []
   for (let i = 0; i < count; i++) {
-    const x = n(rand() * W)
+    const x = n(rand() * sw)
     const y = n(rand() * GROUND_Y)
     const dur = n(1.5 + rand() * 3)
     const begin = n(-rand() * 4)
@@ -275,9 +281,9 @@ function particles(scene: FablesScene, rand: () => number): string {
 
 // ---------------------------------------------------------------- props
 
-function label(text: string, cx: number, y: number, color: string): string {
+function label(text: string, cx: number, y: number, color: string, sw: number): string {
   const w = text.length * 5 + 8
-  const x = Math.min(W - w - 2, Math.max(2, cx - w / 2))
+  const x = Math.min(sw - w - 2, Math.max(2, cx - w / 2))
   const top = Math.max(2, y - 13)
   return (
     `<rect x="${n(x)}" y="${n(top)}" width="${w}" height="11" fill="${INK}" stroke="${color}" stroke-width="1"/>` +
@@ -285,11 +291,11 @@ function label(text: string, cx: number, y: number, color: string): string {
   )
 }
 
-function propSvg(prop: FablesProp, floor: number, index: number): string {
+function propSvg(prop: FablesProp, floor: number, index: number, sw: number): string {
   const art = artFor(prop)
   const w = widthOf(art.rows) * U
   const h = art.rows.length * U
-  const x = Math.round(((W - w) * prop.x) / 100)
+  const x = Math.round(((sw - w) * prop.x) / 100)
   const y = prop.y === 'ground' ? floor - h : prop.y === 'air' ? 58 - h / 2 : 8
   const cx = x + w / 2
   const cy = y + h / 2
@@ -316,10 +322,10 @@ function propSvg(prop: FablesProp, floor: number, index: number): string {
       motion = `<animate attributeName="opacity" values="1;.25;1" dur="1s" repeatCount="indefinite"/>`
       break
     case 'scroll':
-      motion = `<animateTransform attributeName="transform" type="translate" values="${W - x} 0;${-x - w} 0" dur="${n(7 + index)}s" repeatCount="indefinite"/>`
+      motion = `<animateTransform attributeName="transform" type="translate" values="${sw - x} 0;${-x - w} 0" dur="${n(7 + index)}s" repeatCount="indefinite"/>`
       break
   }
-  const tag = prop.label ? label(prop.label, cx, y, prop.color ?? '#d9d4c7') : ''
+  const tag = prop.label ? label(prop.label, cx, y, prop.color ?? '#d9d4c7', sw) : ''
   return `<g>${body}${tag}${motion}</g>`
 }
 
@@ -331,10 +337,10 @@ const heroColor = (k: string) => PALETTE[k]
 
 type HeroPlan = { svg: string; endX: number; endY: number }
 
-function hero(scene: FablesScene, floor: number): HeroPlan {
+function hero(scene: FablesScene, floor: number, sw: number): HeroPlan {
   const { action } = scene.hero
   const isMoving = action === 'walk' || action === 'run' || action === 'swim' || action === 'fly'
-  const span = W - HERO_W
+  const span = sw - HERO_W
   const fromX = Math.round((span * scene.hero.from) / 100)
   const toX = Math.round((span * scene.hero.to) / 100)
   const baseY = action === 'fly' ? 34 : action === 'swim' ? floor - HERO_H + 12 : floor - HERO_H
@@ -428,13 +434,13 @@ export function wrap(text: string, width: number): string[] {
   return lines
 }
 
-function caption(text: string, heroX: number, heroY: number, idPrefix: string): string {
+function caption(text: string, heroX: number, heroY: number, idPrefix: string, sw: number): string {
   const lines = wrap(text, 34).slice(0, 3)
   const charW = 5.7
   const w = Math.ceil(Math.max(...lines.map(l => l.length)) * charW + 14)
   const h = lines.length * 11 + 8
   const rightX = heroX + HERO_W + 8
-  const x = rightX + w <= W - 2 ? rightX : Math.max(2, heroX - w - 8)
+  const x = rightX + w <= sw - 2 ? rightX : Math.max(2, heroX - w - 8)
   const y = Math.max(4, Math.min(heroY - 4, GROUND_Y - h - 4) - (heroY > 40 ? 16 : 0))
   let delay = 0.2
   const rows = lines
@@ -468,36 +474,45 @@ function title(text: string, color: string): string {
 
 // ---------------------------------------------------------------- the scene
 
+/** The stage width for a box of the given shape, so the scene fills it exactly. */
+export function stageWidth(width: number, height: number): number {
+  const fit = Number.isFinite(width / height) && width > 0 && height > 0 ? (width * H) / height : W
+  return Math.round(Math.min(MAX_W, Math.max(MIN_W, fit)))
+}
+
 /**
  * Compiles a validated scene into one self-animating SVG document (SMIL), so
- * the desktop plays it with no redraws. Stays under the Svg element's limit by
- * shedding particles, then props, if a scene is too rich.
+ * the desktop plays it with no redraws. The stage takes the box's shape
+ * (`width` by `height` CSS pixels; absent, the default stage at its own size).
+ * Stays under the Svg element's limit by shedding particles, then props, if a
+ * scene is too rich.
  */
 export function sceneToSvg(scene: FablesScene, options: { width?: number; height?: number } = {}): string {
+  const sw = options.width && options.height ? stageWidth(options.width, options.height) : W
+  const width = options.width ?? sw
+  const height = options.height ?? Math.round((width * H) / sw)
   const rand = rng(`${scene.backdrop}|${scene.caption}`)
-  const stage = backdrop(scene, rand)
-  const dust = particles(scene, rand)
-  const props = scene.props.map((p, i) => propSvg(p, stage.floor, i))
-  const plan = hero(scene, stage.floor)
+  const stage = backdrop(scene, rand, sw)
+  const dust = particles(scene, rand, sw)
+  const props = scene.props.map((p, i) => propSvg(p, stage.floor, i, sw))
+  const plan = hero(scene, stage.floor, sw)
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
 
-  const width = options.width ?? W
-  const height = options.height ?? Math.round((width * H) / W)
-  // Sky and ground run far past the stage, so a box of another shape than the
-  // stage shows more sky and ground around it instead of the frame's empty page.
+  // Sky and ground run far past the stage, so a box the stage could not match
+  // (past MIN_W or MAX_W) shows more sky and ground instead of the frame's page.
   const build = (withDust: boolean, propCount: number) =>
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${width}" height="${height}" ` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${sw} ${H}" width="${width}" height="${height}" ` +
     `shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet" style="display:block;background:${stage.ground}">` +
-    `<rect x="${-W * 4}" y="${-H * 4}" width="${W * 9}" height="${H * 4 + GROUND_Y}" fill="${stage.sky}"/>` +
+    `<rect x="${-sw * 4}" y="${-H * 4}" width="${sw * 9}" height="${H * 4 + GROUND_Y}" fill="${stage.sky}"/>` +
     stage.back +
-    `<rect x="${-W * 4}" y="${GROUND_Y}" width="${W * 9}" height="${H * 4}" fill="${stage.ground}"/>` +
+    `<rect x="${-sw * 4}" y="${GROUND_Y}" width="${sw * 9}" height="${H * 4}" fill="${stage.ground}"/>` +
     (withDust ? dust : '') +
     props.slice(0, propCount).join('') +
     plan.svg +
     stage.front +
     (scene.title ? title(scene.title, accent) : '') +
-    caption(scene.caption, plan.endX, plan.endY, idPrefix) +
+    caption(scene.caption, plan.endX, plan.endY, idPrefix, sw) +
     `</svg>`
 
   let svg = build(true, props.length)

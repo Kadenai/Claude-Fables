@@ -22,6 +22,7 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 - **Sonnet writes data, not code.** Each scene is a small declarative JSON object: a backdrop, Claude's action, up to 8 props from a sprite library (custom pixel art up to 16×16 is also allowed), particles and a caption. `hooks/scene.ts` validates it strictly: unknown fields are dropped, numbers clamped, strings flattened and cut, and colors must be 3- or 6-digit hex. A bad reply can't break anything; it just doesn't show.
 - **The animation runs inside the SVG.** `hooks/svg.ts` compiles a scene into one SVG document that animates itself with SMIL: walk cycles, bobbing, scrolling trains, twinkling stars, and a speech bubble that types itself out. Once the scene is drawn, the desktop needs no redraws for it.
 - **It has limits.** Only one Sonnet request runs at a time, scenes come at least 5 seconds apart, and after errors it backs off exponentially, up to 60 seconds. The prompt is always bounded (the last 14 activity lines and the last 4 scenes), so a long session can't outgrow the context window.
+- **It fits the window.** The band always gets a cartoon as wide as it is and 192 px tall. A wider window shows more of the scene, not a bigger one, so the art and the text stay the same size. Resizing the window redraws it.
 - **Desktop only.** In the terminal the band is left exactly as the engine draws it.
 
 | File | What it does |

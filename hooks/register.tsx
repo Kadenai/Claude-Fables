@@ -16,13 +16,21 @@ const LINGER_MS = 30000
 /** This plugin's own tools, if it ever registers any, are not part of the story. */
 const OWN_TOOLS = 'mcp__fables__'
 
-/** CSS pixels per cell of the band, to turn its width in cells into pixels. */
+/**
+ * The band's code font advance in CSS pixels: the desktop measures the band in
+ * cells of it, and the Svg wants pixels.
+ */
 const PX_PER_COLUMN = 8
+/** CSS pixels per stage unit: the stage's H units come out this many times taller. */
+const SCALE = 1.5
 
-/** The band's width in CSS pixels, kept between the stage's size and twice it so text stays legible. */
-function bandWidth(columns: number): number {
-  const px = Number.isFinite(columns) && columns > 0 ? columns * PX_PER_COLUMN : W
-  return Math.round(Math.min(W * 2, Math.max(W / 2, px)))
+/**
+ * The band's box in CSS pixels: its whole width, at a fixed height so the art and
+ * the caption keep one size whatever the window; the stage widens to fill it.
+ */
+function bandBox(columns: number): { width: number; height: number } {
+  const width = Number.isFinite(columns) && columns > 0 ? Math.round(columns * PX_PER_COLUMN) : W * SCALE
+  return { width, height: Math.round(H * SCALE) }
 }
 
 type Ending = 'answer' | 'aborted' | 'error' | 'refusal'
@@ -190,9 +198,8 @@ export const register: Register = (on, options) => {
     if (!current || !(await read($, enabled))) return next(e)
     const { Svg } = $.ui.resolve(e)
     // The interactive frame does not size itself from the markup (left alone it
-    // is a 300x150 box), so give it the band's whole width at the stage's shape.
-    const width = bandWidth(e.props.bodyColumns)
-    const height = Math.round((width * H) / W)
+    // is a 300x150 box), so give it the band's box; a new width draws anew.
+    const { width, height } = bandBox(e.props.bodyColumns)
     return (
       <Svg
         source={sceneToSvg(current, { width, height })}
