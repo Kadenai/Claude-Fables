@@ -1,0 +1,16 @@
+{
+  "name": "fables",
+  "version": "0.1.0",
+  "description": "Claude Fables: turns what the agent is doing into little animated cartoons above the prompt, written live by Sonnet.",
+  "author": { "name": "henrik-thevibe" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "model": {
+      "type": "string",
+      "title": "Scene model",
+      "description": "The model that writes each cartoon scene.",
+      "default": "sonnet",
+      "options": ["sonnet", "haiku", "opus"]
+    }
+  }
+}
