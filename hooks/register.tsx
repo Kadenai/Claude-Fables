@@ -3,9 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { DEFAULT_MODEL, Director, findModel, type Host, MODEL_LABELS, NARRATOR_MODELS, type NarratorModel } from './director'
 import { DEFAULT_LOOK, findLook, LOOK_NAMES, LOOKS, lookFor } from './looks'
-import { typeMs } from './narrator'
-import { ENTRANCE_SECONDS } from './scene'
-import { H, sceneToSvg, W } from './svg'
+import { H, MAX_SVG, resumeAt, sceneToSvg, W } from './svg'
 
 const scene = atom({ plugin: 'fables', key: 'scene' } as const, null)
 const enabled = atom({ plugin: 'fables', key: 'enabled' } as const, true)
@@ -67,12 +65,13 @@ async function setOn($: EngineInterface, n: Director, value: boolean) {
 }
 
 /**
- * The band's drawing of the scene up now. The same scene in the same box draws
- * the same, so the desktop keeps playing it; redrawn in a new box or style
- * once its caption is out, it opens with the caption already written rather
- * than typing it again.
+ * The scene up now, when it went up, and its drawing in the box and style last
+ * asked for. The band is drawn again whenever its props change (the turn
+ * ending flips isWorking, the window is resized) and the desktop may start the
+ * frame over then; so every drawing after the first is set to the scene's own
+ * clock, and it carries on where it was instead of typing its caption again.
  */
-type Drawn = { scene: string; key: string; source: string; at: number }
+type Drawn = { scene: string; at: number; key: string; base: string }
 
 export const register: Register = (on, options) => {
   const n = new Director()
@@ -178,14 +177,14 @@ export const register: Register = (on, options) => {
     const key = `${width}x${height}|${look}`
     const now = await $.clock.now()
     const same = JSON.stringify(current)
-    if (drawn?.scene !== same || drawn.key !== key) {
-      const isUp = drawn?.scene === same
-      const isSettled = isUp && now - (drawn?.at ?? now) >= typeMs(current.caption) + (current.enter ? ENTRANCE_SECONDS * 1000 : 0)
-      drawn = { scene: same, key, at: isUp ? (drawn?.at ?? now) : now, source: sceneToSvg(current, { width, height, look, figure: FIGURE, isSettled }) }
-    }
+    const at = drawn?.scene === same ? drawn.at : now
+    if (drawn?.scene !== same || drawn.key !== key) drawn = { scene: same, at, key, base: sceneToSvg(current, { width, height, look, figure: FIGURE }) }
+    // To a tenth of a second, so drawings in the same moment stay the same.
+    const along = Math.floor((now - at) / 100) / 10
+    const resumed = resumeAt(drawn.base, along)
     return (
       <Svg
-        source={drawn.source}
+        source={resumed.length <= MAX_SVG ? resumed : drawn.base}
         alt={current.caption}
         width={width}
         height={height}

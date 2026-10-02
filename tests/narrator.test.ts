@@ -1,6 +1,8 @@
 import type { ModelCompleteResult, On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
+import { resumeAt } from '../hooks/svg'
+
 const SCENE = {
   backdrop: 'forest',
   hero: { action: 'walk', from: 5, to: 35 },
@@ -161,24 +163,38 @@ test('/fables model switches the storyteller between Sonnet and Haiku, and remem
   expect((await run('model')).text).toContain('Haiku writes the story')
 })
 
-test('a scene redrawn while it is up keeps its caption written instead of typing it again', async ($, on) => {
+test('the band drawn again as the turn ends carries the scene on from where it was, instead of starting it over', async ($, on) => {
   const clock = world(on)
   on('model.complete', () => answer(JSON.stringify(SCENE)))
-  const source = async (bodyColumns: number) => {
-    const desktop = await $.ui.mount({ ...BAND, surface: 'desktop', props: { ...BAND.props, bodyColumns } })
+  on('turn.complete', () => ({ text: 'done' }))
+  const source = async (props: Partial<typeof BAND.props>) => {
+    const desktop = await $.ui.mount({ ...BAND, surface: 'desktop', props: { ...BAND.props, ...props } })
     const svg = await desktop.find({ type: 'Svg' })
     await desktop.unmount()
     return String((svg?.props as { source?: unknown } | undefined)?.source)
   }
+  // When the caption's first line starts typing, in the drawing's own seconds.
+  const typingFrom = (svg: string) => Number(/<clipPath[^>]*><rect[^>]*><animate[^>]*begin="(-?[\d.]+)s"/.exec(svg)?.[1])
 
   await $.session.start({ cwd: '/work', surface: 'desktop', isInteractive: true })
   await $.prompt.submit({ text: 'look for bugs', wait: false, origin: { kind: 'composer' } })
   await clock.advance(1000)
-  const first = await source(100)
-  expect(first).not.toContain('begin="-60s"')
-  // The same box draws the same, so the desktop plays on.
-  expect(await source(100)).toBe(first)
-  // A wider window once the caption is out: the caption is already written.
-  await clock.advance(4000)
-  expect(await source(140)).toContain('begin="-60s"')
+  const first = await source({ isWorking: true })
+  expect(typingFrom(first)).toBe(0.2)
+  // Drawn again in the same moment, it draws the same, so the desktop plays on.
+  expect(await source({ isWorking: true })).toBe(first)
+
+  // Two seconds on, the turn ends: the band is drawn again (isWorking flips, and the box may change).
+  await clock.advance(2000)
+  for (const props of [{ isWorking: false }, { isWorking: false, bodyColumns: 140 }]) {
+    const again = await source(props)
+    expect(typingFrom(again)).toBe(-1.8)
+    expect(again).not.toBe(first)
+  }
+})
+
+test('resumeAt moves every animation back by the time already played', () => {
+  const svg = '<svg><animate attributeName="x" dur="1s" begin="0.5s"/><animateTransform dur="2s" begin="-1s" repeatCount="indefinite"/><set to="1"/></svg>'
+  expect(resumeAt(svg, 2)).toBe('<svg><animate attributeName="x" dur="1s" begin="-1.5s"/><animateTransform dur="2s" begin="-3s" repeatCount="indefinite"/><set to="1" begin="-2s"/></svg>')
+  expect(resumeAt(svg, 0)).toBe(svg)
 })

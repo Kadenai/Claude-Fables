@@ -826,8 +826,6 @@ export function sceneToSvg(
     height?: number
     look?: string
     figure?: 'auto' | 'pixel' | '3d'
-    /** Redrawn while it is up (a new width, a new style): no fade, and the caption already written. */
-    isSettled?: boolean
   } = {},
 ): string {
   const sw = options.width && options.height ? stageWidth(options.width, options.height) : W
@@ -857,7 +855,7 @@ export function sceneToSvg(
   let plan = hero(scene, stage.floor, sw, figure, tint)
   const accent = scene.palette.accent ?? '#d9d4c7'
   const idPrefix = `fable${Math.floor(rand() * 2 ** 31).toString(36)}-`
-  const entrance = scene.enter === 'fade' && !options.isSettled ? ENTRANCE_SECONDS : 0
+  const entrance = scene.enter === 'fade' ? ENTRANCE_SECONDS : 0
   const sky = art?.sky ?? stage.sky
   const ground = art?.ground ?? stage.ground
   // A look's grade takes the stage, Claude and all, before any pixelizing; past the stage's edges its own color shows.
@@ -901,7 +899,7 @@ export function sceneToSvg(
     (look.texture?.(sw, H, GROUND_Y, pixelArt) ?? '') +
     (look.frame?.(sw, H, GROUND_Y) ?? '') +
     (tag?.svg ?? '') +
-    caption(scene.caption, { startX: plan.startX, x: plan.endX, y: plan.endY, arrive: plan.arrive, jump: Math.max(heroReach(scene.hero.action), scene.hero.then ? heroReach(scene.hero.then) : 0), sway: scene.hero.action === 'inspect' ? 2 * U : 0 }, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined, options.isSettled ? -60 : entrance + 0.2) +
+    caption(scene.caption, { startX: plan.startX, x: plan.endX, y: plan.endY, arrive: plan.arrive, jump: Math.max(heroReach(scene.hero.action), scene.hero.then ? heroReach(scene.hero.then) : 0), sway: scene.hero.action === 'inspect' ? 2 * U : 0 }, idPrefix, sw, look, avoid(propCount), rich ? (scene.tone ?? (scene.hero.action === 'celebrate' ? 'milestone' : 'work')) : undefined, entrance + 0.2) +
     // A new setting fades in from the dark, so the band never jumps from one place to the next.
     (entrance ? `<rect x="${-sw * 4}" y="${-H * 4}" width="${sw * 9}" height="${H * 9}" fill="#0b0b10" pointer-events="none"><animate attributeName="opacity" values="1;0" dur="${n(entrance)}s" fill="freeze"/></rect>` : '') +
     `</svg>`
@@ -932,4 +930,20 @@ export function sceneToSvg(
   }
   for (let count = propsShown - 1; svg.length > BUDGET && count >= 0; count--) svg = build(false, count)
   return svg
+}
+
+/**
+ * The same drawing, its clock already `seconds` along: every animation begins
+ * that much earlier, so a scene drawn again while it is up (the band redrawn
+ * when the turn ends, a new width, a new style) carries on from where it was:
+ * the caption as far typed as it was, Claude as far along. Every begin in a
+ * scene is a plain offset in seconds, and an animation without one begins at 0.
+ */
+export function resumeAt(svg: string, seconds: number): string {
+  if (!(seconds > 0)) return svg
+  return svg.replace(/<(animate|animateTransform|animateMotion|set)\b([^>]*?)(\/?)>/g, (_, tag: string, attrs: string, close: string) => {
+    const at = /\sbegin="(-?[\d.]+)s"/.exec(attrs)
+    const moved = at ? attrs.replace(at[0], ` begin="${n(Number(at[1]) - seconds)}s"`) : `${attrs} begin="${n(-seconds)}s"`
+    return `<${tag}${moved}${close}>`
+  })
 }
