@@ -33,8 +33,10 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 | `hooks/scene.ts` | The scene format and its validator |
 | `hooks/sprites.ts` | The pixel-art library: Claude in two walk frames, plus 30+ props |
 | `hooks/svg.ts` | Scene → animated SVG: backdrops, particles, props, hero, caption |
-| `hooks/looks.ts` | The styles: each one's grade, texture, frame, chapter tag and caption paper |
-| `hooks/grade.ts` | The filter building blocks the styles grade with: ramps, hue masks, outlines, screens, tesserae |
+| `hooks/looks.ts` | The looks: Pixel Art, the Original, and the registry of styles |
+| `hooks/styles/*.ts` | The eleven gallery styles, each an art bible: inks, how each kind of element is drawn, Claude, caption, tag, frame |
+| `hooks/art/roles.ts`, `hooks/art/painter.ts`, `hooks/art/ink.ts` | The roles scenes paint their elements under, and the painter a style redraws them with |
+| `hooks/grade.ts` | The medium a grid style sets the drawn stage into: tesserae, stitches, a weave, LCD pixels |
 | `hooks/clawd3d.ts` | The 3D Claude: the box model, its motions and its projection (ported from the gallery) |
 | `hooks/hero3d.ts` | Bakes the posed 3D model into SVG frames that SMIL plays in turn |
 | `hooks/scenery.ts` | The seven authored scenes: light maps, materials, reflections |
