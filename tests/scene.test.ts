@@ -6,7 +6,7 @@ import { summarizeTool } from '../hooks/activity'
 import { buildPrompt, readMs, sceneFromReply } from '../hooks/narrator'
 import { cleanCaption, extractJson, MAX_CAPTION, parseHex, parseScene } from '../hooks/scene'
 import { H, MAX_SVG, MAX_W, MIN_W, resumeAt, sceneToSvg, speaksAfter, stageWidth } from '../hooks/svg'
-import { NARRATOR_MODELS } from '../hooks/director'
+import { CLAUDE_NARRATOR_MODELS as NARRATOR_MODELS } from '../hooks/director'
 import { rehearse } from '../scripts/rehearse'
 import { SCENARIOS } from '../scripts/scenarios'
 

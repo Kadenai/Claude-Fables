@@ -11,7 +11,7 @@
  * what it sends, and what it does with a bad reply are exactly what the plugin
  * does live. Each reply answers the narrator's next ask, in order.
  */
-import type { Ending, NarratorModel } from '../hooks/director'
+import type { Ending, ClaudeNarratorModel } from '../hooks/director'
 
 export type Step =
   | { at: number; tool: string; input: Record<string, unknown>; out?: string; failed?: boolean }
@@ -30,7 +30,7 @@ export type Scenario = {
   end: number
   ending?: Ending
   /** What each model writes back, in the order the narrator asks. */
-  replies: Record<NarratorModel, Reply[]>
+  replies: Record<ClaudeNarratorModel, Reply[]>
 }
 
 /** A reply as bare JSON, the way it usually comes back. */

@@ -1,5 +1,6 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
+import { AgyNarrator, findBridgeServer, type Bridge } from './agy'
 
 import { DEFAULT_MODEL, Director, findModel, type Host, MODEL_LABELS, NARRATOR_MODELS, type NarratorModel } from './director'
 import { DEFAULT_LOOK, findLook, LOOK_NAMES, LOOKS, lookFor } from './looks'
@@ -37,11 +38,34 @@ function bandBox(columns: number): { width: number; height: number } {
   return { width, height: Math.round(H * SCALE) }
 }
 
-/** The narrator's host in a session: Claude Code's clock, its model, the band, and how the band draws a scene. */
-function host($: EngineInterface, band: Band): Host {
+/** Access to the connected bridge through the mod's capability table. */
+function bridge($: EngineInterface, server: string): Bridge {
+  return {
+    call: (tool, args) => $.mcp.call(server, tool, args),
+    now: () => $.clock.now(),
+    log: message => $.ui.log(message),
+  }
+}
+async function bridgeServer($: EngineInterface, configured: string): Promise<string> {
+  if (configured !== 'auto') return configured
+  const server = findBridgeServer(await $.tool.list())
+  if (!server) throw new Error('AGY Bridge is not connected. Enable it in /mcp or set the AGY Bridge MCP server option.')
+  return server
+}
+function host($: EngineInterface, band: Band, agy: AgyNarrator, server: string): Host {
   return {
     now: () => $.clock.now(),
-    complete: ask => $.model.complete(ask),
+    complete: async ask => {
+      if (ask.model === 'agy') {
+        try { return await agy.complete(bridge($, await bridgeServer($, server)), await $.session.cwd(), ask) }
+        catch (error) {
+          await $.ui.log(`AGY narrator: ${error instanceof Error ? error.message : String(error)} No Claude fallback.`)
+          return { isAnswered: false, text: '' }
+        }
+      }
+      const reply = await $.model.complete({ ...ask, model: ask.model })
+      return { isAnswered: reply.isAnswered, text: reply.isAnswered ? reply.text : '' }
+    },
     show: drawn => update($, scene, () => drawn),
     speaksAfter: async next => speaksAfter((await draw($, band, next)).base) * 1000,
   }
@@ -92,6 +116,8 @@ async function draw($: EngineInterface, band: Band, next: FablesScene): Promise<
 
 export const register: Register = (on, options) => {
   const n = new Director()
+  const agy = new AgyNarrator()
+  const server = typeof options.agyServer === 'string' && options.agyServer.trim() ? options.agyServer.trim() : 'auto'
   const band: Band = { box: bandBox(NaN) }
   // The config menu's choice is the default; /fables model overrides it.
   const configured = findModel(options.model) ?? DEFAULT_MODEL
@@ -110,9 +136,12 @@ export const register: Register = (on, options) => {
     await $.command.register({
       name: 'fables',
       description: 'Claude Fables: turn the cartoons above the prompt on or off, pick a style, or pick the model that writes them',
-      argumentHint: '[on|off|style [name|off]|model [sonnet|haiku]]',
+      argumentHint: '[on|off|style [name|off]|model [sonnet|haiku|agy]]',
     })
-    $.clock.every(1000, () => void n.tick(host($, band)))
+    $.clock.every(1000, async () => {
+      await agy.poll()
+      void n.tick(host($, band, agy, server))
+    })
     return next(e)
   })
 
@@ -126,7 +155,8 @@ export const register: Register = (on, options) => {
         return { text: `${MODEL_LABELS[n.model]} writes the story. Pick another with /fables model <name>:\n${list}` }
       }
       const model = findModel(want)
-      if (!model) return { text: `No narrator called "${want}". Try /fables model sonnet or /fables model haiku.` }
+      if (!model) return { text: `No narrator called "${want}". Try /fables model sonnet, /fables model haiku, or /fables model agy.` }
+      await agy.cancel()
       return chooseModel($, n, model)
     }
     const st = /^(?:style|styles|look)\b\s*(.*)$/.exec(arg)
@@ -144,7 +174,8 @@ export const register: Register = (on, options) => {
     const px = /^pixel(?:\s+(on|off))?$/.exec(arg)
     if (px) return chooseLook($, n, px[1] === 'off' || (!px[1] && n.look === 'pixel') ? 'original' : 'pixel')
     const value = arg === 'on' ? true : arg === 'off' ? false : !n.isOn
-    await setOn($, n, host($, band), value)
+    if (!value) await agy.cancel()
+    await setOn($, n, host($, band, agy, server), value)
     return {
       text: value
         ? `Claude Fables is on: cartoons written by ${MODEL_LABELS[n.model]} play above the prompt while Claude works.`
@@ -154,6 +185,11 @@ export const register: Register = (on, options) => {
 
   on('prompt.submit', async ($, e, next) => {
     n.submit(e.text)
+    return next(e)
+  })
+
+  on('session.end', async ($, e, next) => {
+    await agy.cancel()
     return next(e)
   })
 

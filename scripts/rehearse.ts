@@ -9,7 +9,7 @@
  */
 import type { FablesScene } from '../types'
 
-import { type Answer, Director, type Ending, type Host, LINGER_MS, type NarratorModel } from '../hooks/director'
+import { type Answer, Director, type Ending, type Host, LINGER_MS, type NarratorModel, type ClaudeNarratorModel } from '../hooks/director'
 
 import type { Scenario, Step } from './scenarios'
 
@@ -38,7 +38,7 @@ export type Rehearsal = {
 const STEP_MS = 100
 
 /** Runs the session for one narrating model; `look` is the style the scenes are drawn in (it changes the prompt). */
-export async function rehearse(scenario: Scenario, model: NarratorModel, look = 'pixel'): Promise<Rehearsal> {
+export async function rehearse(scenario: Scenario, model: ClaudeNarratorModel, look = 'pixel'): Promise<Rehearsal> {
   let now = 0
   const moments: Moment[] = []
   const timers: { due: number; run: () => void; done?: boolean }[] = []

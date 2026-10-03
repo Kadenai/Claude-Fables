@@ -28,6 +28,8 @@
 </p>
 
 > [!NOTE]
+> **AGY Bridge fork:** this version can narrate scenes through Antigravity/Gemini with `/fables model agy`, without Claude fallback. See [setup and testing instructions](AGY-BRIDGE.md) (Português). The original Sonnet/Haiku narrators are still available.
+>
 > Claude Fables was developed entirely in Claude Code cloud environments and tested locally in the desktop app as well. Still, there may be bugs and rough edges. [Issues](https://github.com/henrik-thevibe/Claude-Fables/issues) and pull requests are very welcome.
 
 While Claude works, Fables watches each tool call it makes and each line it says. Every few seconds it asks Sonnet (or Haiku, if you prefer) to retell the latest moment as a scene. Bug hunts turn into nature documentaries and bad regexes get pulled over by the train police. Claude appears as a small orange critter walking, sneaking or flying through the story. When the turn ends there is a closing scene, and it stays up for 30 seconds.
@@ -124,6 +126,8 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 - `/fables model haiku` and `/fables model sonnet`: pick who writes the story. Sonnet is the default and writes wittier scenes; Haiku answers in about a second and costs less, but writes plainer captions and slips a little more often (a bad reply is simply skipped). `/fables model` shows which one is on. The choice is remembered across sessions; the config menu's **Scene model** (`pluginConfigs.fables.model`) sets the default.
 
 Every scene is one small model request, so this costs a few requests per minute while Claude is working.
+
+- `/fables model agy`: ask the connected AGY Bridge to write scenes instead. Gemini supplies JSON to the same scene validator and SVG renderer; failures never fall back to Claude. See [AGY-BRIDGE.md](AGY-BRIDGE.md) for setup and testing.
 
 ## The scenes
 

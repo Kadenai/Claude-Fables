@@ -11,16 +11,19 @@ import { type Activity, pushActivity, summarizeSpeech, summarizeTool } from './a
 import { backoffMs, buildPrompt, readMs, remember, sceneFromReply, type StoryBeat, SYSTEM } from './narrator'
 import { lookFor } from './looks'
 
-/** The models that can write the story: Sonnet by default, Haiku for quicker, cheaper scenes. */
-export const NARRATOR_MODELS = ['sonnet', 'haiku'] as const
+/** Claude models have scripted viewer fixtures; AGY uses the connected bridge. */
+export const CLAUDE_NARRATOR_MODELS = ['sonnet', 'haiku'] as const
+export type ClaudeNarratorModel = (typeof CLAUDE_NARRATOR_MODELS)[number]
+export const NARRATOR_MODELS = [...CLAUDE_NARRATOR_MODELS, 'agy'] as const
 export type NarratorModel = (typeof NARRATOR_MODELS)[number]
 export const DEFAULT_MODEL: NarratorModel = 'sonnet'
-export const MODEL_LABELS: Record<NarratorModel, string> = { sonnet: 'Sonnet', haiku: 'Haiku' }
+export const MODEL_LABELS: Record<NarratorModel, string> = { sonnet: 'Sonnet', haiku: 'Haiku', agy: 'AGY Bridge' }
 
 /** A model name as a person might type it, or as an older config holds it, to one of the narrators. */
 export function findModel(name: unknown): NarratorModel | undefined {
   const s = typeof name === 'string' ? name.trim().toLowerCase() : ''
-  return NARRATOR_MODELS.find(m => s === m || s.startsWith(`claude-${m}`) || s.includes(m))
+  if (s === 'agy' || s === 'agy-bridge') return 'agy'
+  return NARRATOR_MODELS.find(m => m !== 'agy' && (s === m || s.startsWith(`claude-${m}`) || s.includes(m)))
 }
 
 /** How long the last scene of a turn stays up once the turn is over (and at least until it is read). */

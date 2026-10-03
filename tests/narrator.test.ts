@@ -163,6 +163,74 @@ test('/fables model switches the storyteller between Sonnet and Haiku, and remem
   expect((await run('model')).text).toContain('Haiku writes the story')
 })
 
+test('/fables model agy renders a bridge scene, persists the choice, and never calls Claude', async ($, on) => {
+  const clock = world(on)
+  const calls: { tool: string; args: Record<string, unknown> }[] = []
+  let claudeCalls = 0
+  on('session.cwd', () => ({ value: '/work' }))
+  on('tool.list', () => ({ value: [{ name: 'mcp__agy-bridge__start_task', description: '', mcp: true }] }))
+  on('model.complete', () => { claudeCalls++; return answer(JSON.stringify(SCENE)) })
+  on('mcp.call', (_, e) => {
+    calls.push({ tool: e.tool, args: e.args })
+    const result = e.tool === 'start_task' ? { taskId: 'scene-task' } : { status: 'success', response: JSON.stringify(SCENE) }
+    return { value: { content: [{ type: 'text', text: JSON.stringify(result) }], isError: false } }
+  })
+  const run = (args: string) => $.command.run({ command: 'fables', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })
+  await $.session.start({ cwd: '/work', surface: 'desktop', isInteractive: true })
+  expect((await run('model agy')).text).toContain('AGY Bridge now writes the story')
+  await $.prompt.submit({ text: 'test the bridge', wait: false, origin: { kind: 'composer' } })
+  await clock.advance(3000)
+  expect(calls[0]?.tool).toBe('start_task')
+  expect(calls[0]?.args.workspace).toBe('/work')
+  expect(claudeCalls).toBe(0)
+  const desktop = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await desktop.find({ type: 'Svg' })).toBeDefined()
+  await desktop.unmount()
+  await $.session.start({ cwd: '/work', surface: 'desktop', isInteractive: true })
+  expect((await run('model')).text).toContain('AGY Bridge writes the story')
+})
+
+test('AGY MCP errors do not fall back to Claude', async ($, on) => {
+  const clock = world(on)
+  let claudeCalls = 0
+  on('session.cwd', () => ({ value: '/work' }))
+  on('tool.list', () => ({ value: [{ name: 'mcp__agy-bridge__start_task', description: '', mcp: true }] }))
+  on('model.complete', () => { claudeCalls++; return answer(JSON.stringify(SCENE)) })
+  on('mcp.call', () => ({ value: { content: [{ type: 'text', text: '{"error":"not connected"}' }], isError: true } }))
+  on('ui.log', () => ({ value: undefined }))
+  await $.session.start({ cwd: '/work', surface: 'desktop', isInteractive: true })
+  await $.command.run({ command: 'fables', args: 'model agy', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })
+  await $.prompt.submit({ text: 'test failure', wait: false, origin: { kind: 'composer' } })
+  await clock.advance(3000)
+  expect(claudeCalls).toBe(0)
+  const desktop = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await desktop.find({ type: 'Svg' })).toBe(undefined)
+  await desktop.unmount()
+})
+
+test('/fables off and model switching cancel a queued AGY scene on its detected server', async ($, on) => {
+  const clock = world(on)
+  const cancelled: string[] = []
+  on('session.cwd', () => ({ value: '/work' }))
+  on('tool.list', () => ({ value: [{ name: 'mcp__plugin_agy-bridge_agy-bridge__start_task', description: '', mcp: true }] }))
+  on('mcp.call', (_, e) => {
+    if (e.tool === 'cancel_task') cancelled.push(e.server)
+    const result = e.tool === 'start_task' ? { taskId: 'scene-task' } : { status: e.tool === 'cancel_task' ? 'cancelled' : 'queued' }
+    return { value: { content: [{ type: 'text', text: JSON.stringify(result) }], isError: false } }
+  })
+  const run = (args: string) => $.command.run({ command: 'fables', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })
+  await $.session.start({ cwd: '/work', surface: 'desktop', isInteractive: true })
+  await run('model agy')
+  await $.prompt.submit({ text: 'one', wait: false, origin: { kind: 'composer' } })
+  await clock.advance(2000)
+  await run('off')
+  await run('on')
+  await $.prompt.submit({ text: 'two', wait: false, origin: { kind: 'composer' } })
+  await clock.advance(12000)
+  await run('model sonnet')
+  expect(cancelled).toEqual(['plugin_agy-bridge_agy-bridge', 'plugin_agy-bridge_agy-bridge'])
+})
+
 test('the band drawn again as the turn ends carries the scene on from where it was, instead of starting it over', async ($, on) => {
   const clock = world(on)
   on('model.complete', () => answer(JSON.stringify(SCENE)))
