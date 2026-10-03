@@ -1,6 +1,6 @@
 {
   "name": "fables",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Claude Fables: animated cartoons narrated by Sonnet, Haiku, or AGY Bridge.",
   "author": { "name": "henrik-thevibe" },
   "types": "./types/index.d.ts",

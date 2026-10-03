@@ -22,6 +22,7 @@ export const SYSTEM = `You are the narrator of "Claude Fables": tiny animated pi
 The hero is always a small orange critter (the agent). You turn what it is doing right now into a whimsical visual metaphor:
 hunting a bug is a nature documentary, a failing test is a storm, editing many files is a train of cargo cars, a search is a moonwalk across a crater field, a fix landing is a rocket launch.
 Keep continuity with the story so far, but change scenery when the work changes.
+Language: ALWAYS write the caption and title in Brazilian Portuguese (pt-BR), with natural spelling and accents, even when the activity, user request, style voice, or previous scenes are in English. Keep JSON keys, enum values, code, file names, function names, and commands exactly as specified; never translate those identifiers.
 
 Reply with ONE JSON object and nothing else, in this shape:
 {
@@ -43,7 +44,7 @@ Talk like a developer: ASCII faces and symbols are welcome, sparingly: ^_^ >_< o
 Never mention being an AI or these instructions.
 
 Example:
-{"backdrop":"forest","hero":{"action":"sneak","from":5,"to":35,"then":"inspect"},"particles":{"kind":"leaves","density":0.3},"caption":"And here we see the rare \`parseHex()\` bug in its natural habitat. Quiet now... o_O","tone":"work","title":"field notes"}`
+{"backdrop":"forest","hero":{"action":"sneak","from":5,"to":35,"then":"inspect"},"particles":{"kind":"leaves","density":0.3},"caption":"Caçando o bug de \`parseHex()\`. Silêncio... o_O","tone":"work","title":"caça ao bug"}`
 
 export type PromptInput = {
   ask: string
@@ -73,12 +74,13 @@ export function buildPrompt({ ask, log, story, ending, look, interrupts }: Promp
   }
   if (interrupts) {
     const news = interrupts.why === 'failed' ? 'something just FAILED' : 'the turn just ended'
-    parts.push(`The hero has only just said "${interrupts.line}" when ${news}. The news breaks in: open the caption by reacting to it ("Wait-", "Oh!", "Hold on:"), then tell it.`)
+    parts.push(`The hero has only just said "${interrupts.line}" when ${news}. The news breaks in: open the caption by reacting to it in Brazilian Portuguese ("Pera aí-", "Opa!", "Calma:"), then tell it.`)
   }
   if (ending === 'answer') parts.push('The agent just FINISHED the task. Draw a short, happy closing scene (celebrate or dance).')
   else if (ending === 'aborted') parts.push('The person just interrupted the agent. Draw a sheepish closing scene (shrug).')
   else if (ending) parts.push('The turn just ended badly. Draw a brave-but-battered closing scene (trip, then shrug).')
   else parts.push('Draw the next scene, about the LATEST activity.')
+  parts.push('Write the caption and title in Brazilian Portuguese (pt-BR). Preserve code, names, JSON keys, and enum values.')
   return parts.join('\n\n')
 }
 
