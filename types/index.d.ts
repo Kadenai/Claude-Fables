@@ -66,6 +66,8 @@ declare module 'claude-code' {
       enabled: boolean
       /** The style scenes are drawn in (looks.ts): 'pixel' by default, 'original', or a gallery style. */
       style: string
+      /** Animation height in CSS pixels, saved by /fables size. */
+      height: number
     }
   }
 }

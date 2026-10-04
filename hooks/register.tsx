@@ -11,11 +11,13 @@ import { H, MAX_SVG, resumeAt, sceneToSvg, speaksAfter, W } from './svg'
 const scene = atom({ plugin: 'fables', key: 'scene' } as const, null)
 const enabled = atom({ plugin: 'fables', key: 'enabled' } as const, true)
 const style = atom({ plugin: 'fables', key: 'style' } as const, DEFAULT_LOOK)
+const animationHeight = atom({ plugin: 'fables', key: 'height' } as const, 128)
 
 const STORE_ENABLED = 'enabled'
 const STORE_PIXEL = 'pixelArt'
 const STORE_STYLE = 'style'
 const STORE_MODEL = 'model'
+const STORE_HEIGHT = 'height'
 /** Every scene is drawn with the 3D Claude, in the style the person chose (looks.ts). */
 const FIGURE = '3d'
 /** This plugin's own tools, if it ever registers any, are not part of the story. */
@@ -26,16 +28,22 @@ const OWN_TOOLS = 'mcp__fables__'
  * cells of it, and the Svg wants pixels.
  */
 const PX_PER_COLUMN = 8
-/** CSS pixels per stage unit: the stage's H units come out this many times taller. */
-const SCALE = 1.5
+const DEFAULT_HEIGHT = 128
+const MIN_HEIGHT = 64
+const MAX_HEIGHT = 256
+
+function frameHeight(value: unknown, fallback = DEFAULT_HEIGHT): number {
+  const number = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN
+  return Number.isFinite(number) ? Math.round(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, number))) : fallback
+}
 
 /**
- * The band's box in CSS pixels: its whole width, at a fixed height so the art and
- * the caption keep one size whatever the window; the stage widens to fill it.
+ * The band's box in CSS pixels: the chosen height scales the art and caption;
+ * the stage widens to fill the window.
  */
-function bandBox(columns: number): { width: number; height: number } {
-  const width = Number.isFinite(columns) && columns > 0 ? Math.round(columns * PX_PER_COLUMN) : W * SCALE
-  return { width, height: Math.round(H * SCALE) }
+function bandBox(columns: number, height: number): { width: number; height: number } {
+  const width = Number.isFinite(columns) && columns > 0 ? Math.round(columns * PX_PER_COLUMN) : Math.round(W * height / H)
+  return { width, height }
 }
 
 /** Access to the connected bridge through the mod's capability table. */
@@ -118,7 +126,8 @@ export const register: Register = (on, options) => {
   const n = new Director()
   const agy = new AgyNarrator()
   const server = typeof options.agyServer === 'string' && options.agyServer.trim() ? options.agyServer.trim() : 'auto'
-  const band: Band = { box: bandBox(NaN) }
+  const configuredHeight = frameHeight(options.height)
+  const band: Band = { box: bandBox(NaN, configuredHeight) }
   // The config menu's choice is the default; /fables model overrides it.
   const configured = findModel(options.model) ?? DEFAULT_MODEL
   n.model = configured
@@ -128,6 +137,8 @@ export const register: Register = (on, options) => {
     n.isOn = (await $.store.get(STORE_ENABLED)) !== false
     n.model = findModel(await $.store.get(STORE_MODEL)) ?? configured
     await update($, enabled, () => n.isOn)
+    const savedHeight = await $.store.get(STORE_HEIGHT)
+    await update($, animationHeight, () => frameHeight(savedHeight, configuredHeight))
     const saved = await $.store.get(STORE_STYLE)
     // Pixel art was once a switch of its own: someone who turned it off keeps the original look, drawn smooth.
     const smooth = (await $.store.get(STORE_PIXEL)) === false
@@ -136,7 +147,7 @@ export const register: Register = (on, options) => {
     await $.command.register({
       name: 'fables',
       description: 'Claude Fables: turn the cartoons above the prompt on or off, pick a style, or pick the model that writes them',
-      argumentHint: '[on|off|style [name|off]|model [sonnet|haiku|agy]]',
+      argumentHint: '[on|off|size [64-256]|style [name|off]|model [sonnet|haiku|agy]]',
     })
     $.clock.every(1000, async () => {
       await agy.poll()
@@ -147,6 +158,17 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'fables' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
+    const sz = /^(?:size|tamanho)\b\s*(.*)$/.exec(arg)
+    if (sz) {
+      const want = (sz[1] ?? '').trim()
+      if (!want) return { text: `Altura atual: ${await read($, animationHeight)} px. Use /fables size 96 para diminuir ou /fables size 192 para o tamanho original.` }
+      const aliases: Record<string, number> = { small: 96, pequeno: 96, normal: 128, original: 192, large: 192, grande: 192, default: configuredHeight }
+      const chosen = aliases[want] ?? (/^\d+$/.test(want) ? Number(want) : NaN)
+      if (!Number.isFinite(chosen) || chosen < MIN_HEIGHT || chosen > MAX_HEIGHT) return { text: 'Escolha uma altura entre 64 e 256 pixels. Exemplo: /fables size 96.' }
+      await $.store.set(STORE_HEIGHT, chosen)
+      await update($, animationHeight, () => chosen)
+      return { text: `Altura da animação: ${chosen} px.` }
+    }
     const md = /^(?:model|models|narrator)\b\s*(.*)$/.exec(arg)
     if (md) {
       const want = (md[1] ?? '').trim()
@@ -225,7 +247,7 @@ export const register: Register = (on, options) => {
     const { Box, Svg } = $.ui.resolve(e)
     // The interactive frame does not size itself from the markup (left alone it
     // is a 300x150 box), so give it the band's box; a new width draws anew.
-    band.box = bandBox(e.props.bodyColumns)
+    band.box = bandBox(e.props.bodyColumns, await read($, animationHeight))
     const { width, height } = band.box
     const { base, at } = await draw($, band, current)
     // To a tenth of a second, so drawings in the same moment stay the same.

@@ -1,6 +1,6 @@
 {
   "name": "fables",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Claude Fables: animated cartoons narrated by Sonnet, Haiku, or AGY Bridge.",
   "author": { "name": "henrik-thevibe" },
   "types": "./types/index.d.ts",
@@ -11,6 +11,12 @@
       "description": "Who writes each scene: Sonnet, Haiku, or Gemini through AGY Bridge. /fables model switches it in a session.",
       "default": "sonnet",
       "options": ["sonnet", "haiku", "agy"]
+    },
+    "height": {
+      "type": "number",
+      "title": "Altura da animação (px)",
+      "description": "Altura de 64 a 256 pixels. Padrão: 128. /fables size altera e salva o tamanho.",
+      "default": 128
     },
     "agyServer": {
       "type": "string",

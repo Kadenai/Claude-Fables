@@ -89,7 +89,7 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 - **Changes are smooth.** A scene in a new setting fades in from the last one; one in the same setting carries straight on. Each scene is drawn once and kept, so the desktop plays it through. The desktop draws the band again whenever its props change, and the end of a turn always changes them. So every redraw of a scene that is up (the turn ending, a resize, a new style) is set to the scene's own clock: the caption is exactly as far typed as it was, and Claude is exactly as far along.
 - **Captions fit the bubble.** The narrator is asked for at most 70 characters. The hard limit is 80, the most the bubble shows whole in four lines. A longer caption is cut after its last full sentence, or else after a whole word with an ellipsis, never mid-word. The bubble always shows every word it is given.
 - **It has limits.** Only one model request runs at a time, scenes come at least 5 seconds apart, and after errors it backs off exponentially, up to 60 seconds. The prompt is always bounded (the last 14 activity lines and the last 4 scenes), so a long session can't outgrow the context window.
-- **It fits the window.** The band always gets a cartoon as wide as it is and 192 px tall. A wider window shows more of the scene, not a bigger one, so the art and the text stay the same size. Resizing the window redraws it.
+- **It fits the window.** The band gets a cartoon as wide as it is and 128 px tall by default. `/fables size 96` makes it smaller; `/fables size 192` restores the original height. The chosen size is saved. A wider window shows more of the scene, and resizing the window redraws it.
 - **Desktop only.** In the terminal the band is left exactly as the engine draws it.
 
 </details>
@@ -128,6 +128,7 @@ tool calls, Claude's own words ──► activity log (last 14 lines)
 Every scene is one small model request, so this costs a few requests per minute while Claude is working.
 
 - `/fables model agy`: ask the connected AGY Bridge to write scenes instead. Gemini supplies JSON to the same scene validator and SVG renderer; failures never fall back to Claude. See [AGY-BRIDGE.md](AGY-BRIDGE.md) for setup and testing.
+- `/fables size 96` (or `/fables tamanho 96`): set the animation height in pixels, from 64 to 256. The default is 128; 192 is the original size. `/fables size` shows the current height. The choice is remembered across sessions.
 
 ## The scenes
 

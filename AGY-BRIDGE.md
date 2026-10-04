@@ -8,6 +8,8 @@ Na versão **0.2.2**, a animação preserva o conteúdo de outros mods na faixa 
 
 ## Como testar no Claude Code Desktop
 
+A animação agora usa **128 px de altura** por padrão (antes: 192 px). Para reduzir mais, execute `/fables size 96` ou `/fables tamanho 96`. `/fables size` mostra a altura atual; `/fables size 192` restaura o tamanho original. A escolha é salva para as próximas sessões. Você também pode configurar a opção **Altura da animação (px)** no menu do plugin. São aceitas alturas de 64 a 256 pixels.
+
 1. Instale e autentique o Antigravity CLI e habilite o plugin **AGY Bridge no Claude Code**. Ter o bridge conectado no Codex não o conecta automaticamente ao Claude Code. Abra `/mcp` no Claude Code e confirme que o bridge está disponível.
 2. Clone este fork para uma pasta permanente:
 
