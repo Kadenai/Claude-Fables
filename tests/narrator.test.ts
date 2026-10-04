@@ -55,6 +55,22 @@ test('activity becomes a scene drawn above the prompt on the desktop only', asyn
   await terminal.unmount()
 })
 
+test('a right click opens an Ocultar menu and hides only the Fables animation', async ($, on) => {
+  const clock = world(on)
+  on('model.complete', () => answer(JSON.stringify(SCENE)))
+  await $.session.start({ cwd: '/work', surface: 'desktop', isInteractive: true })
+  await $.prompt.submit({ text: 'show the menu', wait: false, origin: { kind: 'composer' } })
+  await clock.advance(1000)
+  const desktop = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  await desktop.resize({ columns: 100, rows: 8, in: 'fables-controls' })
+  await desktop.pointer({ type: 'down', x: 5, y: 2, button: 'right', in: 'fables-controls' })
+  expect(await desktop.find({ key: 'hide-fables', in: 'fables-controls' })).toBeDefined()
+  await desktop.press({ key: 'hide-fables', in: 'fables-controls' })
+  expect(await desktop.find({ type: 'Svg' })).toBeUndefined()
+  expect(await desktop.find({ type: 'Text', text: 'engine band' })).toBeDefined()
+  await desktop.unmount()
+})
+
 test('a garbage reply is skipped and the narrator backs off', async ($, on) => {
   const clock = world(on)
   let calls = 0

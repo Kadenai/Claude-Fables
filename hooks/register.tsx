@@ -215,6 +215,13 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  on('ui.message', { component: 'AbovePrompt', element: 'fables-controls' }, async ($, e) => {
+    if (e.surface !== 'desktop' || !e.data || typeof e.data !== 'object' || !('action' in e.data) || e.data.action !== 'hide') return {}
+    await agy.cancel()
+    await setOn($, n, host($, band, agy, server), false)
+    return {}
+  })
+
   on('tool.call', async ($, e, next) => {
     const tool = String(e.tool)
     const isTold = e.agentId === undefined && !tool.startsWith(OWN_TOOLS)
@@ -244,7 +251,7 @@ export const register: Register = (on, options) => {
     if (e.surface !== 'desktop' || e.props.hasSurvey) return next(e)
     const current = await read($, scene)
     if (!current || !(await read($, enabled))) return next(e)
-    const { Box, Svg } = $.ui.resolve(e)
+    const { Box, Svg, Client } = $.ui.resolve(e)
     // The interactive frame does not size itself from the markup (left alone it
     // is a 300x150 box), so give it the band's box; a new width draws anew.
     band.box = bandBox(e.props.bodyColumns, await read($, animationHeight))
@@ -258,13 +265,18 @@ export const register: Register = (on, options) => {
     const inherited = await next(e)
     return (
       <Box flexDirection="column">
-        <Svg
-          source={resumed.length <= MAX_SVG ? resumed : base}
-          alt={current.caption}
-          width={width}
-          height={height}
-          isInteractive
-        />
+        <Box position="relative">
+          <Svg
+            source={resumed.length <= MAX_SVG ? resumed : base}
+            alt={current.caption}
+            width={width}
+            height={height}
+            isInteractive
+          />
+          <Box position="absolute" top={0} left={0} right={0} bottom={0}>
+            <Client key="fables-controls" module="./controls.tsx" props={{}} width="100%" height="100%" />
+          </Box>
+        </Box>
         {inherited}
       </Box>
     )
