@@ -4,6 +4,8 @@ Este fork adiciona `/fables model agy`. O Claude continua trabalhando na tarefa 
 
 As legendas e os títulos das histórias são escritos em português brasileiro, inclusive quando a atividade ou as cenas anteriores estão em inglês. Código, nomes de arquivos e funções e comandos mantêm seus nomes originais. Essa regra também vale para os narradores Sonnet e Haiku.
 
+Na versão **0.2.2**, a animação preserva o conteúdo de outros mods na faixa acima da caixa de mensagem. Com **Kadenai's Style**, a cena aparece em cima e os indicadores compactos logo abaixo, nas duas ordens de carregamento. Desligar o Fables não oculta os indicadores; os controles nativos com `hasSurvey` continuam tendo prioridade.
+
 ## Como testar no Claude Code Desktop
 
 1. Instale e autentique o Antigravity CLI e habilite o plugin **AGY Bridge no Claude Code**. Ter o bridge conectado no Codex não o conecta automaticamente ao Claude Code. Abra `/mcp` no Claude Code e confirme que o bridge está disponível.

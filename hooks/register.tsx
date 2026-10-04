@@ -222,7 +222,7 @@ export const register: Register = (on, options) => {
     if (e.surface !== 'desktop' || e.props.hasSurvey) return next(e)
     const current = await read($, scene)
     if (!current || !(await read($, enabled))) return next(e)
-    const { Svg } = $.ui.resolve(e)
+    const { Box, Svg } = $.ui.resolve(e)
     // The interactive frame does not size itself from the markup (left alone it
     // is a 300x150 box), so give it the band's box; a new width draws anew.
     band.box = bandBox(e.props.bodyColumns)
@@ -231,14 +231,20 @@ export const register: Register = (on, options) => {
     // To a tenth of a second, so drawings in the same moment stay the same.
     const along = Math.floor(((await $.clock.now()) - at) / 100) / 10
     const resumed = resumeAt(base, along)
+    // Keep the shared band: another mod may draw indicators below our scene.
+    // Only layout props belong above next(e), which may contain native UI.
+    const inherited = await next(e)
     return (
-      <Svg
-        source={resumed.length <= MAX_SVG ? resumed : base}
-        alt={current.caption}
-        width={width}
-        height={height}
-        isInteractive
-      />
+      <Box flexDirection="column">
+        <Svg
+          source={resumed.length <= MAX_SVG ? resumed : base}
+          alt={current.caption}
+          width={width}
+          height={height}
+          isInteractive
+        />
+        {inherited}
+      </Box>
     )
   })
 }
